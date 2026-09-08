@@ -19,7 +19,7 @@
 | CAAU-008 | 原型功能、角色权限、首闭环与两端范围梳理 | 007、用户本轮只读授权 | 完成 |
 | CAAU-009 | 确认首闭环及细化材料/审核规则 | 008、用户业务确认 | 阻塞：按用户指令暂缓，待其对接负责人后恢复 |
 | CAAU-002 | 核验版本并初始化 pnpm、三个应用、检查工具 | 001、007、008；用户明确本轮工程与提交授权 | 完成：工程交付；微信工具/真机及远程 CI 待验证 |
-| CAAU-003 | 数据库开发环境、迁移和 OpenAPI 客户端链路 | 002；业务模型依赖 009 | 待开始 |
+| CAAU-003 | 数据库开发环境、迁移和 OpenAPI 客户端链路 | 完整 002 成果；不依赖业务模型确认 | 完成：本地 dev/test、真实恢复/迁移/shadow 与全套工程检查通过；远程 CI 待验证 |
 | CAAU-004 | 身份、机构和赛事授权矩阵及实现 | 003、009；008 仅提供候选矩阵 | 待开始 |
 | CAAU-005 | 首个业务闭环 | 004、009 | 待开始 |
 | CAAU-006 | 预发布与试点准备 | 核心流程验收、资源就绪 | 待开始 |
@@ -102,6 +102,63 @@ Git 基线（008 轮次）：起始工作区干净，当前提交 `f9a0ea8`（�
 
 下一步：CAAU-003 的健康接口 OpenAPI 客户端生成与隔离 PostgreSQL 开发链路可以独立推进；业务表与权限仍等待 CAAU-009。微信平台资源到位后补实际开发者工具/真机验收。
 
+## CAAU-003 本轮范围与准入
+
+基线：工作区干净，直接从 `1381a94` 创建 `codex/caau-003-database-contract`，已验证 002 为祖先；不从落后的 main 建支、不重置历史或连接远程。
+
+目标：固定 PostgreSQL/Prisma/驱动，建立回环绑定且开发/测试隔离的数据库基础、迁移命令、独立就绪接口、真实 OpenAPI 与可复现客户端链路。业务模型、权限、原型数据与部署不在范围。验收：真实连接/断连/恢复、迁移隔离验证、契约重复生成无漂移、三个构建与相关测试、CI 配置及操作文档；有环境限制的验证必须标明未执行。
+
+环境检查：Apple silicon arm64、macOS 26.6；PATH 及常用安装位置未发现 Docker/Podman/Colima/OrbStack/Lima/nerdctl/PostgreSQL；常见容器桌面应用未安装。已主动告知阻塞并提供 Apple silicon Docker Desktop 官方入口及启动/验证步骤，见 [数据库与契约操作文档](../runbooks/database-contract.md)。用户要求先完成独立工作，由其安装，不调整系统安全设置；数据库环境就绪后再补真实检查和整体交付。
+
+### 已完成且实际验证通过（不依赖 Docker）
+
+- 固定 Prisma CLI/client/adapter-pg 7.10.0、pg 8.23.0、Swagger11.4.7、openapi-typescript7.13.0；冻结安装与严格 peer/engines 不放宽。PostgreSQL17.11-bookworm 的 arm64/amd64 镜像清单和 digest 已核对，但未拉取/启动。
+- `@caau/database` 空业务模型 generate/validate/build 通过；受限连接/查询、共享在途检查、关闭资源；没有为迁移演示建立正式占位业务表。
+- 独立 `/api/v1/ready`，缺配置/失败返回通用 503，不含连接详情；`/api/v1/health` 保持进程存活语义。TCP 拒绝、无握手约 500ms 失败、API 卡住探测约 1.5s 返回的测试通过；API 成功/失败切换用 probe 替身，明确不是数据库恢复验证。
+- Nest 的 `/api/openapi.json` 与 DTO 控制器生成真实契约；类型与操作元数据被无运行时依赖的 api-client 门面消费，Web/fetch 和 miniapp/Taro 适配器独立。三份契约产物连续重复生成两次，SHA-256 全部一致；contract:check 与实际服务的契约一致性测试通过。
+- Compose 声明 dev/test 的独立回环端口、网络、卷、owner/app 凭据；db:setup 实际执行两次且保留已有文件，忽略规则验证通过。静态 YAML 约束、shell 语法、URL/环境隔离和远程 Docker 拒绝测试通过；不算 Compose 引擎启动验证。
+- 真实迁移/停启恢复套件和独立 CI database 作业已编写；不混入无需 Docker 的 test，也不静默 skip。Prisma 在系统临时目录从临时模型实际生成 PostgreSQL SQL，正式 schema 前后不变；SQL 尚未在数据库执行。
+
+| 本阶段检查 | 实际结果 |
+| --- | --- |
+| check | 契约漂移、文档链接、格式、ESLint 零警告、应用/包导入边界、严格 TS 及 12 个工具测试通过 |
+| build | database、api-client、API、Web、Taro weapp 全部通过；微信构建产物检查通过，不是微信运行验收 |
+| test | 17 个包/应用测试 + 1 个两端健康/就绪真实 HTTP 联调通过；小程序用 Node 传输替身，未验证 wx.request 运行时 |
+| test:e2e | Chromium 3 个通过：真实 Web/API、错误重试、缺数据库配置时就绪失败且存活正常 |
+| 新依赖目录复验 | 本轮复制 109 份源码/配置/文档，不带 node_modules、dist、Prisma 生成目录或凭据；install --frozen-lockfile → check → build → test → test:e2e 全通过。位置 `.local/verification/caau-003-g9lazjzs`，日志在该副本 `.local/evidence`；同一 Mac、复用 pnpm store/引擎/浏览器缓存，不是新 OS 或 Linux 验收 |
+| 凭据与历史 | `.local/db`、Prisma 生成源码及 dist 被忽略；不打印/提交真实密码；002 完整历史保持，未连接/推送远程 |
+
+本阶段修复：Compose 的 0600 secret 采用 root 入口读取再交给官方初始化流程（实际容器行为待验证）；迁移测试改用显式文件名而非 spawn 的未展开通配符；新工作区按依赖构建；前端旧 HTTP 错误断言改为统一客户端文案；ESLint 的错误 cause 规则仅在可能携带密码的子进程错误脱敏处明确例外，不保留未脱敏 cause。修复后的独立检查重跑，不以关闭严格校验或隐藏失败解决问题。
+
+### 历史阻塞与待验清单（已由下方最终验收补齐）
+
+续跑记录（2026-09-08）：已按官方 Node24.20.0 / pnpm10.32.1 重新执行 `db:setup`、`contract:check`、`check`、`build`、`test`、`test:e2e`，均通过；`db:test` 因当前 PATH 仍找不到 Docker CLI 失败（`spawn docker ENOENT`），未触达数据库、未删除卷或凭据。CAAU-003 仍等待真实 PostgreSQL 验证，不关闭任务。
+
+1. Docker/Compose 实际配置与固定镜像启动，初始化脚本/secret 权限、dev/test 隔离和真实 app 账号权限。
+2. 真实 Prisma SELECT 1 / ready200；停止 test 后 ready503 且 health200；重新启动后同一 API 进程/连接池恢复。
+3. `db:test` 的两个隔离临时数据库迁移 deploy/status/重复执行与无 schema 漂移；另补开发迁移与 shadow 库流程；不得影响开发库或引入正式测试表。
+4. 补跑相关检查、审查差异和凭据忽略，再完成 CAAU-003 最终本地提交与交付。当前保留分支中的修改，HEAD 仍为 002 的 `1381a94`，不提前作 003 最终提交或把任务标完成。
+
+远程 GitHub Actions/Linux runner 未执行；微信开发者工具/真机、业务功能和生产部署不在本阶段已验收范围。评审为开发执行者自检，不是独立安全审计。
+
+### CAAU-003 最终本地验收（2026-09-08）
+
+用户本轮明确授权自动安装/配置/验证并提交；继续现有 `codex/caau-003-database-contract`，起始 HEAD `1381a94`、35 项跟踪修改和 27 项未跟踪文件/目录，全部在原成果上续作，无重置或切换业务开发。
+
+| 检查 | 本轮实际证据 |
+| --- | --- |
+| Docker 与隔离启动 | 官方 Docker Desktop4.90.0、Engine29.7.2、Compose5.5.1；本机 Unix socket，无远程覆盖。固定 digest 的 PostgreSQL17.11 arm64 拉取成功，dev/test 均 healthy，独立网络/卷，回环 15432/15433 |
+| dev/test 连接与权限 | 两环境 app 真实连库、数据库名正确、health/ready200；无 superuser/建库/建角色权限，交叉使用另一环境凭据被 28P01 拒绝；测试后无残留 probe 临时库 |
+| db:test | 3 项通过、0 跳过：同一 API/连接池 ready200 → 停 test 后 ready503 且 health200 → 重启 ready200；app 不能建表/连接 shadow；迁移完整套件 |
+| 真实迁移 | 两个 test 专属临时库执行 deploy/status/重复 deploy；第三个临时 shadow 库实际用于 migrate dev 新增可空字段与无变更复跑；新迁移在第二库复现，两库均两条完成记录、无漂移、合成数据保留。仅清理本次三个临时库，正式 schema 字节不变、无业务 model |
+| 正式命令包装 | dev/test 的空 migrate deploy、随后 status 均通过；只建立迁移元数据，没有业务 SQL 或数据 |
+| 安装与回归 | 官方 Node24.20.0/pnpm10.32.1；install --frozen-lockfile、check（含契约漂移、12 工具测试）、全部包/三应用 build、17 包/应用测试 + 1 两端 HTTP 联调、Chromium3 项全部通过 |
+| 数据保留 | 不操作既有本机 PostgreSQL 或 welcome-to-docker；不删除卷、无 reset、无密码轮换。凭据仅在忽略的 .local/db；本轮日志在 .local/evidence/caau-003-final |
+
+失败与修复：首次 dev 启动遇 5432 已被本机 PostgreSQL 占用，改用项目专属 15432/15433，同步 Compose/配置校验/测试/示例和现有本地 URL 的端口，保留密码。随后 macOS 挂载 init 脚本直接执行失败，改为容器内 0644 副本由官方入口 source；dev 在确认 app/shadow/业务表均不存在后仅补齐初始化，test 从空卷自动初始化通过，未删除数据。首次空 dev 的 migrate status 返回“未受 Prisma 管理”退出1，空 deploy 后 status 通过，作为预期首次状态记录，不伪称首次成功。
+
+本任务本地范围已完成，按用户授权将现有成果与本轮修复一并提交，提交正文引用 CAAU-003；提交编号由最终报告和 Git 历史定位。评审为开发执行者自检。远程 GitHub Actions/Linux runner、微信开发者工具/真机、生产部署和独立安全审计未执行，不能由本机测试替代。下一步只维护工程底座并在资源授权后补平台/CI 验证；CAAU-009 继续暂缓，不开始业务表、权限或业务功能。
+
 ## 待解决问题
 
 - 远程仓库所属账号或组织、仓库可见性和协作者：接入远程时确认，不阻塞本地基础。
@@ -111,4 +168,4 @@ Git 基线（008 轮次）：起始工作区干净，当前提交 `f9a0ea8`（�
 
 ## 当前未实现
 
-业务功能、身份/权限实现、数据库、OpenAPI 生成客户端、CI 远程执行、远程分支保护和部署尚未实现；微信开发者工具与真机尚未验收。三个应用工程、健康接口、根检查工具、锁文件和 CI 配置已交付。
+业务功能、身份/权限实现、CI 远程执行、远程分支保护和部署尚未实现；微信开发者工具与真机尚未验收。CAAU-003 数据库入口、隔离 dev/test PostgreSQL、迁移/shadow、就绪接口及 OpenAPI 客户端已完成本地真实验收；这不代表已实现业务表或生产数据库方案。CAAU-002 三应用、健康接口、根工具、锁文件和 CI 配置的完整历史保留。

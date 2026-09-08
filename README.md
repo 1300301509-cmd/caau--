@@ -2,7 +2,7 @@
 
 本仓库用于建设 CAAU 微信小程序、Web 管理后台和后端 API。
 
-当前阶段：三个应用工程已初始化，可构建并通过健康接口联调；尚无业务功能、数据库或部署。业务闭环选择暂缓。小程序编译与请求逻辑测试通过不等于微信开发者工具或真机验收通过。原始架构建议见 [agent.md](agent.md)，其中的示例模型、业务规则和实施顺序不等于已确认需求。
+当前阶段：CAAU-003 本地工程验收完成，三个应用、健康/数据库就绪接口、OpenAPI 生成客户端，以及隔离 dev/test PostgreSQL 的真实连接/断连恢复/迁移/shadow 流程均已验证。没有业务功能或部署，业务闭环选择暂缓。小程序编译与请求逻辑测试通过不等于微信开发者工具或真机验收通过。原始架构建议见 [agent.md](agent.md)，其中的示例模型、业务规则和实施顺序不等于已确认需求。
 
 ## 从这里开始
 
@@ -13,7 +13,8 @@
 - [开发计划与状态](docs/planning/roadmap.md)：当前成果和后续任务。
 - [需求登记](docs/product/requirements.md)：区分已确认内容与待验证假设。
 - [架构决策](docs/adr/0001-monorepo.md)：单仓库与模块化单体方案。
-- [本地工具与版本核验](docs/runbooks/local-tooling.md)：已验证命令、检查边界、环境缺口及候选版本。
+- [本地工具与版本核验](docs/runbooks/local-tooling.md)：已验证命令、检查边界、环境缺口及固定版本。
+- [数据库与契约操作](docs/runbooks/database-contract.md)：Docker 官方安装、隔离开发/测试、迁移规则与待执行验证。
 
 ## 目录
 
@@ -39,7 +40,7 @@ corepack pnpm dev:admin     # http://127.0.0.1:5173
 corepack pnpm dev:miniapp   # watch 编译，产物 apps/miniapp/dist
 ```
 
-Web 点击“检查后端连接”；小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见本地工程文档，当前未完成平台验收。API 开发命令先编译再启动，不自动热重载。
+Web 点击“检查后端连接”；新增“检查数据库就绪”是独立检查，无数据库配置时正确显示 503。小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见本地工程文档，当前未完成平台验收。API 开发命令先编译再启动，不自动热重载。
 
 ## 检查与构建
 
@@ -51,7 +52,7 @@ corepack pnpm exec playwright install chromium
 corepack pnpm test:e2e
 ```
 
-本地已通过三应用构建、静态检查、工具/请求/API 测试和 Web 浏览器联调。`.github/workflows/ci.yml` 已配置同等检查，未推送远程，故未声称 GitHub CI 执行通过。详情、实际限制和已知警告见 [本地工程文档](docs/runbooks/local-tooling.md)。
+本地已通过三应用构建、静态检查、工具/请求/API 测试和 Web 浏览器联调。`contract:generate` 从 Nest 生成真实 OpenAPI、类型与请求元数据，`contract:check` 检查漂移；Web/Taro 已消费无运行时依赖的客户端包。`db:setup` 可离线准备忽略目录下的独立凭据；`db:up`、`db:test` 已在本机 Docker 实际验证，数据库专属回环端口为 15432/15433，详见数据库操作文档。`.github/workflows/ci.yml` 已配置同等检查，未推送远程，故未声称 GitHub CI 执行通过。详情、实际限制和已知警告见 [本地工程文档](docs/runbooks/local-tooling.md)。
 
 ## 本地 Git
 

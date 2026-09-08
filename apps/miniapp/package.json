@@ -9,6 +9,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "@caau/api-client": "workspace:*",
     "@tarojs/components": "4.2.1",
     "@tarojs/helper": "4.2.1",
     "@tarojs/react": "4.2.1",

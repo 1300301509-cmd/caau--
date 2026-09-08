@@ -18,6 +18,9 @@ coverage/
 *.p12
 *.pfx
 
+# Reproducible server-only Prisma output; generated OpenAPI contracts stay tracked.
+database/src/generated/
+
 # Local data and uploads; migrations and synthetic fixtures remain tracked
 .local/
 .data/

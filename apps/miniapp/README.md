@@ -1,12 +1,12 @@
 # @caau/miniapp
 
-Taro 4.2.1 + React 18 微信小程序工程。只有技术连接页，通过 `Taro.request` 请求 `/api/v1/health`，没有业务导航、账号或业务数据。
+Taro 4.2.1 + React 18 微信小程序工程。只有技术连接页，通过 @caau/api-client 生成契约及注入 `Taro.request` 的适配器请求 `/api/v1/health`、`/api/v1/ready`，没有业务导航、账号或业务数据。就绪请求与存活请求独立，无数据库配置时就绪应显示 503；不引入 Prisma、Nest 或 Node/fetch 传输运行库。
 
 ```sh
 # 在仓库根目录；另一个终端先启动 corepack pnpm dev:api
 corepack pnpm dev:miniapp
 # 单次生产构建
-corepack pnpm --filter @caau/miniapp build
+corepack pnpm --filter @caau/miniapp... build
 ```
 
 构建输出到本目录 `dist/`。微信开发者工具应导入 **apps/miniapp**，项目配置的 miniprogramRoot 为 `dist/`。`touristappid` 仅是明确标记的游客占位值，不是用户微信 AppID；不保证游客模式具备完整运行/预览权限。实际测试身份以用户的平台资源为准，请在工具中选择有权限的测试 AppID；工具生成的 project.private.config.json 已忽略，若工具修改了受追踪的项目配置，提交前必须审查并保留仓库占位值，不混入本机平台配置。

@@ -21,7 +21,7 @@ test('failed request is visible and the same button can retry', async ({
   );
   await page.goto('/');
   await page.getByRole('button', { name: '检查后端连接' }).click();
-  await expect(page.getByText('健康接口返回 HTTP 503')).toBeVisible();
+  await expect(page.getByText('接口返回 HTTP 503')).toBeVisible();
   await page.unroute('**/api/v1/health');
   await page.getByRole('button', { name: '检查后端连接' }).click();
   await expect(page.getByText('已连接 caau-api，服务状态正常')).toBeVisible();

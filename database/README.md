@@ -1,5 +1,26 @@
-# 数据库工程
+# @caau/database
 
-预留 Prisma 配置、模型、版本化迁移和合成种子数据。由 CAAU-003 建立；当前没有数据库或迁移文件。
+仅服务端使用的 Prisma 7.10.0 / pg 8.23.0 数据库入口。正式 `prisma/schema.prisma` 只有生成器和数据源，没有业务模型、占位业务表、seed 或原型数据。
 
-运行时入口仅供服务端依赖。实际版本确认后确定生成路径及连接方式；历史已执行迁移不修改，结构变更追加迁移。真实数据库导出不能提交仓库。
+- `src/index.ts`：受限连接/查询超时、共享在途探测、SELECT 1、关闭资源；不把 Prisma 实体导出给前端。
+- `src/generated/prisma/`：Prisma 生成代码，忽略并随构建重新生成。
+- `prisma.config.ts`：迁移 owner URL 与独立 shadow URL；API 仅使用 app URL。
+- `prisma/migrations/`：当前仅 PostgreSQL provider 锁。业务模型确认后再提交正式迁移。
+- `init/01-access.sh`：本地容器的基础设施账号与 schema 权限，不是业务权限模型。
+- `test/`：无需 PostgreSQL 的缺配置、TCP 拒绝/无握手、超时与关闭测试。
+
+从仓库根目录：
+
+```sh
+corepack pnpm --filter @caau/database build
+corepack pnpm --filter @caau/database test
+corepack pnpm db:setup
+# Docker 就绪后再执行：
+corepack pnpm db:up
+corepack pnpm db:api
+corepack pnpm db:test
+```
+
+真实集成测试由根目录 `scripts/database.integration.mjs` 编排 API 和隔离 test 容器，临时测试模型不进入正式 schema。禁止用前端包引用本包，禁止提交 `.local/db`、真实数据库/上传/凭据，禁止为测试重置开发卷。
+
+**已验证**：空 schema generate/validate、离线 SQL、TCP 失败超时，以及本机 Compose dev/test 运行、真实连接/断连恢复、受限账号、隔离迁移 deploy/dev/shadow 与数据保留。**未验证**：远程 Linux CI、生产数据库。正式 schema 仍无业务模型。安装、隔离、迁移命令与清理限制见 [数据库操作文档](../docs/runbooks/database-contract.md)。

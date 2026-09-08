@@ -50,6 +50,6 @@ test('inspects static imports, re-exports, require, dynamic import and type impo
   );
 });
 
-test('current application manifests and imports follow the repository boundary', async () => {
+test('current application and package manifests/imports follow the repository boundary', async () => {
   assert.deepEqual((await checkBoundaries(process.cwd())).errors, []);
 });

@@ -1,21 +1,26 @@
 import { useState } from 'react';
 import { Button, Text, View } from '@tarojs/components';
 import Taro from '@tarojs/taro';
-import { getHealth } from '../../features/health/api';
+import { getHealth, getReadiness } from '../../features/health/api';
 
 export default function Index() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('尚未检查后端连接');
 
-  async function checkConnection() {
+  async function checkConnection(database = false) {
     if (loading) return;
     setLoading(true);
     setMessage('正在请求后端…');
     try {
-      await getHealth(__API_BASE_URL__, (options) =>
+      const check = database ? getReadiness : getHealth;
+      await check(__API_BASE_URL__, (options) =>
         Taro.request<unknown>(options),
       );
-      setMessage('已连接 caau-api，服务状态正常');
+      setMessage(
+        database
+          ? '数据库连接就绪（不代表业务表已迁移）'
+          : '已连接 caau-api，服务状态正常',
+      );
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -31,7 +36,7 @@ export default function Index() {
     <View className="page">
       <Text className="title">CAAU 工程连接检查</Text>
       <Text className="description">
-        仅验证 API 存活，不代表业务功能、数据库或真机验收通过。
+        存活与数据库连接分别检查，不代表业务功能或真机验收通过。
       </Text>
       <Text className="endpoint">{__API_BASE_URL__}/api/v1/health</Text>
       <Button
@@ -41,6 +46,9 @@ export default function Index() {
         onClick={() => void checkConnection()}
       >
         检查后端连接
+      </Button>
+      <Button disabled={loading} onClick={() => void checkConnection(true)}>
+        检查数据库就绪
       </Button>
       <Text className="result">{message}</Text>
     </View>

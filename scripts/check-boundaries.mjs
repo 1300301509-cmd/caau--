@@ -4,21 +4,34 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { builtinModules } from 'node:module';
 
-const applications = ['admin', 'miniapp', 'api'];
+const units = [
+  'apps/admin',
+  'apps/miniapp',
+  'apps/api',
+  'packages/api-client',
+  'database',
+];
 const ignored = new Set(['node_modules', 'dist', '.local', '.swc']);
 
 export function boundaryError(root, importer, specifier) {
-  const relative = path.relative(root, importer).split(path.sep);
-  if (relative[0] !== 'apps' || !applications.includes(relative[1]))
-    return null;
-  const app = relative[1];
-  const front = app !== 'api';
+  const unit = units.find((name) =>
+    importer.startsWith(path.join(root, name) + path.sep),
+  );
+  if (!unit) return null;
+  const relative = path
+    .relative(path.join(root, unit), importer)
+    .split(path.sep);
+  const front = ['apps/admin', 'apps/miniapp', 'packages/api-client'].includes(
+    unit,
+  );
+  if (unit === 'database' && /^@caau\/api-client(?:\/|$)/.test(specifier))
+    return 'Database must not depend on frontend client packages';
   if (/^@caau\/(admin|miniapp|api)(\/|$)/.test(specifier)) {
     return 'Applications must not import application packages';
   }
   if (
     front &&
-    ((relative[2] === 'src' &&
+    ((relative[0] === 'src' &&
       (specifier.startsWith('node:') || builtinModules.includes(specifier))) ||
       /^(@nestjs\/|@prisma\/|prisma(?:\/|$)|pg(?:\/|$)|@caau\/database(?:\/|$))/.test(
         specifier,
@@ -28,7 +41,7 @@ export function boundaryError(root, importer, specifier) {
   }
   if (specifier.startsWith('.') || path.isAbsolute(specifier)) {
     const target = path.resolve(path.dirname(importer), specifier);
-    const appRoot = path.join(root, 'apps', app);
+    const appRoot = path.join(root, unit);
     const within = path.relative(appRoot, target);
     if (
       within === '..' ||
@@ -83,7 +96,13 @@ export function importSpecifiers(filename, source) {
 async function filesUnder(directory) {
   const result = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (ignored.has(entry.name) || entry.isSymbolicLink()) continue;
+    if (
+      ignored.has(entry.name) ||
+      entry.isSymbolicLink() ||
+      (entry.name === 'generated' &&
+        directory.endsWith(path.join('database', 'src')))
+    )
+      continue;
     const filename = path.join(directory, entry.name);
     if (entry.isDirectory()) result.push(...(await filesUnder(filename)));
     else if (/\.(?:[cm]?js|tsx?)$/.test(entry.name)) result.push(filename);
@@ -93,7 +112,9 @@ async function filesUnder(directory) {
 
 export async function checkBoundaries(root) {
   const errors = [];
-  const files = await filesUnder(path.join(root, 'apps'));
+  const files = (
+    await Promise.all(units.map((unit) => filesUnder(path.join(root, unit))))
+  ).flat();
   for (const filename of files) {
     for (const specifier of importSpecifiers(
       filename,
@@ -107,8 +128,8 @@ export async function checkBoundaries(root) {
         errors.push(`${path.relative(root, filename)}: ${specifier}: ${error}`);
     }
   }
-  for (const app of applications) {
-    const dir = path.join(root, 'apps', app);
+  for (const app of units) {
+    const dir = path.join(root, app);
     const manifest = JSON.parse(
       await readFile(path.join(dir, 'package.json'), 'utf8'),
     );
@@ -118,6 +139,14 @@ export async function checkBoundaries(root) {
     })) {
       const error = boundaryError(root, path.join(dir, 'package.json'), name);
       if (error) errors.push(`${app}/package.json: ${name}: ${error}`);
+    }
+    if (
+      app === 'packages/api-client' &&
+      Object.keys(manifest.dependencies ?? {}).length
+    ) {
+      errors.push(
+        'api-client must stay free of runtime dependencies; review any new transport dependency',
+      );
     }
     const config = JSON.parse(
       await readFile(path.join(dir, 'tsconfig.json'), 'utf8'),

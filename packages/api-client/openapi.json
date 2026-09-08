@@ -1,0 +1,113 @@
+{
+  "components": {
+    "schemas": {
+      "HealthDto": {
+        "properties": {
+          "service": {
+            "enum": ["caau-api"],
+            "type": "string"
+          },
+          "status": {
+            "enum": ["ok"],
+            "type": "string"
+          }
+        },
+        "required": ["status", "service"],
+        "type": "object"
+      },
+      "NotReadyDto": {
+        "properties": {
+          "code": {
+            "enum": ["DATABASE_UNAVAILABLE"],
+            "type": "string"
+          },
+          "service": {
+            "enum": ["caau-api"],
+            "type": "string"
+          },
+          "status": {
+            "enum": ["not_ready"],
+            "type": "string"
+          }
+        },
+        "required": ["status", "service", "code"],
+        "type": "object"
+      },
+      "ReadyDto": {
+        "properties": {
+          "service": {
+            "enum": ["caau-api"],
+            "type": "string"
+          },
+          "status": {
+            "enum": ["ready"],
+            "type": "string"
+          }
+        },
+        "required": ["status", "service"],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "Liveness and database connectivity only. No approved business models.",
+    "title": "CAAU engineering API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "API process liveness; independent of database",
+        "tags": ["system"]
+      }
+    },
+    "/api/v1/ready": {
+      "get": {
+        "operationId": "getReadiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotReadyDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Database connectivity; 1500ms application deadline, not schema readiness",
+        "tags": ["system"]
+      }
+    }
+  },
+  "servers": [],
+  "tags": []
+}

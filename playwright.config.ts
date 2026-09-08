@@ -18,6 +18,7 @@ export default defineConfig({
       env: {
         HOST: '127.0.0.1',
         PORT: '3000',
+        DATABASE_URL: '',
         CORS_ORIGINS: 'http://127.0.0.1:4173',
       },
       reuseExistingServer: false,

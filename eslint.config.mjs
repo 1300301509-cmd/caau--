@@ -8,6 +8,8 @@ export default [
       '**/node_modules/**',
       '**/dist/**',
       '**/.swc/**',
+      'database/src/generated/**',
+      'packages/api-client/src/generated/**',
       '.local/**',
       'playwright-report/**',
       'test-results/**',
@@ -32,6 +34,22 @@ export default [
   {
     files: ['apps/miniapp/src/**/*.{ts,tsx}'],
     languageOptions: { globals: { __API_BASE_URL__: 'readonly' } },
+  },
+  {
+    files: [
+      'apps/admin/src/**/*.{ts,tsx}',
+      'apps/miniapp/src/**/*.{ts,tsx}',
+      'packages/api-client/src/**/*.ts',
+    ],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        'process',
+        'Buffer',
+        '__dirname',
+        '__filename',
+      ],
+    },
   },
   {
     files: ['**/*.cjs'],

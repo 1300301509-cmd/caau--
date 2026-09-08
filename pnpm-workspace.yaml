@@ -6,9 +6,13 @@ packages:
 # esbuild verifies/selects its platform binary during installation.
 onlyBuiltDependencies:
   - esbuild
+  # Downloads the schema engine for the exact pinned Prisma engine version.
+  - '@prisma/engines'
 # Nest's postinstall only prints its donation message; no build is required.
 ignoredBuiltDependencies:
   - '@nestjs/core'
+  - '@scarf/scarf' # Swagger dependency's optional install analytics
+  - prisma # Runtime engines are enforced by package.json; no preinstall required
   # Prebuilt platform packages are locked; no local native compilation/fallback install.
   - '@parcel/watcher'
   - '@swc/core'

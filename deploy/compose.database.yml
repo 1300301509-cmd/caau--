@@ -1,0 +1,71 @@
+name: caau-database
+
+x-postgres: &postgres
+  image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+  restart: 'no'
+  # Read the 0600 bind-mounted app secret as root before the official entrypoint
+  # drops to postgres. This avoids requiring world-readable host secret files.
+  entrypoint:
+    - /bin/bash
+    - -ec
+    - 'install -m 0644 /opt/caau/01-access.sh /docker-entrypoint-initdb.d/01-access.sh; export CAAU_APP_PASSWORD="$$(cat "$${CAAU_APP_PASSWORD_FILE}")"; exec /usr/local/bin/docker-entrypoint.sh "$$@"'
+    - --
+  healthcheck:
+    test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+    interval: 2s
+    timeout: 2s
+    retries: 30
+  command: [postgres, -c, max_connections=40]
+
+services:
+  postgres-dev:
+    <<: *postgres
+    profiles: [dev]
+    ports: ['127.0.0.1:15432:5432']
+    networks: [dev]
+    environment:
+      POSTGRES_DB: caau_dev
+      POSTGRES_USER: caau_dev_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/dev_owner
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      CAAU_APP_USER: caau_dev_app
+      CAAU_APP_PASSWORD_FILE: /run/secrets/dev_app
+      CAAU_SHADOW_DB: caau_dev_shadow
+    secrets: [dev_owner, dev_app]
+    volumes:
+      - dev_data:/var/lib/postgresql/data
+      - ../database/init/01-access.sh:/opt/caau/01-access.sh:ro
+
+  postgres-test:
+    <<: *postgres
+    profiles: [test]
+    ports: ['127.0.0.1:15433:5432']
+    networks: [test]
+    environment:
+      POSTGRES_DB: caau_test
+      POSTGRES_USER: caau_test_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/test_owner
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      CAAU_APP_USER: caau_test_app
+      CAAU_APP_PASSWORD_FILE: /run/secrets/test_app
+      CAAU_SHADOW_DB: caau_test_shadow
+    secrets: [test_owner, test_app]
+    volumes:
+      - test_data:/var/lib/postgresql/data
+      - ../database/init/01-access.sh:/opt/caau/01-access.sh:ro
+
+networks:
+  dev: {}
+  test: {}
+volumes:
+  dev_data: {}
+  test_data: {}
+secrets:
+  dev_owner:
+    file: ../.local/db/dev-owner.password
+  dev_app:
+    file: ../.local/db/dev-app.password
+  test_owner:
+    file: ../.local/db/test-owner.password
+  test_app:
+    file: ../.local/db/test-app.password

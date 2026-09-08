@@ -15,5 +15,10 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       throw new Error('CORS_ORIGINS must contain exact HTTP(S) origins');
     }
   }
-  return { port, host: env.HOST ?? '127.0.0.1', origins };
+  return {
+    port,
+    host: env.HOST ?? '127.0.0.1',
+    origins,
+    databaseUrl: env.DATABASE_URL,
+  };
 }

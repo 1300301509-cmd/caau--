@@ -6,5 +6,9 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["playwright.config.ts", "apps/admin/e2e/**/*.ts"]
+  "include": [
+    "playwright.config.ts",
+    "apps/admin/e2e/**/*.ts",
+    "database/prisma.config.ts"
+  ]
 }

@@ -1,0 +1,10 @@
+// No business models are approved yet. Do not add placeholder business tables.
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
