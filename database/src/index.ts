@@ -2,6 +2,32 @@ import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client.js';
 
+// Prisma is constructed only here; callers never import generated internals.
+export type { Prisma } from './generated/prisma/client.js';
+export { Role } from './generated/prisma/client.js';
+export function createAuthorizationDatabase(connectionString: string) {
+  const pool = new Pool({
+    connectionString,
+    max: 6,
+    connectionTimeoutMillis: 1000,
+    statement_timeout: 5000,
+    application_name: 'caau-authorization',
+  });
+  pool.on('error', () => {});
+  const client = new PrismaClient({
+    adapter: new PrismaPg(pool, { disposeExternalPool: false }),
+    log: [],
+    errorFormat: 'minimal',
+  });
+  return {
+    client,
+    async close() {
+      await client.$disconnect();
+      await pool.end();
+    },
+  };
+}
+
 export interface DatabaseProbe {
   check(): Promise<boolean>;
   close(): Promise<void>;

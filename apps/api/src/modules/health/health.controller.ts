@@ -1,10 +1,12 @@
 import { Controller, Get, Header } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Public } from '../authorization/authorization.guard.js';
 import { HealthDto } from './status.dto.js';
 
 @ApiTags('system')
 @Controller('health')
 export class HealthController {
+  @Public()
   @Get()
   @Header('Cache-Control', 'no-store')
   @ApiOperation({

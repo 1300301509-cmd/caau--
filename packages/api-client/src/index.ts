@@ -2,7 +2,13 @@ import { operations as wire } from './generated/operations.js';
 import type { operations } from './generated/schema.js';
 export type { paths, components, operations } from './generated/schema.js';
 
-export type RequestOptions = { url: string; method: 'GET'; timeout: number };
+export type RequestOptions = {
+  url: string;
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  timeout: number;
+  header?: Record<string, string>;
+  data?: unknown;
+};
 export type Transport = (
   options: RequestOptions,
 ) => Promise<{ status: number; data: unknown }>;
@@ -15,9 +21,21 @@ export type NotReady =
 type Success<K extends keyof typeof wire> =
   operations[K]['responses'][200]['content']['application/json'];
 type WireSchema = {
-  required: readonly string[];
-  properties: Readonly<Record<string, { enum: readonly string[] }>>;
+  type: string;
+  nullable?: boolean;
+  enum?: readonly unknown[];
+  required?: readonly string[];
+  properties?: Readonly<Record<string, WireSchema>>;
+  items?: WireSchema;
 };
+type Input<K extends keyof typeof wire> = (operations[K] extends {
+  requestBody: { content: { 'application/json': infer B } };
+}
+  ? { body: B }
+  : { body?: never }) &
+  (operations[K]['parameters'] extends { path: infer P }
+    ? { path: P }
+    : { path?: never }) & { token?: string };
 
 export class ApiError extends Error {
   constructor(
@@ -29,19 +47,28 @@ export class ApiError extends Error {
   }
 }
 
-function matches(
-  schema: WireSchema,
-  value: unknown,
-): value is Record<string, string> {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return schema.required.every((key) => {
-    const property = schema.properties[key];
+function matches(schema: WireSchema, value: unknown): boolean {
+  if (value === null && schema.nullable) return true;
+  if (schema.enum && !schema.enum.includes(value)) return false;
+  if (schema.type === 'array')
     return (
-      typeof record[key] === 'string' &&
-      property?.enum.includes(record[key]) === true
+      Array.isArray(value) &&
+      !!schema.items &&
+      value.every((v) => matches(schema.items!, v))
     );
-  });
+  if (schema.type === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false;
+    const record = value as Record<string, unknown>;
+    return (
+      (schema.required ?? []).every((k) => k in record) &&
+      Object.entries(schema.properties ?? {}).every(
+        ([k, v]) => !(k in record) || matches(v, record[k]),
+      )
+    );
+  }
+  if (schema.type === 'integer') return Number.isInteger(value);
+  return typeof value === schema.type;
 }
 
 // Handwritten transport facade. Paths, statuses, response types and wire enums
@@ -49,12 +76,37 @@ function matches(
 export function createApiClient(baseUrl: string, transport: Transport) {
   async function request<K extends keyof typeof wire>(
     name: K,
+    ...args: Input<K> extends { body: unknown } | { path: unknown }
+      ? [input: Input<K>]
+      : [input?: Input<K>]
   ): Promise<Success<K>> {
     const operation = wire[name];
+    const input = args[0];
+    const path = operation.path.replace(
+      /\{([^}]+)\}/g,
+      (_match, key: string) => {
+        const value = (input?.path as Record<string, string> | undefined)?.[
+          key
+        ];
+        if (!value) throw new Error('Missing path parameter');
+        return encodeURIComponent(value);
+      },
+    );
     const response = await transport({
-      url: baseUrl.replace(/\/$/, '') + operation.path,
+      url: baseUrl.replace(/\/$/, '') + path,
       method: operation.method,
       timeout: 5000,
+      ...(input?.token
+        ? {
+            header: {
+              Authorization: `Bearer ${input.token}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        : input?.body
+          ? { header: { 'Content-Type': 'application/json' } }
+          : {}),
+      ...(input?.body ? { data: input.body } : {}),
     });
     if (response.status !== 200) {
       const unavailable =
@@ -71,6 +123,7 @@ export function createApiClient(baseUrl: string, transport: Transport) {
     return response.data as Success<K>;
   }
   return {
+    request,
     getHealth: () => request('getHealth'),
     getReadiness: () => request('getReadiness'),
   };

@@ -1,6 +1,6 @@
 # 本地启动、检查与工程版本（CAAU-002 / CAAU-003）
 
-状态：三个应用、健康/就绪接口、生成契约客户端及数据库入口已实现；隔离 dev/test PostgreSQL 的真实连接、恢复、迁移和 shadow 流程已在本机验证，见 [数据库操作文档](database-contract.md)。业务闭环仍待负责人确认。本文件区分本地已执行检查、模拟传输联调、微信平台验收与远程 CI，不把构建当成真机通过。
+状态：三个应用、健康/就绪接口、生成契约客户端及数据库入口已实现；隔离 dev/test PostgreSQL 的真实连接、恢复、迁移和 shadow 流程已在本机验证，见 [数据库操作文档](database-contract.md)。首版业务已确认，CAAU-004 权限底座已落地；本地身份、迁移与后续边界见 [权限文档](authorization.md)。本文件区分本地已执行检查、模拟传输联调、微信平台验收与远程 CI，不把构建当成真机通过。
 
 ## 1. 环境与安装
 
@@ -91,7 +91,7 @@ corepack pnpm test:e2e
 | `test:tooling` | 12 个：链接/AST/依赖边界反例、Compose 静态声明/shell 语法、配置隔离/权限/远程 Docker 拒绝、Prisma 离线迁移 SQL |
 | `contract:check` | 构建当前 API/database 后重新生成 Nest OpenAPI、类型与操作元数据，逐字节对比现有文件，有漂移即失败，不连接 DB |
 | `build` | 按依赖顺序构建 database/api-client、API tsc、Web tsc + Vite、Taro weapp；检查 app.json/JS/WXML/WXSS |
-| `test` | 17 个包/应用测试 + 1 个两端健康/就绪真实 HTTP 联调，共 18 个；DB 仅缺配置/TCP 失败测试和 API probe 替身，不是 PostgreSQL 连接成功验证 |
+| `test` | CAAU-004 后为 22 个包/应用测试 + 1 个两端健康/就绪真实 HTTP 联调，共 23 个；DB 仅缺配置/TCP 失败测试和 API probe 替身，不是 PostgreSQL 连接成功验证 |
 | `test:e2e` | Chromium 3 个：生产 Web 连真实 API、HTTP 失败重试、DB 缺配置时就绪失败而健康正常；不运行微信，明确清空测试 API 的 DATABASE_URL |
 
 单独构建应用及其 workspace 依赖：`corepack pnpm --filter @caau/api... build`、`corepack pnpm --filter @caau/admin... build`、`corepack pnpm --filter @caau/miniapp... build`。生产构建的本地预览：先 `corepack pnpm --filter @caau/api start`，再 `corepack pnpm --filter @caau/admin preview`，访问 `http://127.0.0.1:4173`；preview 不是生产部署方案。

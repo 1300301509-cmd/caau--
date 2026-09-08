@@ -1,6 +1,84 @@
 {
   "components": {
     "schemas": {
+      "AccessDto": {
+        "properties": {
+          "action": {
+            "enum": ["task.read", "content.write", "review", "file.download"],
+            "type": "string"
+          }
+        },
+        "required": ["action"],
+        "type": "object"
+      },
+      "ActiveDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": ["active"],
+        "type": "object"
+      },
+      "AuditDto": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actorId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceId": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "context",
+          "id",
+          "occurredAt",
+          "actorId",
+          "action",
+          "resourceId",
+          "outcome",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "GrantDto": {
+        "properties": {
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "memberId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["eventId", "memberId"],
+        "type": "object"
+      },
       "HealthDto": {
         "properties": {
           "service": {
@@ -13,6 +91,34 @@
           }
         },
         "required": ["status", "service"],
+        "type": "object"
+      },
+      "IdDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["id"],
+        "type": "object"
+      },
+      "MemberDto": {
+        "properties": {
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "enum": ["EVENT_MANAGER", "ORGANIZER", "REVIEWER", "SYSTEM_ADMIN"],
+            "type": "string"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["userId", "organizationId", "role"],
         "type": "object"
       },
       "NotReadyDto": {
@@ -33,6 +139,16 @@
         "required": ["status", "service", "code"],
         "type": "object"
       },
+      "OrganizationDto": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "type": "string"
+          }
+        },
+        "required": ["name"],
+        "type": "object"
+      },
       "ReadyDto": {
         "properties": {
           "service": {
@@ -46,17 +162,856 @@
         },
         "required": ["status", "service"],
         "type": "object"
+      },
+      "ReviewerDto": {
+        "properties": {
+          "reviewerGrantId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": ["reviewerGrantId"],
+        "type": "object"
+      },
+      "TaskDto": {
+        "properties": {
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "handlerGrantId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["eventId", "handlerGrantId"],
+        "type": "object"
+      },
+      "UserDto": {
+        "properties": {
+          "displayName": {
+            "maxLength": 80,
+            "type": "string"
+          }
+        },
+        "required": ["displayName"],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
   "info": {
     "contact": {},
-    "description": "Liveness and database connectivity only. No approved business models.",
-    "title": "CAAU engineering API",
-    "version": "0.1.0"
+    "description": "Health and authorization foundation. Local test identity only; no material workflow or WeChat login.",
+    "title": "CAAU API",
+    "version": "0.2.0"
   },
   "openapi": "3.0.0",
   "paths": {
+    "/api/v1/authorization/audit": {
+      "get": {
+        "operationId": "getSecurityAudit",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AuditDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/event-grants": {
+      "post": {
+        "operationId": "createEventGrant",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/event-grants/{id}": {
+      "delete": {
+        "operationId": "deleteEventGrant",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/event-scopes": {
+      "post": {
+        "operationId": "createEventScope",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/event-scopes/{id}": {
+      "get": {
+        "operationId": "getEventScope",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/logout": {
+      "post": {
+        "operationId": "logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/me": {
+      "get": {
+        "operationId": "getIdentity",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/members": {
+      "post": {
+        "operationId": "createOrganizationMember",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/members/{id}": {
+      "patch": {
+        "operationId": "setMemberActive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActiveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/organizations": {
+      "post": {
+        "operationId": "createOrganization",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/task-scopes": {
+      "post": {
+        "operationId": "createTaskScope",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/task-scopes/{id}": {
+      "get": {
+        "operationId": "getTaskScope",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/task-scopes/{id}/access": {
+      "post": {
+        "description": "Policy probe only; does not read or change material or transfer files.",
+        "operationId": "checkTaskAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/task-scopes/{id}/reviewer": {
+      "patch": {
+        "operationId": "assignTaskReviewer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewerDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/users": {
+      "post": {
+        "operationId": "createInternalUser",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/users/{id}": {
+      "patch": {
+        "operationId": "setUserActive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActiveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "getHealth",

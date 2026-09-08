@@ -10,6 +10,7 @@ import {
   ApiServiceUnavailableResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Public } from '../authorization/authorization.guard.js';
 import { ReadyDto, NotReadyDto } from '../health/status.dto.js';
 import { DatabaseReadinessService } from './readiness.service.js';
 
@@ -18,6 +19,7 @@ import { DatabaseReadinessService } from './readiness.service.js';
 export class ReadinessController {
   constructor(private readonly readiness: DatabaseReadinessService) {}
 
+  @Public()
   @Get()
   @Header('Cache-Control', 'no-store')
   @ApiOperation({

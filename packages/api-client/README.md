@@ -1,6 +1,6 @@
 # @caau/api-client
 
-Web 与 Taro 共用的健康/就绪接口客户端，**无运行时依赖**。不包含 Prisma 实体、Nest、Node 内置模块、密钥或业务规则。
+Web 与 Taro 共用的健康/就绪及权限底座客户端，**无运行时依赖**。不包含 Prisma 实体、Nest、Node 内置模块、密钥或业务规则。
 
 ## 生成边界
 
@@ -22,7 +22,7 @@ corepack pnpm --filter @caau/api-client test
 
 生成命令先编译当前 Nest 与数据库包，不监听网络、不连接 DB；按稳定顺序写入产物。check 在内存中重生成并逐字节比较；CI 会因契约漂移失败。已实际重复生成两次，三个文件全部字节一致。
 
-当前元数据生成器只支持两个工程 GET 操作和对象中的字符串枚举响应，其他形状主动报错，不能静默生成错误客户端。新增业务契约时先明确输入、错误和鉴权设计，再扩展生成器与测试。
+CAAU-004 已扩展元数据生成器：GET/POST/PATCH/DELETE、路径参数、JSON 请求体、对象/数组/可空标量响应及 bearer 标记。`client.request(operationId, { token, path, body })` 使用生成参数和响应类型；fetch/Taro 适配器支持 header/data 并有单测、真实 PostgreSQL/API 联调。未支持文件流、multipart、任意 OpenAPI 组合类型；新增形状须先扩展生成与测试，不宣称完整通用 SDK。运行时响应校验覆盖类型、必填与枚举，不是完整 JSON Schema format 校验器。
 
 ## 消费方式
 

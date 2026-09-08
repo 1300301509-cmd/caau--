@@ -1,6 +1,6 @@
 # 本地数据库、迁移与接口契约（CAAU-003）
 
-**状态：CAAU-003 本地工程验收完成（2026-09-08）；真实 dev/test PostgreSQL、连接/断连恢复、迁移与 shadow 流程均已验证。** 三应用启动和 Node 工具链见 [本地工程文档](local-tooling.md)，逐项证据见 [任务状态](../planning/roadmap.md)。没有业务表、业务角色权限或原型数据迁移。
+**状态：CAAU-003 本地工程验收完成（2026-09-08）；真实 dev/test PostgreSQL、连接/断连恢复、迁移与 shadow 流程均已验证。** 三应用启动和 Node 工具链见 [本地工程文档](local-tooling.md)，逐项证据见 [任务状态](../planning/roadmap.md)。CAAU-004 已在此基础上新增身份/权限锚点、会话与审计正式迁移，操作及验证见 [权限文档](authorization.md)。下文 CAAU-003 的“空模型/无正式迁移”描述保留为当时证据，不代表当前 schema；无原型数据迁移。
 
 ## 1. 当前 Mac 与 Docker Desktop
 
@@ -88,7 +88,7 @@ ready **只证明当前数据库可查询**，不检查业务表、迁移版本�
 
 ## 5. 迁移规则与实际验证
 
-正式模型未确认，当前不创建正式迁移 SQL，不运行 seed、不导入原型数据。迁移命令包装器只接受本机固定环境、账号、库名、端口和无额外查询参数的 URL；shadow 必须不同库，拒绝 URL 参数覆盖 host 的绕过。正式模型经确认后，在开发终端按需使用：
+CAAU-004 首版模型已确认并提供正式迁移 `202609080001_authorization`，dev 已 deploy/status，test 专属临时库已重复 deploy/diff 验证；不导入原型数据。迁移命令包装器只接受本机固定环境、账号、库名、端口和无额外查询参数的 URL；shadow 必须不同库，拒绝 URL 参数覆盖 host 的绕过。正式模型经确认后，在开发终端按需使用：
 
 ```sh
 corepack pnpm db:migrate:dev --name descriptive_change_name
@@ -131,7 +131,7 @@ corepack pnpm test:e2e
 
 确定性生成三个受追踪文件：`packages/api-client/openapi.json`、`src/generated/schema.ts`、`src/generated/operations.ts`。连续两次再生成已比对 SHA-256，全部字节一致。修改契约先改 Nest DTO/控制器，再生成并评审差异；不要手改 generated 文件或只改前端接口类型。
 
-`@caau/api-client` 无运行时依赖；生成的类型及 method/path/响应枚举元数据由手写、无业务规则的请求门面消费。Web 用独立 fetch/AbortController 适配器；小程序用只接受 Taro.request 能力的结构化适配器，不加载 Nest、Prisma、pg、Node 模块或浏览器 fetch 适配器。当前元数据生成器明确只支持两个工程 GET 接口的对象字符串枚举响应，遇到不支持的形状直接报错；未来业务契约出现请求体/分页等结构时需有测试地扩展，不宣称它是完整通用 OpenAPI SDK 生成器。
+`@caau/api-client` 无运行时依赖；生成的类型及 method/path/响应枚举元数据由手写、无业务规则的请求门面消费。Web 用独立 fetch/AbortController 适配器；小程序用只接受 Taro.request 能力的结构化适配器，不加载 Nest、Prisma、pg、Node 模块或浏览器 fetch 适配器。CAAU-004 元数据生成器已扩展 GET/POST/PATCH/DELETE、路径参数、JSON 请求体、对象/数组及可空响应；请求门面及 fetch/Taro 传输已补测试。文件流/multipart 和任意组合类型仍不支持，不宣称完整通用 SDK；详见 [权限文档](authorization.md)。
 
 CI 已配置独立工程检查与真实数据库作业：冻结安装、契约漂移检查、构建/测试/E2E，以及 Compose 配置、真实停启恢复/迁移检查。**未连接或推送远程，Linux runner 与远程 CI 均未执行。** 小程序仅编译和 Node 替身请求联调通过，微信开发者工具/真机仍未验收。
 

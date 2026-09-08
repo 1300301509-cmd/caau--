@@ -17,4 +17,6 @@ corepack pnpm --filter @caau/api start
 
 使用本地 PostgreSQL 时按 [数据库文档](../../docs/runbooks/database-contract.md) 先 db:setup、db:up，再 db:api；后者只注入 app 连接，不把迁移 owner 凭据传给 API。本机真实 PostgreSQL 连接、断连失败与同进程恢复已通过独立 db:test 验证；探测替身测试仍不代表真实数据库验证。
 
+CAAU-004 新增 `/api/v1/authorization/*`：内部用户、组织/成员、赛事/任务权限锚点、审核员指派、本地会话鉴权和审计。默认关闭身份模式，开启必须回环且非 production；使用方法、权限矩阵、dev 迁移和离线会话见 [权限操作文档](../../docs/runbooks/authorization.md)。仅权限底座，不实现材料或真实微信登录。
+
 完整步骤与限制见 [本地工程文档](../../docs/runbooks/local-tooling.md)。不建立未确认的业务模块或业务表。

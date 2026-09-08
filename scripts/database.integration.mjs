@@ -3,6 +3,7 @@ import { rm, readFile, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import test from 'node:test';
+import { authorizationIntegration } from './authorization.integration.mjs';
 import pg from 'pg';
 import { createApplication } from '../apps/api/dist/application.js';
 import { readConfig } from '../apps/api/dist/config.js';
@@ -17,6 +18,12 @@ import {
   migrationFixture,
   runPrisma,
 } from './migration-fixture.mjs';
+
+test(
+  'authorization foundation on isolated PostgreSQL',
+  { timeout: 120000 },
+  authorizationIntegration,
+);
 
 // Explicit entry only: never silently skip this suite or use arbitrary DB URLs.
 assert.equal(

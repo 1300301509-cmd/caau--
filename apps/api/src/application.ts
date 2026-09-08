@@ -11,15 +11,26 @@ export async function createApplication(
   probe?: DatabaseProbe,
 ) {
   const app = await NestFactory.create(
-    AppModule.register(probe ?? createDatabase(config.databaseUrl)),
+    AppModule.register(probe ?? createDatabase(config.databaseUrl), config),
     {
       logger: ['error', 'warn'],
+    },
+  );
+  app.use(
+    (
+      _request: unknown,
+      response: { setHeader(name: string, value: string): void },
+      next: () => void,
+    ) => {
+      response.setHeader('Cache-Control', 'no-store');
+      next();
     },
   );
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: config.origins,
-    methods: ['GET'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: false,
   });
   SwaggerModule.setup('openapi', app, createOpenApiDocument(app), {

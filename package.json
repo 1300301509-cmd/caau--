@@ -18,6 +18,7 @@
     "db:stop": "node scripts/database.mjs stop",
     "db:status": "node scripts/database.mjs status",
     "db:api": "node scripts/database.mjs api",
+    "auth:local": "corepack pnpm --filter @caau/database build && node scripts/local-identity.mjs",
     "db:migrate:dev": "node scripts/database.mjs migrate-dev",
     "db:migrate:deploy": "node scripts/database.mjs migrate-deploy",
     "db:migrate:status": "node scripts/database.mjs migrate-status",

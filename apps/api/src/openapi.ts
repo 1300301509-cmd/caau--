@@ -5,11 +5,12 @@ export function createOpenApiDocument(app: INestApplication) {
   return SwaggerModule.createDocument(
     app,
     new DocumentBuilder()
-      .setTitle('CAAU engineering API')
+      .setTitle('CAAU API')
+      .addBearerAuth()
       .setDescription(
-        'Liveness and database connectivity only. No approved business models.',
+        'Health and authorization foundation. Local test identity only; no material workflow or WeChat login.',
       )
-      .setVersion('0.1.0')
+      .setVersion('0.2.0')
       .build(),
   );
 }

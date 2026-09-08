@@ -84,3 +84,50 @@ test('Taro adapter uses only the supplied request capability', async () => {
     { status: 503, data: notReady },
   );
 });
+
+test('generated authorization paths, methods, bodies and headers reach fetch and Taro', async () => {
+  for (const mode of ['fetch', 'taro']) {
+    const inspect = (url, method, header, body) => {
+      assert.equal(
+        url,
+        'http://localhost/api/v1/authorization/task-scopes/synthetic%2Fid/reviewer',
+      );
+      assert.equal(method, 'PATCH');
+      assert.equal(header.Authorization, 'Bearer synthetic-test-token');
+      assert.deepEqual(body, { reviewerGrantId: null });
+    };
+    const transport =
+      mode === 'fetch'
+        ? createFetchTransport(async (url, options) => {
+            inspect(
+              url,
+              options.method,
+              options.headers,
+              JSON.parse(options.body),
+            );
+            return Response.json({ id: 'synthetic-id' });
+          })
+        : createTaroTransport(async (options) => {
+            inspect(options.url, options.method, options.header, options.data);
+            return { statusCode: 200, data: { id: 'synthetic-id' } };
+          });
+    const client = createApiClient('http://localhost', transport);
+    assert.deepEqual(
+      await client.request('assignTaskReviewer', {
+        token: 'synthetic-test-token',
+        path: { id: 'synthetic/id' },
+        body: { reviewerGrantId: null },
+      }),
+      { id: 'synthetic-id' },
+    );
+  }
+});
+
+test('authorization responses validate required fields and array item shapes', async () => {
+  const client = createApiClient('http://localhost', async () => ({
+    status: 200,
+    data: [{}],
+  }));
+  await assert.rejects(client.request('getSecurityAudit'), /生成契约/);
+  await assert.rejects(client.request('getIdentity'), /生成契约/);
+});

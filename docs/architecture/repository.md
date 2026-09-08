@@ -1,6 +1,6 @@
 # 仓库与代码组织
 
-状态：CAAU-002 三应用基线已保留；CAAU-003 已加入数据库入口、独立就绪接口与生成客户端，独立检查及本机真实数据库连接/恢复/迁移/shadow 验证通过，决策见 [ADR-0002](../adr/0002-database-contract.md)。业务模块仍按确认范围后续落地。
+状态：CAAU-002 三应用基线已保留；CAAU-003 已加入数据库入口、独立就绪接口与生成客户端，独立检查及本机真实数据库连接/恢复/迁移/shadow 验证通过，决策见 [ADR-0002](../adr/0002-database-contract.md)。CAAU-004 已落地 authorization 模块及身份/权限锚点模型，见 [ADR-0003](../adr/0003-authorization.md)；材料业务按 CAAU-005 后续落地。
 
 用户提供的 12 个实际导航板块及其前后端分层见 [业务模块映射](module-map.md)。模块边界提前规划，源码目录随对应功能实现落地。
 
@@ -18,7 +18,7 @@
 | docs/adr | 有理由和影响的架构决策 | 日常任务流水 |
 | docs/runbooks | 可验证的运行维护步骤 | 未验证的成功声明 |
 
-使用 pnpm workspace 单仓库；应用为 `@caau/miniapp`、`@caau/admin`、`@caau/api`；`@caau/api-client` 提供真实契约、请求门面与平台适配；`@caau/database` 提供仅服务端使用的 Prisma/pg 入口。后两个包已随 CAAU-003 实际实现而加入，不是占位空包；正式 Prisma schema 仍无未确认的业务模型。
+使用 pnpm workspace 单仓库；应用为 `@caau/miniapp`、`@caau/admin`、`@caau/api`；`@caau/api-client` 提供真实契约、请求门面与平台适配；`@caau/database` 提供仅服务端使用的 Prisma/pg 入口。后两个包已随 CAAU-003 实际实现而加入，不是占位空包；正式 Prisma schema 仅新增已确认的身份、组织成员、授权锚点、会话和审计模型，无材料/文件/审核状态模型。
 
 ## 依赖方向
 
@@ -39,7 +39,9 @@ admin ───┘
 
 建议内部职责：controller 接收请求；DTO 校验输入并描述契约；service 执行业务用例、授权范围和事务编排；repository 承担模块数据访问。简单模块不必为每个类增加一层目录。
 
-基础域：auth 管理身份与会话；organizations 管理组织和成员关系；permissions 管理操作及数据范围；events 管理赛事；tasks 管理交付与审核；files 管理附件授权。报名、财务、AI 等在对应需求确认后加入。
+当前 `authorization` 统一承担身份/组织/权限锚点管理、策略与授权事务审计；控制器/DTO、全局 Guard、service 及 policy 分离，Prisma 构造入口仍仅在 database。后续新增业务域复用策略并保持授权、业务写入、审计同事务。
+
+基础域规划：auth 管理身份与会话；organizations 管理组织和成员关系；permissions 管理操作及数据范围；events 管理赛事；tasks 管理交付与审核；files 管理附件授权。报名、财务、AI 等在对应需求确认后加入。
 
 跨模块通过明确导出的服务或接口调用，不直接使用其他模块的 repository 或修改其所属记录。需要跨域事务时，在实现前明确事务用例的负责模块和参与服务，不把事务拆成不能回滚的独立写入。
 

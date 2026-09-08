@@ -15,7 +15,20 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       throw new Error('CORS_ORIGINS must contain exact HTTP(S) origins');
     }
   }
+  const localIdentity = env.CAAU_IDENTITY_MODE === 'local';
+  if (
+    env.CAAU_IDENTITY_MODE &&
+    !['local', 'disabled'].includes(env.CAAU_IDENTITY_MODE)
+  )
+    throw new Error('Invalid identity mode');
+  if (
+    localIdentity &&
+    (env.NODE_ENV === 'production' ||
+      !['127.0.0.1', '::1'].includes(env.HOST ?? '127.0.0.1'))
+  )
+    throw new Error('Local identity requires non-production loopback host');
   return {
+    localIdentity,
     port,
     host: env.HOST ?? '127.0.0.1',
     origins,

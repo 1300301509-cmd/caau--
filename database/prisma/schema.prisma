@@ -1,4 +1,3 @@
-// No business models are approved yet. Do not add placeholder business tables.
 generator client {
   provider     = "prisma-client"
   output       = "../src/generated/prisma"
@@ -7,4 +6,85 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  EVENT_MANAGER
+  ORGANIZER
+  REVIEWER
+  SYSTEM_ADMIN
+}
+
+model InternalUser {
+  id          String @id @default(uuid()) @db.Uuid
+  displayName String @db.VarChar(80)
+  active      Boolean @default(true)
+  memberships OrganizationMember[]
+  sessions    Session[]
+}
+
+model Organization {
+  id      String @id @default(uuid()) @db.Uuid
+  name    String @db.VarChar(120)
+  members OrganizationMember[]
+}
+
+model OrganizationMember {
+  id             String @id @default(uuid()) @db.Uuid
+  userId         String @db.Uuid
+  organizationId String @db.Uuid
+  role           Role
+  active         Boolean @default(true)
+  user           InternalUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  grants         EventGrant[]
+  @@unique([userId, organizationId, role])
+}
+
+// Authorization anchors, not event/task content or workflow models.
+model EventScope {
+  id     String @id @default(uuid()) @db.Uuid
+  grants EventGrant[]
+}
+
+model EventGrant {
+  id         String @id @default(uuid()) @db.Uuid
+  eventId    String @db.Uuid
+  memberId   String @db.Uuid
+  event      EventScope @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  member     OrganizationMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  handledTasks TaskScope[] @relation("Handler")
+  reviewTasks  TaskScope[] @relation("Reviewer")
+  @@unique([eventId, memberId])
+  @@unique([id, eventId])
+}
+
+model TaskScope {
+  id              String @id @default(uuid()) @db.Uuid
+  eventId         String @db.Uuid
+  handlerGrantId  String @db.Uuid
+  reviewerGrantId String? @db.Uuid
+  handler         EventGrant @relation("Handler", fields: [handlerGrantId, eventId], references: [id, eventId], onDelete: Restrict)
+  reviewer        EventGrant? @relation("Reviewer", fields: [reviewerGrantId, eventId], references: [id, eventId], onDelete: Restrict)
+}
+
+model Session {
+  id        String @id @default(uuid()) @db.Uuid
+  tokenHash String @unique @db.Char(64)
+  userId    String @db.Uuid
+  expiresAt DateTime @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  user      InternalUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model AuditRecord {
+  id         String @id @default(uuid()) @db.Uuid
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+  actorId    String? @db.Uuid
+  action     String @db.VarChar(64)
+  resourceId String? @db.Uuid
+  outcome    String @db.VarChar(16)
+  requestId  String @db.Uuid
+  context    Json @default("{}")
+  @@index([occurredAt])
 }

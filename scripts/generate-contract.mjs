@@ -28,31 +28,60 @@ try {
 } finally {
   await app.close();
 }
-assert.deepEqual(Object.keys(spec.paths), ['/api/v1/health', '/api/v1/ready']);
+function resolveSchema(schema) {
+  if (schema.$ref) {
+    assert.ok(schema.$ref.startsWith('#/components/schemas/'));
+    return resolveSchema(
+      spec.components.schemas[schema.$ref.split('/').at(-1)],
+    );
+  }
+  assert.ok(
+    ['object', 'array', 'string', 'boolean', 'integer', 'number'].includes(
+      schema.type,
+    ),
+    'Unsupported schema shape',
+  );
+  if (schema.type === 'object')
+    return {
+      ...schema,
+      properties: Object.fromEntries(
+        Object.entries(schema.properties ?? {}).map(([key, value]) => [
+          key,
+          resolveSchema(value),
+        ]),
+      ),
+    };
+  if (schema.type === 'array')
+    return { ...schema, items: resolveSchema(schema.items) };
+  return schema;
+}
 const metadata = {};
 for (const [url, item] of Object.entries(spec.paths)) {
-  assert.deepEqual(Object.keys(item), ['get']);
-  const operation = item.get;
-  assert.ok(operation.operationId && !metadata[operation.operationId]);
-  const responses = {};
-  for (const [status, response] of Object.entries(operation.responses)) {
-    const reference = response.content?.['application/json']?.schema?.$ref;
-    assert.ok(
-      reference?.startsWith('#/components/schemas/'),
-      'Only local DTO schema references are supported',
-    );
-    const schema = spec.components.schemas[reference.split('/').at(-1)];
-    assert.equal(schema.type, 'object');
-    for (const property of Object.values(schema.properties)) {
-      assert.equal(property.type, 'string');
-      assert.ok(
-        Array.isArray(property.enum),
-        'Extend generator deliberately when new wire shapes are approved',
-      );
+  for (const [method, operation] of Object.entries(item)) {
+    assert.ok(['get', 'post', 'patch', 'delete'].includes(method));
+    assert.ok(operation.operationId && !metadata[operation.operationId]);
+    const responses = {};
+    for (const [status, response] of Object.entries(operation.responses)) {
+      const schema = response.content?.['application/json']?.schema;
+      if (schema) responses[status] = resolveSchema(schema);
     }
-    responses[status] = schema;
+    assert.ok(
+      responses['200'],
+      'Current facade requires a documented 200 success',
+    );
+    metadata[operation.operationId] = {
+      path: url,
+      method: method.toUpperCase(),
+      responses,
+      parameters: operation.parameters ?? [],
+      body: operation.requestBody
+        ? resolveSchema(
+            operation.requestBody.content['application/json'].schema,
+          )
+        : null,
+      authenticated: (operation.security?.length ?? 0) > 0,
+    };
   }
-  metadata[operation.operationId] = { path: url, method: 'GET', responses };
 }
 const header =
   '/** Generated from the Nest OpenAPI contract. DO NOT EDIT. */\n';

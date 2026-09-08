@@ -73,10 +73,10 @@ test('database commands refuse remote Docker endpoints before contacting a daemo
     assert.throws(() => assertLocalDockerEndpoint(endpoint));
 });
 
-test('Prisma generates SQL from an isolated temporary model without changing the formal empty schema', async (t) => {
+test('Prisma generates SQL from an isolated temporary model without changing the formal schema', async (t) => {
   const formal = new URL('../database/prisma/schema.prisma', import.meta.url);
   const before = await readFile(formal, 'utf8');
-  assert.doesNotMatch(before, /^\s*model\s+/m);
+  assert.doesNotMatch(before, /^\s*model\s+MigrationProbe\b/m);
   const fixture = await migrationFixture();
   t.after(() => rm(fixture.directory, { recursive: true, force: true }));
   const sql = await generateFixtureMigration(fixture);

@@ -214,7 +214,14 @@ async function main() {
   } else if (operation === 'test') {
     await requireDocker();
     const env = await databaseEnvironment('test');
-    await run('corepack', ['pnpm', '--filter', '@caau/api...', 'build']);
+    await run('corepack', [
+      'pnpm',
+      '--filter',
+      '@caau/api...',
+      '--filter',
+      '@caau/api-client',
+      'build',
+    ]);
     await run('docker', [
       'compose',
       '-f',
