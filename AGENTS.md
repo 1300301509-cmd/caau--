@@ -14,7 +14,7 @@
 1. 修改前检查 Git 状态，保留已有工作；仅修改本仓库内授权范围。
 2. 任务使用明确编号、目标、范围与验收标准，按 CONTRIBUTING.md 管理分支与提交。
 3. 不跨应用直接引用源码，不把数据库客户端或服务端密钥引入前端；跨模块依赖遵守代码组织文档。
-4. 依赖初始化时核验官方版本和兼容性，再固定 Node.js、pnpm 及依赖版本并提交锁文件。根工作区工具已可运行，三个应用尚未初始化；不编造应用命令或检查结果。
+4. 依赖初始化时核验官方版本和兼容性，再固定 Node.js、pnpm 及依赖版本并提交锁文件。三个应用已有工程骨架与健康接口，已验证命令见 docs/runbooks/local-tooling.md；不编造微信工具、真机或远程 CI 验收结果。
 5. 执行与改动相关的检查，记录已通过、失败和未运行项。文档变更检查链接、路径、差异即可。
 6. 不提交真实凭据、用户上传、数据库副本、生产数据或本机配置；不覆盖用户工作、不强推共享分支。
 7. 外部发布、账号资源和业务决策按用户授权范围处理；缺少远程归属时继续本地工作。
@@ -28,6 +28,10 @@ git diff --check
 git diff
 corepack pnpm install --frozen-lockfile
 corepack pnpm check
+corepack pnpm build
+corepack pnpm test
+corepack pnpm exec playwright install chromium
+corepack pnpm test:e2e
 ```
 
-根工具与检查范围见 docs/runbooks/local-tooling.md。应用命令在工程初始化并验证后补充；当前检查不代表构建、真机验收或生产验证。
+使用官方 Node.js 24.20.0 和指定 pnpm。构建必须先于应用/API 测试；test:e2e 使用 3000/4173 端口且不复用既有服务。完整启动步骤、检查范围和已知提示见 docs/runbooks/local-tooling.md。构建与 Node 适配器联调不代表微信平台、真机或生产验证。

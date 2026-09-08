@@ -1,6 +1,6 @@
 # 仓库与代码组织
 
-状态：仓库组织基线；应用内部目录为后续初始化目标，当前尚无源码。
+状态：仓库组织基线；CAAU-002 已建立三个应用的工程与健康检查源码，业务模块仍按确认范围后续落地。
 
 用户提供的 12 个实际导航板块及其前后端分层见 [业务模块映射](module-map.md)。模块边界提前规划，源码目录随对应功能实现落地。
 
@@ -18,7 +18,7 @@
 | docs/adr | 有理由和影响的架构决策 | 日常任务流水 |
 | docs/runbooks | 可验证的运行维护步骤 | 未验证的成功声明 |
 
-使用 pnpm workspace 单仓库；未来包命名 `@caau/miniapp`、`@caau/admin`、`@caau/api`、`@caau/api-client`。若 database 提供运行时入口，作为仅服务端使用的 `@caau/database` 包加入工作区。依赖与包定义在 CAAU-002 核验后建立。
+使用 pnpm workspace 单仓库；未来包命名 `@caau/miniapp`、`@caau/admin`、`@caau/api`、`@caau/api-client`。若 database 提供运行时入口，作为仅服务端使用的 `@caau/database` 包加入工作区。CAAU-002 已建立三个应用包；api-client/database 仍为 CAAU-003 的预留目录，未因占位说明生成空包。
 
 ## 依赖方向
 
@@ -29,9 +29,9 @@ admin ───┘
 ```
 
 - 应用之间不能通过相对路径导入源码；前端不能依赖 api 或 database。
-- api-client 来自后端 OpenAPI 契约，生成文件不手工修改。生成工具、输出路径和可复现命令在 CAAU-003 固定。
+- api-client 来自后端 OpenAPI 契约，生成文件不手工修改。生成工具、输出路径和可复现命令在 CAAU-003 固定。CAAU-002 仅有健康探测，两端暂用各自平台请求适配器直连 HTTP 并校验响应，不手写假生成客户端，也不跨应用引用 API 源码。
 - 初期不创建通用 UI、utils 或多个配置包。出现两个明确使用方且语义一致时再提取共享包；两端不强制统一 React 版本。
-- 依赖边界目前由评审执行；工程可运行后在 CAAU-002 中增加相应静态检查。
+- CAAU-002 已加入 AST 导入与应用依赖清单检查，禁止跨应用源码、前端数据库/服务端依赖；当前无路径别名，新增别名或计算型导入须先扩展规则。检查实现与反例测试见 scripts/check-boundaries.mjs 及其测试；完整打包/供应链安全检查不能由该规则替代。
 
 ## 后端模块
 
@@ -47,4 +47,4 @@ admin ───┘
 
 前端按 `src/features/<domain>/` 放置业务功能；应用入口与路由放 `src/app/`，真正的通用组件放 `src/components/`。miniapp 保留 Taro 所需页面和配置目录，以实际脚手架约定为准。
 
-单元测试靠近被测源码；各应用集成测试放其 `test/`，端到端测试放其 `e2e/`。使用合成 fixture，不把原型账号或真实名单作为测试数据提交。具体测试框架在工程初始化时核验。
+单元测试靠近被测源码；各应用集成测试放其 `test/`，端到端测试放其 `e2e/`。使用合成 fixture，不把原型账号或真实名单作为测试数据提交。CAAU-002 使用 Node 原生测试、tsx 请求逻辑测试与 Playwright Web E2E；真实 HTTP 联调编排放 scripts/clients-http.integration.mjs，仅测试用途，不被任何应用引用。微信工具与真机验证独立记录。

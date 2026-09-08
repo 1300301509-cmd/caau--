@@ -6,6 +6,7 @@ const ignored = new Set([
   '.git',
   'node_modules',
   '.pnpm-store',
+  '.swc',
   '.local',
   '.data',
   'uploads',

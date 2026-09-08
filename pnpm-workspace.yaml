@@ -3,6 +3,19 @@ packages:
   - packages/*
   - database
 
-# No dependency lifecycle scripts are needed by the current tooling.
-# Review this allow-list when application dependencies are introduced.
-onlyBuiltDependencies: []
+# esbuild verifies/selects its platform binary during installation.
+onlyBuiltDependencies:
+  - esbuild
+# Nest's postinstall only prints its donation message; no build is required.
+ignoredBuiltDependencies:
+  - '@nestjs/core'
+  # Prebuilt platform packages are locked; no local native compilation/fallback install.
+  - '@parcel/watcher'
+  - '@swc/core'
+  - '@tarojs/binding'
+  # CLI postinstall would add a global, floating performance-report plugin.
+  - '@tarojs/cli'
+  - core-js
+  - core-js-pure
+# Frontend frameworks must resolve peers in their own application, not the root.
+resolvePeersFromWorkspaceRoot: false

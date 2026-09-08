@@ -1,83 +1,134 @@
-# 本地工程工具与初始化核验（CAAU-002 / 第一步）
+# 本地启动、检查与工程版本（CAAU-002）
 
-状态：工作区工具已可运行；三个应用、数据库和 CI 尚未初始化。本轮用户表示业务闭环需后续对接负责人，先推进现阶段能做的工作；因此只实施与业务无关的技术底座，不创建业务模型或角色授权代码。
+状态：三个应用工程已初始化；只实现健康接口与两端连接页。业务闭环仍待负责人确认。本文件区分本地已执行检查、模拟传输联调、微信平台验收与远程 CI，不把构建当成真机通过。
 
-## 1. 当前可运行命令
+## 1. 环境与安装
 
-本轮使用 Node.js `24.19.0`、Corepack 调用 pnpm `10.32.1`，未安装全局 pnpm。项目的 `.node-version`、package.json engines/packageManager 固定当前验证基线；`.node-version` 供已有运行时管理工具读取，不会自动替换本机 Node。
+- 官方 Node.js **24.20.0**（Krypton LTS），版本文件 `.node-version`；package.json 限制 24.20.x。
+- pnpm **10.32.1**，由 packageManager 固定，通过 Corepack 调用。不要混用 npm/yarn 生成锁文件。
+- 首次安装需要访问公开 npm registry；浏览器测试另需下载 Playwright Chromium。
+- 本轮无数据库依赖，不需要 Docker、PostgreSQL、微信账号或任何密钥即可运行 API/Web 和编译小程序。
 
 ```sh
-# 在正式仓库根目录执行；仅安装公开工程依赖，不连接 Git 远程。
+cd '/Users/xx_mac/Desktop/caau开发'
+node --version                         # 应为 v24.20.0
+corepack pnpm --version                # 应为 10.32.1
 corepack pnpm install --frozen-lockfile
-corepack pnpm check
-
-# 可以单独运行：
-corepack pnpm check:docs
-corepack pnpm check:format
-corepack pnpm test:tooling
 ```
 
-需要本机具备 Node 和 Corepack；本轮没有对系统全局工具做安装/升级。已存在独立 pnpm 且版本匹配的机器可使用 `pnpm` 代替 `corepack pnpm`。
+新机器先安装指定官方 Node，并确认 `node` 和 `corepack` 位于 PATH。若是本轮同一台 Mac，已校验的官方 Node 位于仓库忽略目录，可在**各终端**进入仓库后使用：
 
-当前仅有根工作区 package.json 和 Prettier `3.6.2` 开发依赖；锁文件为实际安装生成。apps、packages、database 仅声明工作区匹配目录，没有通过虚假 package.json 把职责目录算成可运行应用。`onlyBuiltDependencies: []` 表示当前没有获准的依赖构建脚本，后续引入真实应用依赖时逐项评估，不无条件允许安装脚本。
+```sh
+export PATH="$PWD/.local/toolchain/node-v24.20.0-darwin-arm64/bin:$PATH"
+```
 
-### 检查的实际范围
+`.local/` 不提交，不随仓库分发，其他机器不能假定它存在。本机原有 Node 来自 ChatGPT 应用，其签名策略拒绝加载 SWC 原生模块；本轮没有修改签名或系统安全设置，而是下载官方 Node 并验证官方 SHA-256。下载文件 `node-v24.20.0-darwin-arm64.tar.gz` 的 SHA-256 为 `40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8`；来源 `https://nodejs.org/dist/v24.20.0/SHASUMS256.txt`。这是校验和核对，不声称独立签名审计。
 
-- `check:docs`：扫描本仓库 Markdown 的内联相对链接，检查文件/目录目标存在；跳过依赖、构建、本地数据、上传、符号链接以及三反引号围栏示例，不请求外部 URL。当前不校验锚点、引用式链接、带标题/尖括号等完整 Markdown 语法，也不核实业务来源真实性。
-- `check:format`：仅检查根 package.json、workspace YAML、Prettier 配置和本轮工具脚本。**不重排 agent.md、原有产品文档或用户修改。**后续有应用源码再扩大范围。
-- `test:tooling`：Node 原生测试覆盖正确文件/目录链接、缺失链接反例、外部 URL 跳过、依赖目录/围栏排除；测试仅在自建临时目录创建合成文件并清理。
-- 尚无业务测试、应用类型/构建检查、静态依赖边界检查和运行中的 CI；不能以这些工具检查代替 CAAU-002 的最终验收。
+## 2. 启动三个应用
 
-## 2. 本机环境事实
+以下命令均从仓库根目录运行，需要三个终端。默认无需复制 .env 或填入真实凭据。
 
-| 项目 | 本轮检查结果 | 影响 |
+### 终端 A：后端 API
+
+```sh
+corepack pnpm dev:api
+# 另一个终端可检查：
+curl -i http://127.0.0.1:3000/api/v1/health
+```
+
+预期 HTTP 200：`{"status":"ok","service":"caau-api"}`。这是公开的进程存活接口，不含版本、凭据、数据库连接信息，不宣称数据库就绪。`dev:api` 先执行 tsc 再启动，**当前不自动热重载**；修改 API 后 Ctrl+C 并重启。保留 TypeScript 装饰器 metadata 的正式编译，不用转译模式冒充 Nest 构建。
+
+可选配置见 `apps/api/.env.example`；需要调整时复制为同目录 `.env`。`HOST` 默认 `127.0.0.1`、`PORT` 默认 `3000`；只有明确需要外部测试时才调整监听地址和防火墙。`CORS_ORIGINS` 为精确 HTTP(S) 来源的逗号分隔列表，不接受 `*`；CORS 不是鉴权。
+
+### 终端 B：Web 管理后台
+
+```sh
+corepack pnpm dev:admin
+```
+
+打开 **http://127.0.0.1:5173**，点击“检查后端连接”。成功应显示“已连接 caau-api，服务状态正常”；请求中、HTTP 错误、无效响应和网络失败不显示伪成功。
+
+`apps/admin/.env.example` 展示 `VITE_API_BASE_URL`，默认 `http://127.0.0.1:3000`；如需修改，复制到 `.env.local`，修改后重启/重新构建。Vite 编译变量公开可见，不能放密钥。
+
+### 终端 C：微信小程序编译
+
+```sh
+corepack pnpm dev:miniapp
+```
+
+命令进入 watch 编译；产物在 `apps/miniapp/dist/`。微信开发者工具导入 **apps/miniapp**，而不是仓库根目录；project.config.json 的 miniprogramRoot 已指向 dist。
+
+- `touristappid` 是游客占位，不是实际用户身份，也不保证有完整运行/预览资格；真实测试 AppID/权限由微信资源决定，尚未配置和验收。
+- 默认地址与 Web 相同：`http://127.0.0.1:3000/api/v1/health`。本地 HTTP 调试需使用者在开发者工具中仅对本地调试关闭合法域名检查；仓库保持 `urlCheck: true`，不将绕过检查作为发布方案。
+- 手机的 127.0.0.1 指向手机自身，不是电脑。真机必须使用可达的测试 API、合法 HTTPS 域名及平台权限配置；本轮均未验证。
+- 地址在编译时写入，建议显式设置环境变量，不依赖隐式 .env 加载：
+
+```sh
+# YOUR_TEST_API_HOST 是占位值，需替换为届时已配置的测试 API。
+TARO_APP_API_BASE_URL=https://YOUR_TEST_API_HOST corepack pnpm dev:miniapp
+```
+
+所有服务 Ctrl+C 停止。端口占用时应先确认占用进程，不自动结束其他用户进程。API/Web 默认均只监听回环地址。
+
+## 3. 构建与验证命令
+
+```sh
+corepack pnpm check
+corepack pnpm build
+corepack pnpm test
+corepack pnpm exec playwright install chromium
+corepack pnpm test:e2e
+```
+
+顺序不能省略：API 测试使用 dist 编译产物，浏览器测试使用 Web 生产构建，必须先 build。测试开始前停止正在占用 **3000、4173** 的本项目服务；Playwright 不复用已有服务，以免验证到错误应用。
+
+| 命令 | 实际行为 |
+| --- | --- |
+| `check:docs` | 内联 Markdown 相对链接目标存在性；不验证锚点、引用式链接或外部 URL |
+| `check:format` | 根工程配置、应用源码/配置/测试、工具脚本和 CI 格式；不重排历史产品文档和 agent.md |
+| `lint` | ESLint recommended + TypeScript recommended，零 lint 警告；另执行应用边界检查 |
+| `typecheck` | 三个应用与浏览器测试配置严格 TypeScript 检查；skipLibCheck 仅跳第三方声明库，不关闭业务源码严格模式 |
+| `test:tooling` | 6 个工具测试，含坏链接、跨应用/服务端依赖反例及 AST import 检查 |
+| `build` | API tsc、Web tsc + Vite、Taro weapp 编译；检查 app.json/JS/WXML/WXSS 实际产物 |
+| `test` | API 真实 HTTP/CORS/错误配置测试；两端请求单测；两端共享后端的 HTTP 联调，共 7 个测试 |
+| `test:e2e` | Chromium 打开生产构建 Web 页面，连接真实 API、失败后重试；2 个测试，不运行微信 |
+
+单独构建：`corepack pnpm --filter @caau/api build`、`corepack pnpm --filter @caau/admin build`、`corepack pnpm --filter @caau/miniapp build`。生产构建的本地预览：先 `corepack pnpm --filter @caau/api start`，再 `corepack pnpm --filter @caau/admin preview`，访问 `http://127.0.0.1:4173`；preview 不是生产部署方案。
+
+边界检查覆盖应用的静态 import/export、字符串 require/import()、类型 import、应用依赖清单；禁止跨应用包/相对源码引用和前端引用 Prisma/Nest/数据库；前端 src 禁 Node 内置模块，Node 测试与构建配置允许使用。当前不使用路径别名，新增 tsconfig paths/baseUrl 会使检查失败，须先扩展规则；计算型 import 需显式评审。仓库级联调脚本可以编排两端和 API，但不成为任何应用的运行时依赖。它不是完整供应链/打包产物安全扫描。
+
+## 4. 固定版本与选择证据
+
+本轮再次使用 Context7 官方文档与 npm 精确版本元数据核对 engines、peerDependencies、optional peers、deprecated；通过实际安装/类型/构建验证组合。所有直接依赖使用精确版本，传递依赖由 pnpm-lock.yaml 锁定，不使用浮动 latest 脚手架。
+
+| 层 | 实际锁定 | 选择与验证 |
 | --- | --- | --- |
-| Node | 24.19.0，来自本机已有应用附带运行时；arm64 | 本轮工具可运行；后续独立开发环境应安装受控官方运行时，不依赖该应用路径 |
-| npm | 11.17.0 | 可用，但本仓库安装依赖统一用指定 pnpm，不混用 npm lockfile |
-| pnpm | 起初无独立命令；`corepack pnpm --version` 返回 10.32.1 | 无需全局安装；根脚本不能假定 PATH 上有 pnpm 命令 |
-| Docker | PATH 中未找到 docker 命令 | 不阻塞根工具/三个应用骨架；数据库容器与 PostgreSQL 集成测试尚不能承诺运行 |
-| Git | 008 三份产品文档和 roadmap 修改仍在 | 保留当前分支与未提交工作，未强行切 main、合并、提交或重置 |
+| 运行时/包管理器 | 官方 Node 24.20.0 / pnpm 10.32.1 | 在既有 24.19.0 基础上升受支持 LTS 补丁，解决本机受限应用运行时问题；不用全局覆盖 |
+| 语言 | TypeScript 5.9.3 | 与 typescript-eslint 8.57.0 的 `<6` 范围一致；不跟随 latest 7 |
+| API | Nest common/core/platform-express 11.1.16，reflect-metadata 0.2.2，rxjs 7.8.2 | 核心包同版本；Node ≥20；不需要 Nest CLI，不引入 CLI 12 的另一套 TS6；ESM/NodeNext |
+| Web | React/DOM 19.2.8，Ant Design 6.6.3，Vite 8.2.2，plugin-react 6.1.1 | Vite 与插件匹配；AntD6 原生支持 React19，不加 v5 补丁 |
+| 小程序 | Taro 全系列 4.2.1，React 18.3.1，官方 webpack5 runner，Webpack 5.91.0 | Taro React peer 为 ^18，runner 要求精确 webpack；与 Web React/Vite 分开解析，不强制统一 |
+| 小程序编译补充 | Babel core/preset-react 7.28.5，babel-preset-taro 4.2.1，PostCSS 8.5.6，Less 4.2.2 | 首次解析出 Less3，与 runner peer 不符，增加明确 Less4 依赖后严格安装通过，没有关闭严格 peer 检查 |
+| 规范与测试 | ESLint 10.5.0、@eslint/js 10.0.1、typescript-eslint 8.57.0、Prettier 3.6.2、tsx 4.21.0、Playwright 1.58.2 | 发现 ESLint9 已标弃用，采用兼容 ESLint10；测试环境使用 Node 原生测试和 Chromium |
+| 数据库规划（未安装） | Prisma 7.10.0 候选，留到 CAAU-003 | 本轮核验 Node/TS 约束；不选 latest 指向的 RC，不创建业务表或迁移 |
 
-Node 官方发布索引确认 24.19.0 为 Krypton LTS；本轮检索到 24.x 的更新补丁为 24.20.0。当前固定已实际验证的本机版本，不把“符合最低要求”当作最新安全补丁证明；独立环境/发布前升级受支持补丁并重新验证。
+安装脚本按需允许：只允许 esbuild 平台二进制验证。SWC/Taro/Parcel 使用锁文件中的平台预编译包，不额外下载未锁定 fallback 或从源编译；core-js/Nest 安装提示不执行。特别检查发现 Taro CLI postinstall 会尝试配置**全局浮动性能上报插件**，故显式忽略，不能直接 approve 全部脚本。pnpm 在本机已有依赖缓存上仍可能提示这些脚本被忽略，这是有意限制，不是通过跳过业务测试掩盖失败。
 
-## 3. 官方文档与包元数据核验
-
-来源：本轮 Context7 查询官方文档仓库，并直接读取 npm registry 的 version/engines/peerDependencies；Node 查询官方发布索引。只传公开产品名，不发送项目代码、配置或个人数据。检索结果是当次快照，**版本存在、未标 deprecated、满足 engines 均不等于组合构建通过或安全审计通过**。
-
-| 项目 | 查到的约束/候选 | 工程判断 |
-| --- | --- | --- |
-| pnpm | 10.32.1 包 engines ≥18.12；latest 为 12.3.4 | 根工具先固定实际验证的 10.32.1，不自动跨大版本升级 |
-| Taro | CLI/react/runner 4.2.1；`@tarojs/react` peer React `^18` | 小程序候选 React/ReactDOM 18.3.1；Taro 相关包版本对齐，不随根目录升 React 19 |
-| Taro 编译器 | vite-runner 4.2.1 peer Vite `^4`；webpack5-runner peer Webpack `5.91.0` | 不把 Web 的 Vite 8 强行注入 Taro；后续先在小程序隔离依赖下验证官方 runner，构建后才锁定选项 |
-| Web | Vite 8.2.2 要求 Node `^20.19.0 || >=22.12.0`；plugin-react 6.1.1 peer Vite `^8` | 当前 Node 满足最低约束；Web 独立依赖，无需强求两端同一构建器 |
-| React / Ant Design | React latest 19.2.8；Ant Design 6.6.3 peer React/DOM ≥18，文档说明原生支持 React 19 | Web 可单独选 React 19；不需要旧 v5 React 19 补丁；组合待实构建 |
-| NestJS | core latest 12.0.1；CLI 12.0.0 内部依赖 TypeScript `~6.0.2`；11.1.16 包亦存在且 engines ≥20 | 不直接执行浮动 CLI 生成工程；在应用初始化时确定同大版本核心包及匹配 TS，避免根 TypeScript 隐式漂移 |
-| TypeScript | latest 7.0.2；候选 5.9.3 包已核验 | 不把 latest 当兼容性证明；仅在实际应用需要时安装，允许工具内部编译器和应用分别锁定 |
-| Prisma | latest 当时为 `8.0.0-rc.13`；7.10.0 的 CLI/client/adapter-pg 包均存在 | 不选 RC；后续候选 7.10.0 + PostgreSQL adapter，按 v7 的 ESM/初始化规则实施，不沿用旧示例 |
-| Prisma v7 运行时 | 7.10.0 engines `^20.19 || ^22.12 || >=24.0`，TypeScript ≥5.4 | 本机 Node 符合；尚未安装 Prisma、生成模型、连接数据库或运行迁移 |
-
-本轮**仅锁定根工具依赖**，表内应用候选不是已安装清单。不预填云服务/微信账号、数据库密码或未知 AppID，不创建会连接生产的配置。
-
-可复查来源：
-- Node 发布索引：https://nodejs.org/dist/index.json
-- npm 包元数据：`https://registry.npmjs.org/<公开包名>/<版本或标签>`
-- pnpm 安装：https://pnpm.io/installation
-- Taro React 18：https://docs.taro.zone/docs/react-18
-- Taro 编译配置：https://docs.taro.zone/docs/config-detail
-- Nest 迁移：https://docs.nestjs.com/migration-guide
-- Vite Node 要求：https://vite.dev/guide/
+公开来源：
+- Node 发布：https://nodejs.org/dist/index.json
+- 精确包元数据：`https://registry.npmjs.org/<公开包名>/<精确版本>`
+- Taro React18 / 编译：https://docs.taro.zone/docs/react-18 、https://docs.taro.zone/docs/config-detail
+- Nest CORS：https://docs.nestjs.com/security/cors
+- Vite：https://vite.dev/guide/ 、https://vite.dev/guide/env-and-mode
 - Ant Design v6：https://ant.design/docs/react/migration-v6
-- Prisma v7：https://www.prisma.io/docs/orm/more/upgrade-guides/upgrading-versions/upgrading-to-prisma-7
+- ESLint：https://eslint.org/docs/latest/use/configure/configuration-files
+- pnpm：https://pnpm.io/cli/install
+- Playwright CI：https://playwright.dev/docs/ci
 
-## 4. 本轮验证与限制
+## 5. CI 与交付边界
 
-实际执行：Corepack 指定 pnpm、首次安装生成锁文件、同一工作区 `install --frozen-lockfile`、格式检查、文档链接检查和 3 个工具测试均通过。首次根 check 使用嵌套 pnpm 命令，因本机无全局 pnpm 而失败；已改为直接调用 Node/Prettier，重跑通过，不要求用户改 PATH。
+`.github/workflows/ci.yml` 对 PR、main/codex 分支 push 执行：指定 Node → frozen install → check → 三应用 build → test → 安装 Chromium → Web E2E → 跟踪文件无生成漂移。运行于 Ubuntu 24.04、只读 contents 权限、有限超时，不含密钥、数据库、部署或微信上传。checkout/setup-node 固定提交 SHA。
 
-没有执行：独立干净机器重装、依赖漏洞审计、三个应用构建、数据库/迁移测试、微信开发者工具/真机、CI 远程运行或部署。未安装 Docker，未改原型、读取凭据文件、复制个人数据或连接 Git 远程。
+**实际执行结果与限制见 [CAAU-002 开发计划](../planning/roadmap.md)。** 本地 CLI、构建与浏览器通过不等于 GitHub Actions 已运行；本轮不连接/推送 Git 远程，所以远程 CI、Linux runner、分支保护均未验收。微信开发者工具/真机、HTTPS 合法域名、生产部署与数据库仍未验收。
 
-## 5. 不依赖业务确认的后续工作
-
-1. 固定各应用实际可兼容依赖，初始化最小 Nest API 健康接口、Web 技术连接页、小程序技术连接页；不放业务菜单、假业绩、演示角色或业务表。
-2. 建立应用格式/类型/构建与依赖边界检查；本地执行有效后才接入真实 CI 配置，远程接入仍按原授权边界。
-3. 建立仅健康检查的 OpenAPI 契约和客户端生成链路，再准备隔离 PostgreSQL 开发环境；数据库连接与迁移验收不依赖选择具体业务闭环，但业务建模必须等待确认。
-4. 业务闭环、业务权限、材料清单和历史迁移继续挂起；不重复追问用户，等其与负责人对接后恢复。
+已知非阻塞提示：Taro 工具链有 15 个弃用传递依赖提示（包括其内部 ESLint8，区别于根 ESLint10）；Web 首个 AntD 页面主 JS 超过 Vite 默认 500KB 提示，暂不为技术演示页引入业务拆包；Node 直接加载 miniapp TS 的联调测试有模块类型推断提示。上述未隐藏，也不构成完整依赖安全审计。后续发布前需评估工具链升级、安全与体积预算。

@@ -1,0 +1,12 @@
+{
+  "description": "CAAU 工程连接检查；不含业务功能",
+  "miniprogramRoot": "dist/",
+  "projectname": "caau-miniapp",
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "setting": {
+    "urlCheck": true,
+    "es6": false,
+    "minified": false
+  }
+}

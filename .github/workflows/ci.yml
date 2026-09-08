@@ -1,0 +1,39 @@
+name: Engineering checks
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: caau-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engineering:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+      - name: Verify package manager and install locked dependencies
+        run: |
+          corepack pnpm --version
+          corepack pnpm install --frozen-lockfile
+      - name: Static checks and tooling tests
+        run: corepack pnpm check
+      - name: Build all three applications
+        run: corepack pnpm build
+      - name: Application and HTTP integration tests
+        run: corepack pnpm test
+      - name: Install Chromium
+        run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Built Web to live API browser tests
+        run: corepack pnpm test:e2e
+      - name: Verify tracked files were not rewritten
+        run: git diff --exit-code

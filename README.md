@@ -2,7 +2,7 @@
 
 本仓库用于建设 CAAU 微信小程序、Web 管理后台和后端 API。
 
-当前阶段：本地仓库管理、产品梳理和根工作区工具已建立；应用尚未初始化，不能启动或部署。业务闭环选择暂缓，工程底座可独立推进。原始架构建议见 [agent.md](agent.md)，其中的示例模型、业务规则和实施顺序不等于已确认需求。
+当前阶段：三个应用工程已初始化，可构建并通过健康接口联调；尚无业务功能、数据库或部署。业务闭环选择暂缓。小程序编译与请求逻辑测试通过不等于微信开发者工具或真机验收通过。原始架构建议见 [agent.md](agent.md)，其中的示例模型、业务规则和实施顺序不等于已确认需求。
 
 ## 从这里开始
 
@@ -27,16 +27,31 @@ docs/                  架构、需求、计划和运维文档
 deploy/                部署工程
 ```
 
-目前各应用目录仅包含职责说明。根工作区已有 package.json、pnpm 锁文件与文档/格式/工具测试；三个应用、业务测试和 CI 尚未建立。
+## 本地启动
 
-在 Node.js 24.19.0 与 Corepack 环境中，以下命令已验证：
+使用官方 **Node.js 24.20.0** 和 Corepack，pnpm 固定为 **10.32.1**。若本机默认 Node 来自应用内置运行时，先按 [本地工程文档](docs/runbooks/local-tooling.md) 切换到已校验的官方运行时。
 
 ```sh
 corepack pnpm install --frozen-lockfile
-corepack pnpm check
+# 分别在三个终端中运行：
+corepack pnpm dev:api       # http://127.0.0.1:3000/api/v1/health
+corepack pnpm dev:admin     # http://127.0.0.1:5173
+corepack pnpm dev:miniapp   # watch 编译，产物 apps/miniapp/dist
 ```
 
-检查通过不代表应用构建、权限、数据库或真机验收通过；具体范围见本地工具文档。
+Web 点击“检查后端连接”；小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见本地工程文档，当前未完成平台验收。API 开发命令先编译再启动，不自动热重载。
+
+## 检查与构建
+
+```sh
+corepack pnpm check
+corepack pnpm build
+corepack pnpm test
+corepack pnpm exec playwright install chromium
+corepack pnpm test:e2e
+```
+
+本地已通过三应用构建、静态检查、工具/请求/API 测试和 Web 浏览器联调。`.github/workflows/ci.yml` 已配置同等检查，未推送远程，故未声称 GitHub CI 执行通过。详情、实际限制和已知警告见 [本地工程文档](docs/runbooks/local-tooling.md)。
 
 ## 本地 Git
 
