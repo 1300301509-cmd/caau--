@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+  - database
+
+# No dependency lifecycle scripts are needed by the current tooling.
+# Review this allow-list when application dependencies are introduced.
+onlyBuiltDependencies: []
