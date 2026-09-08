@@ -354,6 +354,102 @@ export interface paths {
     patch: operations['assignMaterialTask'];
     trace?: never;
   };
+  '/api/v1/material-tasks/{id}/close': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['closeMaterialTask'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/draft': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getMaterialDraft'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['saveMaterialDraft'];
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/draft-history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getDraftHistory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/execution': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getTaskExecution'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/extensions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listDeadlineExtensions'];
+    put?: never;
+    post: operations['extendTaskDeadline'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/handover': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['handoverTaskHandler'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/material-tasks/{id}/publish': {
     parameters: {
       query?: never;
@@ -386,6 +482,54 @@ export interface paths {
     patch: operations['configureMaterialTask'];
     trace?: never;
   };
+  '/api/v1/material-tasks/{id}/reviews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['reviewMaterialPackage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/submissions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listSubmissionVersions'];
+    put?: never;
+    post: operations['submitMaterialPackage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/uploads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['createUploadIntent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/ready': {
     parameters: {
       query?: never;
@@ -397,6 +541,38 @@ export interface paths {
     get: operations['getReadiness'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/uploads/{id}/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['confirmPrivateUpload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/uploads/{id}/content': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['downloadPrivateContent'];
+    put?: never;
+    post: operations['uploadPrivateContent'];
     delete?: never;
     options?: never;
     head?: never;
@@ -461,6 +637,10 @@ export interface components {
       requestId: string;
       resourceId: string | null;
     };
+    CloseDto: {
+      expectedRevision: number;
+      reason: string;
+    };
     ConfigureTaskDto: {
       expectedRevision: number;
       requirements: components['schemas']['RequirementsDto'];
@@ -476,10 +656,55 @@ export interface components {
       reviewerMemberId: string;
       title: string;
     };
+    DeadlineDto: {
+      /** Format: date-time */
+      deadline: string;
+      id: string;
+    };
+    DeadlineHistoryDto: {
+      /** Format: uuid */
+      actorId: string;
+      /** Format: uuid */
+      id: string;
+      next: components['schemas']['DeadlinesDto'];
+      /** Format: date-time */
+      occurredAt: string;
+      previous: components['schemas']['DeadlinesDto'];
+      reason: string;
+    };
+    DeadlinesDto: {
+      materials: components['schemas']['DeadlineDto'][];
+      /** Format: date-time */
+      task: string;
+    };
     DirectoryDto: {
       members: components['schemas']['MemberChoiceDto'][];
       organizations: components['schemas']['OrganizationChoiceDto'][];
       users: components['schemas']['PersonDto'][];
+    };
+    DraftEditViewDto: {
+      /** Format: uuid */
+      actorId: string;
+      entries: components['schemas']['EntryDto'][];
+      /** Format: uuid */
+      id: string;
+      kind: string;
+      /** Format: date-time */
+      occurredAt: string;
+      revision: number;
+    };
+    DraftViewDto: {
+      baseSubmissionId: string | null;
+      entries: components['schemas']['EntryDto'][];
+      /** Format: uuid */
+      id: string;
+      revision: number;
+    };
+    EntryDto: {
+      fileIds: string[];
+      /** Format: uuid */
+      materialId: string;
+      text: string;
     };
     EventInputDto: {
       description: string;
@@ -493,11 +718,32 @@ export interface components {
       id: string;
       name: string;
     };
+    ExecutionViewDto: {
+      currentSubmissionId: string | null;
+      deadlines: components['schemas']['DeadlinesDto'];
+      generation: number;
+      /** Format: uuid */
+      id: string;
+      revision: number;
+      /** @enum {string} */
+      state: 'EDITING' | 'SUBMITTED' | 'APPROVED' | 'CLOSED';
+    };
+    ExtendDto: {
+      expectedRevision: number;
+      /** Format: date-time */
+      newDeadline: string;
+      reason: string;
+    };
     GrantDto: {
       /** Format: uuid */
       eventId: string;
       /** Format: uuid */
       memberId: string;
+    };
+    HandoverDto: {
+      expectedRevision: number;
+      /** Format: uuid */
+      handlerMemberId: string;
     };
     HealthDto: {
       /** @enum {string} */
@@ -508,6 +754,12 @@ export interface components {
     IdDto: {
       /** Format: uuid */
       id: string;
+    };
+    IssueDto: {
+      instruction: string;
+      /** Format: uuid */
+      materialId: string;
+      reason: string;
     };
     MaterialRequirementDto: {
       acceptanceStandard: string;
@@ -572,12 +824,58 @@ export interface components {
       deadline: string;
       materials: components['schemas']['MaterialRequirementDto'][];
     };
+    ReviewDto: {
+      /** @enum {string} */
+      decision: 'PASS' | 'RETURN';
+      issues: components['schemas']['IssueDto'][];
+      /** Format: uuid */
+      submissionId: string;
+    };
+    ReviewViewDto: {
+      /** Format: uuid */
+      actorId: string;
+      /** @enum {string} */
+      decision: 'PASS' | 'RETURN';
+      /** Format: uuid */
+      id: string;
+      issues: components['schemas']['IssueDto'][];
+      /** Format: date-time */
+      reviewedAt: string;
+      /** Format: uuid */
+      submissionId: string;
+    };
     ReviewerDto: {
       /** Format: uuid */
       reviewerGrantId: string | null;
     };
     RevisionDto: {
       expectedRevision: number;
+    };
+    SaveDraftDto: {
+      entries: components['schemas']['EntryDto'][];
+      expectedRevision: number;
+    };
+    SubmissionViewDto: {
+      /** Format: uuid */
+      actorId: string;
+      deadlines: components['schemas']['DeadlinesDto'];
+      entries: components['schemas']['EntryDto'][];
+      generation: number;
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      requirementVersionId: string;
+      review: components['schemas']['ReviewViewDto'] | null;
+      /** Format: date-time */
+      submittedAt: string;
+      /** Format: uuid */
+      taskId: string;
+      version: number;
+    };
+    SubmitDto: {
+      expectedDraftRevision: number;
+      /** Format: uuid */
+      idempotencyKey: string;
     };
     TaskDto: {
       /** Format: uuid */
@@ -613,6 +911,22 @@ export interface components {
       organizationId: string;
       /** Format: uuid */
       reviewerMemberId: string;
+    };
+    UploadDto: {
+      expectedBytes: number;
+      /** @enum {string} */
+      extension: 'txt' | 'pdf' | 'png' | 'jpg' | 'jpeg';
+      /** Format: uuid */
+      materialId: string;
+      sha256: string;
+    };
+    UploadViewDto: {
+      /** Format: date-time */
+      expiresAt: string;
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      state: 'PENDING' | 'CONFIRMED';
     };
     UserDto: {
       displayName: string;
@@ -1961,6 +2275,470 @@ export interface operations {
       };
     };
   };
+  closeMaterialTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CloseDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExecutionViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getMaterialDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DraftViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  saveMaterialDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveDraftDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DraftViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getDraftHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DraftEditViewDto'][];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getTaskExecution: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExecutionViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  listDeadlineExtensions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeadlineHistoryDto'][];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  extendTaskDeadline: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExtendDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExecutionViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  handoverTaskHandler: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HandoverDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExecutionViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   publishMaterialTask: {
     parameters: {
       query?: never;
@@ -2081,6 +2859,242 @@ export interface operations {
       };
     };
   };
+  reviewMaterialPackage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReviewDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReviewViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  listSubmissionVersions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubmissionViewDto'][];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  submitMaterialPackage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SubmitDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubmissionViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  createUploadIntent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UploadDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UploadViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   getReadiness: {
     parameters: {
       query?: never;
@@ -2105,6 +3119,178 @@ export interface operations {
         content: {
           'application/json': components['schemas']['NotReadyDto'];
         };
+      };
+    };
+  };
+  confirmPrivateUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UploadViewDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  downloadPrivateContent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  uploadPrivateContent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/octet-stream': string;
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

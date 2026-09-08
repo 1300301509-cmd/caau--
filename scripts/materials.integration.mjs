@@ -363,11 +363,18 @@ export async function materialsIntegration(
       const oldScope = (
         await sql.query('SELECT * FROM "TaskScope" WHERE id=$1', [task.id])
       ).rows[0];
-      task = await api(
+      await api(
         'manager',
         'PATCH',
         `material-tasks/${task.id}/assignment`,
         { expectedRevision: 1, ...assignmentB },
+        409,
+      );
+      task = await api(
+        'manager',
+        'PATCH',
+        `material-tasks/${task.id}/assignment`,
+        { expectedRevision: 1, ...assignmentA },
       );
       await api(
         'manager',
@@ -406,7 +413,7 @@ export async function materialsIntegration(
         `material-tasks/${task.id}/requirements`,
         { expectedRevision: task.revision, requirements: req() },
       );
-      await api('sys', 'PATCH', `authorization/members/${members.b}`, {
+      await api('sys', 'PATCH', `authorization/members/${members.a}`, {
         active: false,
       });
       await api(
@@ -416,14 +423,14 @@ export async function materialsIntegration(
         { expectedRevision: task.revision },
         403,
       );
-      await api('sys', 'PATCH', `authorization/members/${members.b}`, {
+      await api('sys', 'PATCH', `authorization/members/${members.a}`, {
         active: true,
       });
       task = await api('manager', 'POST', `material-tasks/${task.id}/publish`, {
         expectedRevision: task.revision,
       });
-      await api('a', 'GET', `material-tasks/${task.id}`, undefined, 403);
-      await api('b', 'GET', `material-tasks/${task.id}`);
+      await api('a2', 'GET', `material-tasks/${task.id}`, undefined, 403);
+      await api('a', 'GET', `material-tasks/${task.id}`);
     },
   );
   await t.test(
@@ -458,7 +465,11 @@ export async function materialsIntegration(
           'manager',
           'PATCH',
           `material-tasks/${task.id}/assignment`,
-          { expectedRevision: task.revision, ...assignmentB },
+          {
+            expectedRevision: task.revision,
+            ...assignmentA,
+            handlerMemberId: members.a2,
+          },
           503,
         );
         await api(

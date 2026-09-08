@@ -22,3 +22,5 @@ CAAU-004 新增 `/api/v1/authorization/*`：内部用户、组织/成员、赛�
 CAAU-005 第一段提供 `/api/v1/events`、`material-tasks`、`workspace` 真实业务接口；创建、指派、配置、发布和审计同事务，发布前后可见性分离，已发布要求 V1 受数据库保护。操作和限制见 [任务文档](../../docs/runbooks/material-tasks.md)。
 
 完整步骤与限制见 [本地工程文档](../../docs/runbooks/local-tooling.md)。不建立未确认的业务模块或业务表。
+
+第二段 workflow 模块提供私有文件上传/确认/下载、草稿 CAS、不可变幂等提交、整包审核/退回、延期与同机构交接。默认私有目录 `.local/files`，服务端可设 `CAAU_PRIVATE_FILE_ROOT`；无静态文件服务，完整规则/限制见上述任务文档。所有接口仍依赖受限本地身份模式，非生产身份方案。

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { rm } from 'node:fs/promises';
+import { workflowIntegration } from './workflow.integration.mjs';
 import { deployAuthorizationBaseline } from './authorization-upgrade.mjs';
 import { materialsIntegration } from './materials.integration.mjs';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
@@ -61,7 +63,7 @@ export async function authorizationIntegration(t) {
     sql = new pg.Client({ connectionString: url.href });
     await sql.connect();
     await t.test(
-      '004 to 005 migration preserves internal identity, audit and original checksum',
+      'phase-2 migration preserves identity/audit and published snapshots, backfilling execution only',
       async () => {
         assert.equal(
           (
@@ -89,6 +91,25 @@ export async function authorizationIntegration(t) {
           ).rows[0].checksum,
           baseline.checksum,
         );
+        assert.deepEqual(
+          (
+            await sql.query(
+              'SELECT row_to_json(r) snapshot FROM "RequirementVersion" r WHERE "taskId"=$1',
+              [baseline.taskId],
+            )
+          ).rows,
+          baseline.snapshots,
+        );
+        const backfill = (
+          await sql.query(
+            'SELECT e.*, d.entries FROM "TaskExecution" e JOIN "MaterialDraft" d USING ("taskId") WHERE e."taskId"=$1',
+            [baseline.taskId],
+          )
+        ).rows[0];
+        assert.equal(backfill.state, 'EDITING');
+        assert.equal(backfill.revision, 1);
+        assert.deepEqual(backfill.entries, []);
+        assert.equal(backfill.deadlines.task, baseline.configuration.deadline);
       },
     );
     await sql.query(`REVOKE CONNECT ON DATABASE "${name}" FROM PUBLIC`);
@@ -134,6 +155,7 @@ export async function authorizationIntegration(t) {
     const config = {
       ...readConfig({ CAAU_IDENTITY_MODE: 'local' }),
       databaseUrl: appUrl.href,
+      privateFileRoot: path.join(root, '.local/files', name),
     };
     app = await createApplication(config);
     await app.listen(0, '127.0.0.1');
@@ -465,7 +487,7 @@ export async function authorizationIntegration(t) {
         assert.equal(
           (await sql.query('SELECT count(*)::int n FROM "TaskScope"')).rows[0]
             .n,
-          2,
+          3,
         );
       },
     );
@@ -619,7 +641,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          2,
+          3,
         );
       },
     );
@@ -635,8 +657,23 @@ export async function authorizationIntegration(t) {
       orgB,
       session,
     });
+    await workflowIntegration(t, {
+      base,
+      config,
+      sql,
+      runtime,
+      tokens,
+      users,
+      members,
+      orgA,
+      orgB,
+    });
   } finally {
     await app?.close();
+    await rm(path.join(root, '.local/files', name), {
+      recursive: true,
+      force: true,
+    });
     await runtime?.end();
     await sql?.end();
     try {

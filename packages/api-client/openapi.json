@@ -65,6 +65,20 @@
         ],
         "type": "object"
       },
+      "CloseDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "required": ["expectedRevision", "reason"],
+        "type": "object"
+      },
       "ConfigureTaskDto": {
         "properties": {
           "expectedRevision": {
@@ -110,6 +124,69 @@
         ],
         "type": "object"
       },
+      "DeadlineDto": {
+        "properties": {
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "deadline"],
+        "type": "object"
+      },
+      "DeadlineHistoryDto": {
+        "properties": {
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "next": {
+            "$ref": "#/components/schemas/DeadlinesDto"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/DeadlinesDto"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "actorId",
+          "occurredAt",
+          "reason",
+          "previous",
+          "next"
+        ],
+        "type": "object"
+      },
+      "DeadlinesDto": {
+        "properties": {
+          "materials": {
+            "items": {
+              "$ref": "#/components/schemas/DeadlineDto"
+            },
+            "type": "array"
+          },
+          "task": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": ["task", "materials"],
+        "type": "object"
+      },
       "DirectoryDto": {
         "properties": {
           "members": {
@@ -132,6 +209,87 @@
           }
         },
         "required": ["users", "organizations", "members"],
+        "type": "object"
+      },
+      "DraftEditViewDto": {
+        "properties": {
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/EntryDto"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "entries",
+          "actorId",
+          "kind",
+          "occurredAt"
+        ],
+        "type": "object"
+      },
+      "DraftViewDto": {
+        "properties": {
+          "baseSubmissionId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/EntryDto"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": ["id", "revision", "entries", "baseSubmissionId"],
+        "type": "object"
+      },
+      "EntryDto": {
+        "properties": {
+          "fileIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "materialId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "type": "string"
+          }
+        },
+        "required": ["materialId", "text", "fileIds"],
         "type": "object"
       },
       "EventInputDto": {
@@ -170,6 +328,58 @@
         "required": ["name", "description", "id", "createdAt"],
         "type": "object"
       },
+      "ExecutionViewDto": {
+        "properties": {
+          "currentSubmissionId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "deadlines": {
+            "$ref": "#/components/schemas/DeadlinesDto"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "state": {
+            "enum": ["EDITING", "SUBMITTED", "APPROVED", "CLOSED"],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "revision",
+          "generation",
+          "currentSubmissionId",
+          "deadlines"
+        ],
+        "type": "object"
+      },
+      "ExtendDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "newDeadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "required": ["expectedRevision", "newDeadline", "reason"],
+        "type": "object"
+      },
       "GrantDto": {
         "properties": {
           "eventId": {
@@ -182,6 +392,20 @@
           }
         },
         "required": ["eventId", "memberId"],
+        "type": "object"
+      },
+      "HandoverDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "handlerMemberId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["expectedRevision", "handlerMemberId"],
         "type": "object"
       },
       "HealthDto": {
@@ -206,6 +430,24 @@
           }
         },
         "required": ["id"],
+        "type": "object"
+      },
+      "IssueDto": {
+        "properties": {
+          "instruction": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "materialId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "required": ["materialId", "reason", "instruction"],
         "type": "object"
       },
       "MaterialRequirementDto": {
@@ -389,6 +631,67 @@
         "required": ["deadline", "materials"],
         "type": "object"
       },
+      "ReviewDto": {
+        "properties": {
+          "decision": {
+            "enum": ["PASS", "RETURN"],
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IssueDto"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "submissionId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["submissionId", "decision", "issues"],
+        "type": "object"
+      },
+      "ReviewViewDto": {
+        "properties": {
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "decision": {
+            "enum": ["PASS", "RETURN"],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IssueDto"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "reviewedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "submissionId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "submissionId",
+          "decision",
+          "issues",
+          "id",
+          "actorId",
+          "reviewedAt"
+        ],
+        "type": "object"
+      },
       "ReviewerDto": {
         "properties": {
           "reviewerGrantId": {
@@ -408,6 +711,98 @@
           }
         },
         "required": ["expectedRevision"],
+        "type": "object"
+      },
+      "SaveDraftDto": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/EntryDto"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": ["expectedRevision", "entries"],
+        "type": "object"
+      },
+      "SubmissionViewDto": {
+        "properties": {
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "deadlines": {
+            "$ref": "#/components/schemas/DeadlinesDto"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/EntryDto"
+            },
+            "type": "array"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requirementVersionId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "review": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReviewViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "submittedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "taskId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "requirementVersionId",
+          "version",
+          "generation",
+          "actorId",
+          "submittedAt",
+          "entries",
+          "deadlines",
+          "review"
+        ],
+        "type": "object"
+      },
+      "SubmitDto": {
+        "properties": {
+          "expectedDraftRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "idempotencyKey": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["idempotencyKey", "expectedDraftRevision"],
         "type": "object"
       },
       "TaskDto": {
@@ -518,6 +913,47 @@
         ],
         "type": "object"
       },
+      "UploadDto": {
+        "properties": {
+          "expectedBytes": {
+            "maximum": 10485760,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "extension": {
+            "enum": ["txt", "pdf", "png", "jpg", "jpeg"],
+            "type": "string"
+          },
+          "materialId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          }
+        },
+        "required": ["materialId", "extension", "expectedBytes", "sha256"],
+        "type": "object"
+      },
+      "UploadViewDto": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "state": {
+            "enum": ["PENDING", "CONFIRMED"],
+            "type": "string"
+          }
+        },
+        "required": ["id", "state", "expiresAt"],
+        "type": "object"
+      },
       "UserDto": {
         "properties": {
           "displayName": {
@@ -558,9 +994,9 @@
   },
   "info": {
     "contact": {},
-    "description": "Health, local identity, events and material-task preparation/publication. No material upload, submission, review or WeChat login.",
+    "description": "Local identity, events, private material files, drafts, immutable submissions, whole-package reviews, extensions and same-organization handover. No WeChat or production identity integration.",
     "title": "CAAU API",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -1720,6 +2156,440 @@
         "tags": ["Materials"]
       }
     },
+    "/api/v1/material-tasks/{id}/close": {
+      "post": {
+        "operationId": "closeMaterialTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/draft": {
+      "get": {
+        "operationId": "getMaterialDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      },
+      "patch": {
+        "operationId": "saveMaterialDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveDraftDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/draft-history": {
+      "get": {
+        "operationId": "getDraftHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DraftEditViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/execution": {
+      "get": {
+        "operationId": "getTaskExecution",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/extensions": {
+      "get": {
+        "operationId": "listDeadlineExtensions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeadlineHistoryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      },
+      "post": {
+        "operationId": "extendTaskDeadline",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtendDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/handover": {
+      "post": {
+        "operationId": "handoverTaskHandler",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandoverDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
     "/api/v1/material-tasks/{id}/publish": {
       "post": {
         "operationId": "publishMaterialTask",
@@ -1838,6 +2708,233 @@
         "tags": ["Materials"]
       }
     },
+    "/api/v1/material-tasks/{id}/reviews": {
+      "post": {
+        "operationId": "reviewMaterialPackage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/submissions": {
+      "get": {
+        "operationId": "listSubmissionVersions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SubmissionViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      },
+      "post": {
+        "operationId": "submitMaterialPackage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/uploads": {
+      "post": {
+        "operationId": "createUploadIntent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
     "/api/v1/ready": {
       "get": {
         "operationId": "getReadiness",
@@ -1866,6 +2963,163 @@
         },
         "summary": "Database connectivity; 1500ms application deadline, not schema readiness",
         "tags": ["system"]
+      }
+    },
+    "/api/v1/uploads/{id}/confirm": {
+      "post": {
+        "operationId": "confirmPrivateUpload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/uploads/{id}/content": {
+      "get": {
+        "operationId": "downloadPrivateContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      },
+      "post": {
+        "operationId": "uploadPrivateContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
       }
     },
     "/api/v1/workspace/directory": {

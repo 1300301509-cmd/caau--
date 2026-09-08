@@ -32,7 +32,7 @@ const uuidPattern =
 export function uuid(value: unknown): string {
   if (typeof value !== 'string' || !uuidPattern.test(value))
     throw new BadRequestException('UUID required');
-  return value;
+  return value.toLowerCase();
 }
 export function bodyObject(
   input: unknown,
@@ -112,6 +112,9 @@ export class AuthorizationService {
       throw new UnauthorizedException('Invalid session');
     return session.user;
   }
+  async reloadActor(tx: Prisma.TransactionClient, token: string) {
+    return this.actor(tx, token);
+  }
   async authenticate(request: AuthRequest) {
     const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(
       request.headers.authorization ?? '',
@@ -154,6 +157,7 @@ export class AuthorizationService {
       actor: Actor,
       id: string | undefined,
     ) => Promise<T>,
+    options: { retries?: number; timeout?: number } = {},
   ): Promise<T> {
     const db = this.db();
     const requestId = randomUUID();
@@ -182,9 +186,28 @@ export class AuthorizationService {
           });
           return result;
         },
-        { isolationLevel: 'Serializable' },
+        { isolationLevel: 'Serializable', timeout: options.timeout ?? 5000 },
       );
     } catch (error) {
+      const databaseError = error as {
+        code?: string;
+        meta?: {
+          code?: string;
+          driverAdapterError?: { cause?: { originalCode?: string } };
+        };
+      };
+      const sqlState =
+        databaseError.meta?.code ??
+        databaseError.meta?.driverAdapterError?.cause?.originalCode;
+      const serializationConflict =
+        databaseError.code === 'P2034' ||
+        (databaseError.code === 'P2010' &&
+          ['40001', '40P01'].includes(sqlState ?? ''));
+      if (serializationConflict && (options.retries ?? 0) > 0)
+        return this.run(token, action, resource, input, work, {
+          ...options,
+          retries: options.retries! - 1,
+        });
       try {
         await db.auditRecord.create({
           data: {
@@ -202,7 +225,10 @@ export class AuthorizationService {
       }
       if (error instanceof HttpException) throw error;
       const code = (error as { code?: string }).code;
-      if (['P2002', 'P2003', 'P2025', 'P2034'].includes(code ?? ''))
+      if (
+        serializationConflict ||
+        ['P2002', 'P2003', 'P2025'].includes(code ?? '')
+      )
         throw new ConflictException('Conflicting authorization change');
       throw new ServiceUnavailableException('Authorization unavailable');
     }

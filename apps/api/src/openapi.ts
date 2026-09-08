@@ -8,9 +8,9 @@ export function createOpenApiDocument(app: INestApplication) {
       .setTitle('CAAU API')
       .addBearerAuth()
       .setDescription(
-        'Health, local identity, events and material-task preparation/publication. No material upload, submission, review or WeChat login.',
+        'Local identity, events, private material files, drafts, immutable submissions, whole-package reviews, extensions and same-organization handover. No WeChat or production identity integration.',
       )
-      .setVersion('0.3.0')
+      .setVersion('0.4.0')
       .build(),
   );
 }

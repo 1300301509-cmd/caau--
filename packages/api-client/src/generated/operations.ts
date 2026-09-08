@@ -36,6 +36,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -50,6 +52,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         eventId: { format: 'uuid', type: 'string' },
@@ -73,6 +77,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -87,6 +93,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -103,6 +111,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -117,6 +127,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -131,6 +143,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -145,6 +159,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         organizationId: { format: 'uuid', type: 'string' },
@@ -172,6 +188,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: { active: { type: 'boolean' } },
       required: ['active'],
@@ -190,6 +208,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: { name: { maxLength: 120, type: 'string' } },
       required: ['name'],
@@ -208,6 +228,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         eventId: { format: 'uuid', type: 'string' },
@@ -231,6 +253,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -247,6 +271,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         action: {
@@ -272,6 +298,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         reviewerGrantId: { format: 'uuid', nullable: true, type: 'string' },
@@ -292,6 +320,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: { displayName: { maxLength: 80, type: 'string' } },
       required: ['displayName'],
@@ -312,6 +342,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: { active: { type: 'boolean' } },
       required: ['active'],
@@ -338,6 +370,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -357,6 +391,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         description: { maxLength: 2000, type: 'string' },
@@ -385,6 +421,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -402,6 +440,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: false,
   },
@@ -452,6 +492,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -495,6 +537,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         eventId: { format: 'uuid', type: 'string' },
@@ -556,6 +600,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -601,6 +647,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         expectedRevision: { minimum: 1, type: 'integer' },
@@ -614,6 +662,454 @@ export const operations = {
         'reviewerMemberId',
         'expectedRevision',
       ],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  closeMaterialTask: {
+    path: '/api/v1/material-tasks/{id}/close',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          currentSubmissionId: { nullable: true, type: 'string' },
+          deadlines: {
+            properties: {
+              materials: {
+                items: {
+                  properties: {
+                    deadline: { format: 'date-time', type: 'string' },
+                    id: { type: 'string' },
+                  },
+                  required: ['id', 'deadline'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              task: { format: 'date-time', type: 'string' },
+            },
+            required: ['task', 'materials'],
+            type: 'object',
+          },
+          generation: { type: 'integer' },
+          id: { format: 'uuid', type: 'string' },
+          revision: { type: 'integer' },
+          state: {
+            enum: ['EDITING', 'SUBMITTED', 'APPROVED', 'CLOSED'],
+            type: 'string',
+          },
+        },
+        required: [
+          'id',
+          'state',
+          'revision',
+          'generation',
+          'currentSubmissionId',
+          'deadlines',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        expectedRevision: { minimum: 1, type: 'integer' },
+        reason: { maxLength: 2000, type: 'string' },
+      },
+      required: ['expectedRevision', 'reason'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  getMaterialDraft: {
+    path: '/api/v1/material-tasks/{id}/draft',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: {
+          baseSubmissionId: { nullable: true, type: 'string' },
+          entries: {
+            items: {
+              properties: {
+                fileIds: {
+                  items: { type: 'string' },
+                  maxItems: 10,
+                  type: 'array',
+                },
+                materialId: { format: 'uuid', type: 'string' },
+                text: { maxLength: 4000, type: 'string' },
+              },
+              required: ['materialId', 'text', 'fileIds'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          id: { format: 'uuid', type: 'string' },
+          revision: { type: 'integer' },
+        },
+        required: ['id', 'revision', 'entries', 'baseSubmissionId'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  saveMaterialDraft: {
+    path: '/api/v1/material-tasks/{id}/draft',
+    method: 'PATCH',
+    responses: {
+      '200': {
+        properties: {
+          baseSubmissionId: { nullable: true, type: 'string' },
+          entries: {
+            items: {
+              properties: {
+                fileIds: {
+                  items: { type: 'string' },
+                  maxItems: 10,
+                  type: 'array',
+                },
+                materialId: { format: 'uuid', type: 'string' },
+                text: { maxLength: 4000, type: 'string' },
+              },
+              required: ['materialId', 'text', 'fileIds'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          id: { format: 'uuid', type: 'string' },
+          revision: { type: 'integer' },
+        },
+        required: ['id', 'revision', 'entries', 'baseSubmissionId'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        entries: {
+          items: {
+            properties: {
+              fileIds: {
+                items: { type: 'string' },
+                maxItems: 10,
+                type: 'array',
+              },
+              materialId: { format: 'uuid', type: 'string' },
+              text: { maxLength: 4000, type: 'string' },
+            },
+            required: ['materialId', 'text', 'fileIds'],
+            type: 'object',
+          },
+          maxItems: 50,
+          type: 'array',
+        },
+        expectedRevision: { minimum: 1, type: 'integer' },
+      },
+      required: ['expectedRevision', 'entries'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  getDraftHistory: {
+    path: '/api/v1/material-tasks/{id}/draft-history',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            actorId: { format: 'uuid', type: 'string' },
+            entries: {
+              items: {
+                properties: {
+                  fileIds: {
+                    items: { type: 'string' },
+                    maxItems: 10,
+                    type: 'array',
+                  },
+                  materialId: { format: 'uuid', type: 'string' },
+                  text: { maxLength: 4000, type: 'string' },
+                },
+                required: ['materialId', 'text', 'fileIds'],
+                type: 'object',
+              },
+              type: 'array',
+            },
+            id: { format: 'uuid', type: 'string' },
+            kind: { type: 'string' },
+            occurredAt: { format: 'date-time', type: 'string' },
+            revision: { type: 'integer' },
+          },
+          required: [
+            'id',
+            'revision',
+            'entries',
+            'actorId',
+            'kind',
+            'occurredAt',
+          ],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  getTaskExecution: {
+    path: '/api/v1/material-tasks/{id}/execution',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: {
+          currentSubmissionId: { nullable: true, type: 'string' },
+          deadlines: {
+            properties: {
+              materials: {
+                items: {
+                  properties: {
+                    deadline: { format: 'date-time', type: 'string' },
+                    id: { type: 'string' },
+                  },
+                  required: ['id', 'deadline'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              task: { format: 'date-time', type: 'string' },
+            },
+            required: ['task', 'materials'],
+            type: 'object',
+          },
+          generation: { type: 'integer' },
+          id: { format: 'uuid', type: 'string' },
+          revision: { type: 'integer' },
+          state: {
+            enum: ['EDITING', 'SUBMITTED', 'APPROVED', 'CLOSED'],
+            type: 'string',
+          },
+        },
+        required: [
+          'id',
+          'state',
+          'revision',
+          'generation',
+          'currentSubmissionId',
+          'deadlines',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  listDeadlineExtensions: {
+    path: '/api/v1/material-tasks/{id}/extensions',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            actorId: { format: 'uuid', type: 'string' },
+            id: { format: 'uuid', type: 'string' },
+            next: {
+              properties: {
+                materials: {
+                  items: {
+                    properties: {
+                      deadline: { format: 'date-time', type: 'string' },
+                      id: { type: 'string' },
+                    },
+                    required: ['id', 'deadline'],
+                    type: 'object',
+                  },
+                  type: 'array',
+                },
+                task: { format: 'date-time', type: 'string' },
+              },
+              required: ['task', 'materials'],
+              type: 'object',
+            },
+            occurredAt: { format: 'date-time', type: 'string' },
+            previous: {
+              properties: {
+                materials: {
+                  items: {
+                    properties: {
+                      deadline: { format: 'date-time', type: 'string' },
+                      id: { type: 'string' },
+                    },
+                    required: ['id', 'deadline'],
+                    type: 'object',
+                  },
+                  type: 'array',
+                },
+                task: { format: 'date-time', type: 'string' },
+              },
+              required: ['task', 'materials'],
+              type: 'object',
+            },
+            reason: { type: 'string' },
+          },
+          required: [
+            'id',
+            'actorId',
+            'occurredAt',
+            'reason',
+            'previous',
+            'next',
+          ],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  extendTaskDeadline: {
+    path: '/api/v1/material-tasks/{id}/extensions',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          currentSubmissionId: { nullable: true, type: 'string' },
+          deadlines: {
+            properties: {
+              materials: {
+                items: {
+                  properties: {
+                    deadline: { format: 'date-time', type: 'string' },
+                    id: { type: 'string' },
+                  },
+                  required: ['id', 'deadline'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              task: { format: 'date-time', type: 'string' },
+            },
+            required: ['task', 'materials'],
+            type: 'object',
+          },
+          generation: { type: 'integer' },
+          id: { format: 'uuid', type: 'string' },
+          revision: { type: 'integer' },
+          state: {
+            enum: ['EDITING', 'SUBMITTED', 'APPROVED', 'CLOSED'],
+            type: 'string',
+          },
+        },
+        required: [
+          'id',
+          'state',
+          'revision',
+          'generation',
+          'currentSubmissionId',
+          'deadlines',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        expectedRevision: { minimum: 1, type: 'integer' },
+        newDeadline: { format: 'date-time', type: 'string' },
+        reason: { maxLength: 2000, type: 'string' },
+      },
+      required: ['expectedRevision', 'newDeadline', 'reason'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  handoverTaskHandler: {
+    path: '/api/v1/material-tasks/{id}/handover',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          currentSubmissionId: { nullable: true, type: 'string' },
+          deadlines: {
+            properties: {
+              materials: {
+                items: {
+                  properties: {
+                    deadline: { format: 'date-time', type: 'string' },
+                    id: { type: 'string' },
+                  },
+                  required: ['id', 'deadline'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              task: { format: 'date-time', type: 'string' },
+            },
+            required: ['task', 'materials'],
+            type: 'object',
+          },
+          generation: { type: 'integer' },
+          id: { format: 'uuid', type: 'string' },
+          revision: { type: 'integer' },
+          state: {
+            enum: ['EDITING', 'SUBMITTED', 'APPROVED', 'CLOSED'],
+            type: 'string',
+          },
+        },
+        required: [
+          'id',
+          'state',
+          'revision',
+          'generation',
+          'currentSubmissionId',
+          'deadlines',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        expectedRevision: { minimum: 1, type: 'integer' },
+        handlerMemberId: { format: 'uuid', type: 'string' },
+      },
+      required: ['expectedRevision', 'handlerMemberId'],
       type: 'object',
     },
     authenticated: true,
@@ -660,6 +1156,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: { expectedRevision: { minimum: 1, type: 'integer' } },
       required: ['expectedRevision'],
@@ -709,6 +1207,8 @@ export const operations = {
     parameters: [
       { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
     ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: {
       properties: {
         expectedRevision: { minimum: 1, type: 'integer' },
@@ -763,6 +1263,268 @@ export const operations = {
     },
     authenticated: true,
   },
+  reviewMaterialPackage: {
+    path: '/api/v1/material-tasks/{id}/reviews',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          actorId: { format: 'uuid', type: 'string' },
+          decision: { enum: ['PASS', 'RETURN'], type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          issues: {
+            items: {
+              properties: {
+                instruction: { maxLength: 2000, type: 'string' },
+                materialId: { format: 'uuid', type: 'string' },
+                reason: { maxLength: 2000, type: 'string' },
+              },
+              required: ['materialId', 'reason', 'instruction'],
+              type: 'object',
+            },
+            maxItems: 50,
+            type: 'array',
+          },
+          reviewedAt: { format: 'date-time', type: 'string' },
+          submissionId: { format: 'uuid', type: 'string' },
+        },
+        required: [
+          'submissionId',
+          'decision',
+          'issues',
+          'id',
+          'actorId',
+          'reviewedAt',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        decision: { enum: ['PASS', 'RETURN'], type: 'string' },
+        issues: {
+          items: {
+            properties: {
+              instruction: { maxLength: 2000, type: 'string' },
+              materialId: { format: 'uuid', type: 'string' },
+              reason: { maxLength: 2000, type: 'string' },
+            },
+            required: ['materialId', 'reason', 'instruction'],
+            type: 'object',
+          },
+          maxItems: 50,
+          type: 'array',
+        },
+        submissionId: { format: 'uuid', type: 'string' },
+      },
+      required: ['submissionId', 'decision', 'issues'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  listSubmissionVersions: {
+    path: '/api/v1/material-tasks/{id}/submissions',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            actorId: { format: 'uuid', type: 'string' },
+            deadlines: {
+              properties: {
+                materials: {
+                  items: {
+                    properties: {
+                      deadline: { format: 'date-time', type: 'string' },
+                      id: { type: 'string' },
+                    },
+                    required: ['id', 'deadline'],
+                    type: 'object',
+                  },
+                  type: 'array',
+                },
+                task: { format: 'date-time', type: 'string' },
+              },
+              required: ['task', 'materials'],
+              type: 'object',
+            },
+            entries: {
+              items: {
+                properties: {
+                  fileIds: {
+                    items: { type: 'string' },
+                    maxItems: 10,
+                    type: 'array',
+                  },
+                  materialId: { format: 'uuid', type: 'string' },
+                  text: { maxLength: 4000, type: 'string' },
+                },
+                required: ['materialId', 'text', 'fileIds'],
+                type: 'object',
+              },
+              type: 'array',
+            },
+            generation: { type: 'integer' },
+            id: { format: 'uuid', type: 'string' },
+            requirementVersionId: { format: 'uuid', type: 'string' },
+            review: {
+              allOf: [{ $ref: '#/components/schemas/ReviewViewDto' }],
+              nullable: true,
+              type: 'object',
+              properties: {},
+            },
+            submittedAt: { format: 'date-time', type: 'string' },
+            taskId: { format: 'uuid', type: 'string' },
+            version: { type: 'integer' },
+          },
+          required: [
+            'id',
+            'taskId',
+            'requirementVersionId',
+            'version',
+            'generation',
+            'actorId',
+            'submittedAt',
+            'entries',
+            'deadlines',
+            'review',
+          ],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  submitMaterialPackage: {
+    path: '/api/v1/material-tasks/{id}/submissions',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          actorId: { format: 'uuid', type: 'string' },
+          deadlines: {
+            properties: {
+              materials: {
+                items: {
+                  properties: {
+                    deadline: { format: 'date-time', type: 'string' },
+                    id: { type: 'string' },
+                  },
+                  required: ['id', 'deadline'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              task: { format: 'date-time', type: 'string' },
+            },
+            required: ['task', 'materials'],
+            type: 'object',
+          },
+          entries: {
+            items: {
+              properties: {
+                fileIds: {
+                  items: { type: 'string' },
+                  maxItems: 10,
+                  type: 'array',
+                },
+                materialId: { format: 'uuid', type: 'string' },
+                text: { maxLength: 4000, type: 'string' },
+              },
+              required: ['materialId', 'text', 'fileIds'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          generation: { type: 'integer' },
+          id: { format: 'uuid', type: 'string' },
+          requirementVersionId: { format: 'uuid', type: 'string' },
+          review: {
+            allOf: [{ $ref: '#/components/schemas/ReviewViewDto' }],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
+          submittedAt: { format: 'date-time', type: 'string' },
+          taskId: { format: 'uuid', type: 'string' },
+          version: { type: 'integer' },
+        },
+        required: [
+          'id',
+          'taskId',
+          'requirementVersionId',
+          'version',
+          'generation',
+          'actorId',
+          'submittedAt',
+          'entries',
+          'deadlines',
+          'review',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        expectedDraftRevision: { minimum: 1, type: 'integer' },
+        idempotencyKey: { format: 'uuid', type: 'string' },
+      },
+      required: ['idempotencyKey', 'expectedDraftRevision'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  createUploadIntent: {
+    path: '/api/v1/material-tasks/{id}/uploads',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          expiresAt: { format: 'date-time', type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+        },
+        required: ['id', 'state', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        expectedBytes: { maximum: 10485760, minimum: 1, type: 'integer' },
+        extension: {
+          enum: ['txt', 'pdf', 'png', 'jpg', 'jpeg'],
+          type: 'string',
+        },
+        materialId: { format: 'uuid', type: 'string' },
+        sha256: { pattern: '^[a-f0-9]{64}$', type: 'string' },
+      },
+      required: ['materialId', 'extension', 'expectedBytes', 'sha256'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
   getReadiness: {
     path: '/api/v1/ready',
     method: 'GET',
@@ -786,8 +1548,62 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: false,
+  },
+  confirmPrivateUpload: {
+    path: '/api/v1/uploads/{id}/confirm',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          expiresAt: { format: 'date-time', type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+        },
+        required: ['id', 'state', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  downloadPrivateContent: {
+    path: '/api/v1/uploads/{id}/content',
+    method: 'GET',
+    responses: { '200': { format: 'binary', type: 'string' } },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/octet-stream',
+    body: null,
+    authenticated: true,
+  },
+  uploadPrivateContent: {
+    path: '/api/v1/uploads/{id}/content',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: { id: { format: 'uuid', type: 'string' } },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/octet-stream',
+    responseMediaType: 'application/json',
+    body: { format: 'binary', type: 'string' },
+    authenticated: true,
   },
   getWorkspaceDirectory: {
     path: '/api/v1/workspace/directory',
@@ -844,6 +1660,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },
@@ -862,6 +1680,8 @@ export const operations = {
       },
     },
     parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
     body: null,
     authenticated: true,
   },

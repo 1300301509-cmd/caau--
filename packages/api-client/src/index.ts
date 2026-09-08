@@ -8,6 +8,7 @@ export type RequestOptions = {
   timeout: number;
   header?: Record<string, string>;
   data?: unknown;
+  responseType?: 'arraybuffer';
 };
 export type Transport = (
   options: RequestOptions,
@@ -19,7 +20,11 @@ export type Ready =
 export type NotReady =
   operations['getReadiness']['responses'][503]['content']['application/json'];
 type Success<K extends keyof typeof wire> =
-  operations[K]['responses'][200]['content']['application/json'];
+  operations[K]['responses'][200]['content'] extends {
+    'application/json': infer T;
+  }
+    ? T
+    : ArrayBuffer;
 type WireSchema = {
   type: string;
   nullable?: boolean;
@@ -32,7 +37,11 @@ type Input<K extends keyof typeof wire> = (operations[K] extends {
   requestBody: { content: { 'application/json': infer B } };
 }
   ? { body: B }
-  : { body?: never }) &
+  : operations[K] extends {
+        requestBody: { content: { 'application/octet-stream': unknown } };
+      }
+    ? { body: ArrayBuffer }
+    : { body?: never }) &
   (operations[K]['parameters'] extends { path: infer P }
     ? { path: P }
     : { path?: never }) & { token?: string };
@@ -95,16 +104,22 @@ export function createApiClient(baseUrl: string, transport: Transport) {
     const response = await transport({
       url: baseUrl.replace(/\/$/, '') + path,
       method: operation.method,
-      timeout: 5000,
+      timeout:
+        operation.requestMediaType === 'application/octet-stream'
+          ? 15000
+          : 5000,
+      ...(operation.responseMediaType === 'application/octet-stream'
+        ? { responseType: 'arraybuffer' as const }
+        : {}),
       ...(input?.token
         ? {
             header: {
               Authorization: `Bearer ${input.token}`,
-              'Content-Type': 'application/json',
+              'Content-Type': operation.requestMediaType,
             },
           }
         : input?.body
-          ? { header: { 'Content-Type': 'application/json' } }
+          ? { header: { 'Content-Type': operation.requestMediaType } }
           : {}),
       ...(input?.body ? { data: input.body } : {}),
     });
@@ -117,6 +132,11 @@ export function createApiClient(baseUrl: string, transport: Transport) {
         response.status,
         unavailable ? 'DATABASE_UNAVAILABLE' : undefined,
       );
+    }
+    if (operation.responseMediaType === 'application/octet-stream') {
+      if (!(response.data instanceof ArrayBuffer))
+        throw new Error('接口二进制响应格式不符合生成契约');
+      return response.data as Success<K>;
     }
     if (!matches(operation.responses[200], response.data))
       throw new Error('接口响应格式不符合生成契约');

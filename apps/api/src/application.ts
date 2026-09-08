@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { readConfig } from './config.js';
@@ -10,12 +11,13 @@ export async function createApplication(
   config = readConfig(),
   probe?: DatabaseProbe,
 ) {
-  const app = await NestFactory.create(
+  const app = await NestFactory.create<NestExpressApplication>(
     AppModule.register(probe ?? createDatabase(config.databaseUrl), config),
     {
       logger: ['error', 'warn'],
     },
   );
+  app.useBodyParser('json', { limit: '512kb' });
   app.use(
     (
       _request: unknown,

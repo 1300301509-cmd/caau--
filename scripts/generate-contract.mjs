@@ -62,7 +62,9 @@ for (const [url, item] of Object.entries(spec.paths)) {
     assert.ok(operation.operationId && !metadata[operation.operationId]);
     const responses = {};
     for (const [status, response] of Object.entries(operation.responses)) {
-      const schema = response.content?.['application/json']?.schema;
+      const schema =
+        response.content?.['application/json']?.schema ??
+        response.content?.['application/octet-stream']?.schema;
       if (schema) responses[status] = resolveSchema(schema);
     }
     assert.ok(
@@ -74,9 +76,22 @@ for (const [url, item] of Object.entries(spec.paths)) {
       method: method.toUpperCase(),
       responses,
       parameters: operation.parameters ?? [],
+      requestMediaType: operation.requestBody?.content?.[
+        'application/octet-stream'
+      ]
+        ? 'application/octet-stream'
+        : 'application/json',
+      responseMediaType: operation.responses['200'].content?.[
+        'application/octet-stream'
+      ]
+        ? 'application/octet-stream'
+        : 'application/json',
       body: operation.requestBody
         ? resolveSchema(
-            operation.requestBody.content['application/json'].schema,
+            (
+              operation.requestBody.content['application/json'] ??
+              operation.requestBody.content['application/octet-stream']
+            ).schema,
           )
         : null,
       authenticated: (operation.security?.length ?? 0) > 0,

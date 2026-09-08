@@ -33,5 +33,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     host: env.HOST ?? '127.0.0.1',
     origins,
     databaseUrl: env.DATABASE_URL,
+    privateFileRoot: env.CAAU_PRIVATE_FILE_ROOT,
   };
 }

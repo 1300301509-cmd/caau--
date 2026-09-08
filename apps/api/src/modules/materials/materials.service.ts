@@ -12,6 +12,7 @@ import {
   taskPolicy,
   type Actor,
 } from '../authorization/policy.js';
+import { initializeExecution } from '../workflow/execution.js';
 import { requirements, revision } from './requirements.js';
 
 const includeTask = {
@@ -249,6 +250,12 @@ export class MaterialsService {
           );
         }
         if (action === 'materials.assign') {
+          if (
+            uuid(b.organizationId) !== task.scope.handler.member.organizationId
+          )
+            throw new ConflictException(
+              'Cross-organization transfer is not supported; close and create a new task',
+            );
           const scope = await this.auth.assignTaskAnchor(
             tx,
             actor,
@@ -296,6 +303,7 @@ export class MaterialsService {
               createdBy: actor.id,
             },
           });
+          await initializeExecution(tx, task.id, configuration);
           return view(
             await tx.materialTask.update({
               where: { id: task.id, revision: task.revision },

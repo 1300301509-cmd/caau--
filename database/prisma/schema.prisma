@@ -121,6 +121,7 @@ model MaterialTask {
   publishedAt DateTime? @db.Timestamptz(3)
   requirements RequirementVersion[]
   assignments AssignmentHistory[]
+  execution   TaskExecution?
   @@index([eventId, state])
   @@unique([id, eventId])
 }
@@ -147,4 +148,137 @@ model AssignmentHistory {
   actorId     String @db.Uuid
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   @@index([taskId, createdAt])
+}
+
+
+enum ExecutionState {
+  EDITING
+  SUBMITTED
+  APPROVED
+  CLOSED
+}
+
+enum UploadState {
+  PENDING
+  CONFIRMED
+}
+
+model TaskExecution {
+  taskId String @id @db.Uuid
+  task MaterialTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  state ExecutionState @default(EDITING)
+  revision Int @default(1)
+  generation Int @default(1)
+  deadlines Json
+  nextVersion Int @default(1)
+  currentSubmissionId String? @db.Uuid
+  closedAt DateTime? @db.Timestamptz(3)
+  closedBy String? @db.Uuid
+  closeReason String? @db.VarChar(2000)
+  draft MaterialDraft?
+  edits DraftEdit[]
+  uploads FileUpload[]
+  submissions SubmissionVersion[]
+  deadlineHistory DeadlineHistory[]
+}
+
+model MaterialDraft {
+  taskId String @id @db.Uuid
+  execution TaskExecution @relation(fields: [taskId], references: [taskId], onDelete: Restrict)
+  revision Int @default(1)
+  entries Json @default("[]")
+  baseSubmissionId String? @db.Uuid
+}
+
+model DraftEdit {
+  id String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  execution TaskExecution @relation(fields: [taskId], references: [taskId], onDelete: Restrict)
+  revision Int
+  entries Json
+  actorId String @db.Uuid
+  kind String @db.VarChar(16)
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([taskId, revision])
+}
+
+model FileUpload {
+  id String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  execution TaskExecution @relation(fields: [taskId], references: [taskId], onDelete: Restrict)
+  materialId String @db.Uuid
+  organizationId String @db.Uuid
+  actorId String @db.Uuid
+  generation Int
+  storageKey String @unique @db.Uuid
+  extension String @db.VarChar(12)
+  expectedBytes Int
+  sha256 String @db.Char(64)
+  state UploadState @default(PENDING)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  confirmedAt DateTime? @db.Timestamptz(3)
+  boundAt DateTime? @db.Timestamptz(3)
+  attachments SubmissionAttachment[]
+  @@unique([id, taskId])
+}
+
+model SubmissionVersion {
+  id String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  execution TaskExecution @relation(fields: [taskId], references: [taskId], onDelete: Restrict)
+  requirementVersionId String @db.Uuid
+  version Int
+  generation Int
+  actorId String @db.Uuid
+  submittedAt DateTime @default(now()) @db.Timestamptz(3)
+  entries Json
+  deadlines Json
+  attachments SubmissionAttachment[]
+  review ReviewRecord?
+  command SubmissionCommand?
+  @@unique([taskId, version])
+  @@unique([id, taskId])
+}
+
+model SubmissionAttachment {
+  submissionId String @db.Uuid
+  fileId String @db.Uuid
+  taskId String @db.Uuid
+  submission SubmissionVersion @relation(fields: [submissionId, taskId], references: [id, taskId], onDelete: Restrict)
+  file FileUpload @relation(fields: [fileId, taskId], references: [id, taskId], onDelete: Restrict)
+  @@id([submissionId, fileId])
+}
+
+model SubmissionCommand {
+  id String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  actorId String @db.Uuid
+  key String @db.Uuid
+  requestHash String @db.Char(64)
+  submissionId String @unique @db.Uuid
+  submission SubmissionVersion @relation(fields: [submissionId, taskId], references: [id, taskId], onDelete: Restrict)
+  @@unique([taskId, actorId, key])
+  @@unique([submissionId, taskId])
+}
+
+model ReviewRecord {
+  id String @id @default(uuid()) @db.Uuid
+  submissionId String @unique @db.Uuid
+  submission SubmissionVersion @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  actorId String @db.Uuid
+  decision String @db.VarChar(8)
+  issues Json
+  reviewedAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model DeadlineHistory {
+  id String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  execution TaskExecution @relation(fields: [taskId], references: [taskId], onDelete: Restrict)
+  actorId String @db.Uuid
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+  reason String @db.VarChar(2000)
+  previous Json
+  next Json
 }

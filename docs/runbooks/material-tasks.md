@@ -1,6 +1,6 @@
-# CAAU-005 第一段：赛事、指派与任务发布
+# CAAU-005：任务发布与材料执行
 
-状态：本地第一段完成；全段技术设计见 [ADR-0004](../adr/0004-material-workflow.md)，实际验收见 [roadmap](../planning/roadmap.md)。不是上传/提交/审核或微信验收。
+状态：第一段 Web 保留，第二段提供本地后端/API 客户端。全段设计见 [ADR-0004](../adr/0004-material-workflow.md)、[执行设计](../adr/0005-material-execution.md)，实际验收见 [roadmap](../planning/roadmap.md)。第二段页面与微信未验收。
 
 ## 本地操作
 
@@ -25,7 +25,7 @@ corepack pnpm dev:admin
 4. **发布**：先保存要求，再核对指派和配置、确认发布。产生不可变要求 V1；发布前经办/审核员看不到业务任务，发布后指定人员可读取。发布失败不显示成功；409 应刷新后核对，而非盲目覆盖。
 5. **承办方**：导入经办会话，选择可见赛事、查看任务要求。此 Web 只用于本地验证查询；小程序业务页面尚未实现。上传/提交/审核按钮不存在。
 
-第一段支持发布前重指派并留历史。发布后重指派、更新要求、撤回发布、删除历史均未开放，API 返回 409，不代表这些后续业务规则已被确认。历史指派引用的授权不能通过旧授权删除接口删除（409）；可停用成员/用户立即冻结访问。截止时间只保存/展示，不据此承诺逾期可提交或不可提交。
+发布前 assignment 现仅允许同机构调整；发布后使用专用 handover 同机构交接。跨机构一律关闭旧任务另建，不复制旧内容。发布要求、撤回发布、删除历史仍不开放。历史指派引用的授权不能通过旧授权删除接口删除（409）；可停用成员/用户立即冻结访问。有效截止以 execution 为准：逾期仍可存草稿，不可提交，须总部明确延期。
 
 ## 真实业务接口
 
@@ -42,13 +42,13 @@ corepack pnpm dev:admin
 | PATCH material-tasks/:id/requirements | 带 expectedRevision 保存总部配置草案；严格递归校验，不是保存承办方材料 |
 | POST material-tasks/:id/publish | 校验完整要求及当前有效指派；原子生成要求 V1 并发布。重复请求不生成第二版；并发冲突可能 409 后刷新重试 |
 
-共同规则：未经授权 403、失效会话 401、非法字段 400、revision/发布保护/约束冲突 409、数据库/审计失败脱敏 503。前端按钮隐藏不是鉴权；所有业务读写最终由后端决定。模板版本目前为明确的版本标识，不是模板文件下载；模板文件与附件通道留第二段。
+共同规则：未经授权 403、失效会话 401、非法字段 400、revision/发布保护/约束冲突 409、数据库/审计失败脱敏 503。前端按钮隐藏不是鉴权；所有业务读写最终由后端决定。模板版本目前为明确的版本标识，不是模板文件下载；附件通道见下节；正式模板文件管理仍未实现。
 
 内部技术输入上限为每任务 1～50 个材料、每项最多 20 种格式、字节上限不超过 PostgreSQL Int 范围；这些是当前实现边界，不是总部已确认的正式文件大小政策。列表当前面向本地小规模试点，尚未做服务端分页和大数据量负载验收。
 
 ## 迁移与验收
 
-新增 `202609080002_material_tasks`，不改 004 migration：Event/MaterialTask 与旧锚点共享 UUID，任务/赛事复合外键防错绑，RequirementVersion 和 AssignmentHistory 追加历史。数据库触发器禁止修改/删除要求快照与指派历史，禁止修改已发布配置/指派；延迟约束要求发布状态和匹配快照同事务提交。旧权限 reviewer 写入口不能修改真实业务任务。
+新增 `202609080002_material_tasks`，不改 004 migration：Event/MaterialTask 与旧锚点共享 UUID，任务/赛事复合外键防错绑，RequirementVersion 和 AssignmentHistory 追加历史。数据库触发器禁止修改/删除要求快照与指派历史，禁止修改已发布配置；第二段追加迁移只放开同机构经办交接，不开放已发布审核员变更；延迟约束要求发布状态和匹配快照同事务提交。旧权限 reviewer 写入口不能修改真实业务任务。
 
 ```sh
 corepack pnpm contract:check
@@ -60,14 +60,39 @@ corepack pnpm test:e2e
 corepack pnpm db:test
 ```
 
-`db:test` 现在也构建 Web 并运行真实业务 Chromium 测试，必须安装 Chromium，**3000/4173 端口必须空闲**，不复用已有服务。仅在 test 服务内自身临时库执行；先部署原 004 迁移并写合成身份/审计，再升级 005，验证原数据及迁移 checksum 保留、重复 deploy/status/diff。随后真实业务 API 与真实生产 Web 构建运行在 app 账号上，无 route mock、权限探测替代或缺环境静默跳过。测试结束只关闭自身 API/Web、清理本次临时库，保留 dev 与卷。
+`db:test` 现在也构建 Web 并运行真实业务 Chromium 测试，必须安装 Chromium，**3000/4173 端口必须空闲**，不复用已有服务。仅在 test 服务内自身临时库执行；先部署 004/005 第一段迁移，写合成身份/审计及已发布任务，再追加第二段，验证原快照保留和执行状态回填、重复 deploy/status/diff。随后真实业务 API 与真实生产 Web 构建运行在 app 账号上，无 route mock、权限探测替代或缺环境静默跳过。测试结束只关闭自身 API/Web、清理本次临时库，保留 dev 与卷。
 
-本地通过：17 项数据库套件（含旧恢复/shadow 与新增业务/浏览器）、全套静态检查与三端构建、25 项应用/HTTP 测试、原 Chromium3项。业务浏览器覆盖账号/组织/角色登记、建赛事、选择指派、五项要求、发布、API 重启后读取、承办方可见范围、系统管理员业务页面拒绝及 375px 无横向溢出；截图在忽略的 `.local/evidence/caau-005/workspace-mobile.png`，不是微信真机。
+第一段历史证据：17 项数据库套件（含旧恢复/shadow 与新增业务/浏览器）、全套静态检查与三端构建、25 项应用/HTTP 测试、原 Chromium3项。业务浏览器覆盖账号/组织/角色登记、建赛事、选择指派、五项要求、发布、API 重启后读取、承办方可见范围、系统管理员业务页面拒绝及 375px 无横向溢出；截图在忽略的 `.local/evidence/caau-005/workspace-mobile.png`，不是微信真机。
 
 已修复并重跑：Prisma 复合一对一补齐唯一约束；原生 select 可访问名称显式化；加载图标不再污染按钮名称；通过 AntD ConfigProvider 关闭动效，不用 CSS 强行取消离场动画导致弹窗遮挡；Node 浏览器编排脚本区分浏览器 globals。保留提示：Web 首包体积、Node 小程序模块类型提示，以及业务关系查询期间出现的 pg8 并行 client.query 弃用提示；未升级 pg9 或关闭提示。远程 CI、生产身份/存储、安全独立评审和微信未验收。
 
-## 第二段开始前
+## 第二段 API 操作
 
-先由业务确认：**截止后提交采用禁止、标逾期允许，还是须总部延期？换经办人后旧草稿如何处理，同机构与跨机构是否不同？** 在这些规则确认前不实现相关放行或自动移交。
+第二段按已确认规则实现，不再把逾期与交接列为未决项。新增迁移 `202609080003_material_execution`，不修改前两次迁移；对既有已发布任务回填 EDITING 执行状态/空草稿，不改原要求或作者。
 
-随后按 ADR-0004 实现私有文件上传/确认/绑定/下载、材料草稿 revision、幂等不可变提交版本、整包审核唯一结论、退回生成新草稿和历史查询，并补真实文件/提交/审核越权及弱网/并发测试。微信完整链路另需 AppID、测试账号、合法 HTTPS 域名及真机资源；当前只完成 CAAU-005 第一段。
+| 方法/路径 | 操作 |
+| --- | --- |
+| GET material-tasks/:id/execution | 当前状态、执行 revision、generation、有效截止 |
+| GET / PATCH material-tasks/:id/draft | 读取/保存当前草稿；保存携带草稿 expectedRevision 和 entries（materialId/text/fileIds） |
+| GET material-tasks/:id/draft-history | 不可变编辑快照；审核员不能读取草稿及其历史 |
+| POST material-tasks/:id/uploads | 创建 30 分钟上传意图：materialId/extension/expectedBytes/sha256 |
+| POST uploads/:id/content | 原始 application/octet-stream 上传，不使用 JSON/base64；独占写入、超时/字节上限 |
+| POST uploads/:id/confirm | 重读文件验证实际大小/hash/格式特征；成功才 CONFIRMED |
+| GET uploads/:id/content | 当前草稿/历史提交绑定文件的授权代理下载；审核员只读提交附件 |
+| POST / GET material-tasks/:id/submissions | 提交/列出不可变版本；提交体 expectedDraftRevision 与 UUID idempotencyKey |
+| POST material-tasks/:id/reviews | submissionId、整包 PASS/RETURN、issues；RETURN 必须列 materialId/reason/instruction，PASS 的 issues 为空 |
+| POST / GET material-tasks/:id/extensions | 延期/历史；POST 为执行 expectedRevision、newDeadline、reason；总部本赛事管理员专用 |
+| POST material-tasks/:id/handover | 执行 expectedRevision、handlerMemberId；总部同机构交接 |
+| POST material-tasks/:id/close | 执行 expectedRevision、reason；关闭旧任务，保留历史，禁止继续编辑/提交/审核 |
+
+推荐顺序：读取要求和 execution/draft → 创建意图 → 二进制上传 → 确认 → 把文件 ID 写入草稿 → 提交。前端统一使用 `@caau/api-client` 的生成 operationId；二进制请求/响应为 ArrayBuffer，Fetch 适配器不 JSON 编码文件。Taro 适配器已传递 arraybuffer 类型，但微信平台上传/下载未验证。
+
+- 三种 revision 不可混用：总部配置 revision、承办草稿 revision、执行 revision。409 时读取当前状态并比较；不要自动覆盖草稿。同一次提交重试保留原 idempotencyKey 和 expectedDraftRevision；不同参数使用同键为 409，已撤权者不能凭旧键重取结果。
+- 服务器数据库时钟检查任务及必交/已填材料截止。延期的新截止必须晚于全部旧截止且晚于服务器时间，整体更新任务/材料有效截止，并留人、时间、原因和完整新旧映射。退回不自动延期。
+- RETURN 复制提交内容形成新草稿修订；改后提交产生 V2 等新版本，不修改 V1 或旧审核。并发审核仅一条结论，另一条 409；PASS 后不再接受材料变更。
+- 同机构交接保留已绑定文件与编辑/提交历史，旧人后续访问立即拒绝。旧 generation 未完成上传不可接续，重新创建意图上传；不允许跨机构绑定、下载或直接转交历史。
+- 私有根目录默认忽略的 `.local/files`，可用服务端 `CAAU_PRIVATE_FILE_ROOT` 指定独立目录。没有静态映射或公开/裸签名 URL；响应 attachment/octet-stream/no-store/nosniff。不得把该目录映射到 Web 根目录，也不提交或截图真实材料。
+- 本地支持 txt/pdf/png/jpg/jpeg，且必须满足总部配置；传输上限 10 MiB，10 秒上传超时，最多每项 10 附件/4000 字文本、50 项草稿。这是技术限制，不是正式业务文件政策。校验 UTF-8、大小、SHA-256 和文件特征，**不是病毒扫描或完整文件语义解析**；Office/压缩包明确拒绝。
+- 失败流清理本次部分文件；完整写入但确认/审计失败的私有对象不算提交。确认可重试；hash 错误应新建意图重传。未做自动 GC，不可手工删除历史绑定文件或数据库/存储卷；部署前还须私有云桶、扫描隔离、配额/速率限制、备份恢复与独立安全评审。
+
+第二段真实测试见 `scripts/workflow.integration.mjs`：真实字节上传/下载、失败确认、跨机构/撤权、草稿 CAS、逾期/延期、提交重试、退回再提交、并发审核、交接继承、审计故障回滚及 API 重启。测试用独立私有目录，仅清理自身临时文件和临时库；不覆盖第一段浏览器验收。**第二段 Web/小程序办理、审核、延期、交接页面尚未实现；微信 AppID/登录/开发者工具/真机、远程 CI 和生产存储均未验收。**

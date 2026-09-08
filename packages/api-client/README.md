@@ -31,3 +31,5 @@ CAAU-005 第一段同步加入真实 events/material-tasks/workspace DTO、路�
 Web 从本包及 `@caau/api-client/fetch` 导入；小程序从本包及 `@caau/api-client/taro` 导入并注入 `Taro.request`。Taro 适配器只依赖结构化请求能力，不引用 Node 或 fetch 适配器。请求路径、方法和成功/错误响应校验均消费生成元数据，两端不另手写健康接口类型。
 
 已验证生成/类型/适配器单测、两端共享真实 HTTP 接口与 Web 浏览器；小程序 HTTP 联调使用 Node 传输替身，不代表微信开发者工具/真机验收。数据库成功与停启恢复已由独立 db:test 在本机验证，非微信平台验收。详情见 [数据库与契约文档](../../docs/runbooks/database-contract.md)。
+
+第二段契约由 Nest DTO/控制器生成，包括材料执行/草稿/上传/提交/审核/延期/交接。`uploadPrivateContent` 的 body 与 `downloadPrivateContent` 成功结果为 ArrayBuffer；Fetch 适配器直接传字节，错误仍解析 JSON，Taro 传递 responseType=arraybuffer。真实 Fetch+API+PostgreSQL/私有文件测试已纳入 db:test；微信平台二进制传输尚未验收。
