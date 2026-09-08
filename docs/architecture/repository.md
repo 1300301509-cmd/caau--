@@ -41,7 +41,7 @@ admin ───┘
 
 当前 `authorization` 统一承担身份/组织/权限锚点管理、策略与授权事务审计；控制器/DTO、全局 Guard、service 及 policy 分离，Prisma 构造入口仍仅在 database。后续新增业务域复用策略并保持授权、业务写入、审计同事务。
 
-CAAU-005 `materials` 负责赛事/任务业务用例与发布事务，通过授权模块公开的 `run`、锚点创建/指派及策略服务参与同事务；不另建会话或绕过审计。业务对象与权限锚点共享 UUID。Web `features/materials` 仅消费生成客户端，按身份提供登记/赛事/任务操作；当前无小程序业务页。第二段 `workflow` 模块负责私有文件、执行状态/草稿/提交/审核、延期与交接，复用同一个 authorization.run 事务/审计；materials 发布通过公开 initializeExecution helper 同事务初始化执行状态。Prisma 仍仅从 @caau/database 引入，私有磁盘仅在 API 侧访问；第二段 Web 页面未实现。
+CAAU-005 `materials` 负责赛事/任务业务用例与发布事务，通过授权模块公开的 `run`、锚点创建/指派及策略服务参与同事务；不另建会话或绕过审计。业务对象与权限锚点共享 UUID。Web `features/materials` 仅消费生成客户端，按身份提供登记/赛事/任务操作；第一段时无小程序业务页，第三段实现范围见下述说明。第二段 `workflow` 模块负责私有文件、执行状态/草稿/提交/审核、延期与交接，复用同一个 authorization.run 事务/审计；materials 发布通过公开 initializeExecution helper 同事务初始化执行状态。Prisma 仍仅从 @caau/database 引入，私有磁盘仅在 API 侧访问；第三段增加 Web 审核/管理和承办联调组件、Taro 任务列表/详情/本地身份页；共用 api-client 内无 React/平台依赖的材料命令状态与字节摘要助手，UI 与 Taro 文件选择仍各自归属应用。小程序运行时单独验收。
 
 基础域规划：auth 管理身份与会话；organizations 管理组织和成员关系；permissions 管理操作及数据范围；events 管理赛事；tasks 管理交付与审核；files 管理附件授权。报名、财务、AI 等在对应需求确认后加入。
 

@@ -913,6 +913,21 @@
         ],
         "type": "object"
       },
+      "UploadCapabilitiesDto": {
+        "properties": {
+          "formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxBytes": {
+            "type": "integer"
+          }
+        },
+        "required": ["formats", "maxBytes"],
+        "type": "object"
+      },
       "UploadDto": {
         "properties": {
           "expectedBytes": {
@@ -3172,6 +3187,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceIdentityDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/workspace/upload-capabilities": {
+      "get": {
+        "operationId": "getUploadCapabilities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCapabilitiesDto"
                 }
               }
             },

@@ -28,6 +28,8 @@ import {
   UpdateAssignmentDto,
   WorkspaceIdentityDto,
 } from './materials.dto.js';
+import { UploadCapabilitiesDto } from '../workflow/capabilities.dto.js';
+import { FILE_EXTENSIONS, MAX_FILE_BYTES } from '../workflow/private-store.js';
 import { MaterialsService } from './materials.service.js';
 @Controller()
 @ApiBearerAuth()
@@ -41,6 +43,13 @@ import { MaterialsService } from './materials.service.js';
 @ApiResponse({ status: 503, description: 'Database or audit unavailable' })
 export class MaterialsController {
   constructor(private readonly service: MaterialsService) {}
+  @Get('workspace/upload-capabilities')
+  @Permission('workspace.capabilities')
+  @ApiOperation({ operationId: 'getUploadCapabilities' })
+  @ApiOkResponse({ type: UploadCapabilitiesDto })
+  capabilities() {
+    return { formats: FILE_EXTENSIONS, maxBytes: MAX_FILE_BYTES };
+  }
   @Get('workspace/identity')
   @Permission('workspace.identity')
   @ApiOperation({ operationId: 'getWorkspaceIdentity' })

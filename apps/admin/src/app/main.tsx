@@ -9,7 +9,21 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Missing application root');
 createRoot(root).render(
   <StrictMode>
-    <ConfigProvider theme={{ token: { motion: false } }}>
+    <ConfigProvider
+      theme={{
+        token: {
+          motion: false,
+          colorPrimary: '#1d4ed8',
+          colorPrimaryHover: '#1e40af',
+          colorPrimaryActive: '#1e3a8a',
+          colorError: '#b91c1c',
+          colorErrorHover: '#991b1b',
+          colorText: '#172033',
+          fontSize: 16,
+          borderRadius: 8,
+        },
+      }}
+    >
       {location.pathname === '/workspace' ? (
         <WorkspacePage />
       ) : (

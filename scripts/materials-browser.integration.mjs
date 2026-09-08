@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { workflowBrowserFlows } from './workflow-browser.integration.mjs';
 import { createServer } from 'node:http';
 import { mkdir, readFile } from 'node:fs/promises';
 import { chromium, expect } from '@playwright/test';
@@ -227,6 +228,7 @@ export async function materialBrowserTest({ config, tokens, sql }) {
       page.getByText('成员角色已登记', { exact: true }),
     ).toBeVisible();
     assert.deepEqual(pageErrors, []);
+    await workflowBrowserFlows({ browser, tokens, sql });
   } finally {
     await browser?.close();
     await app.close();

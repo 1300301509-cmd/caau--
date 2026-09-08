@@ -183,6 +183,31 @@ export async function materialsIntegration(
         { expectedRevision: 1, requirements: invalid },
         400,
       );
+      for (const change of [{ formats: ['docx'] }, { maxBytes: 10485761 }]) {
+        const unsupported = req();
+        Object.assign(unsupported.materials[0], change);
+        await api(
+          'manager',
+          'PATCH',
+          `material-tasks/${taskA.id}/requirements`,
+          { expectedRevision: 1, requirements: unsupported },
+          400,
+        );
+      }
+      const legacy = req();
+      legacy.materials[0].formats = ['docx'];
+      // Simulate a draft created by the previous release; never change existing dev data.
+      await sql.query(
+        'UPDATE "MaterialTask" SET configuration=$2 WHERE id=$1',
+        [taskA.id, legacy],
+      );
+      await api(
+        'manager',
+        'POST',
+        `material-tasks/${taskA.id}/publish`,
+        { expectedRevision: 1 },
+        400,
+      );
       const duplicate = req();
       duplicate.materials.push({ ...duplicate.materials[0] });
       await api(
@@ -521,7 +546,7 @@ export async function materialsIntegration(
     },
   );
   await t.test(
-    'headquarters Web creates, assigns, configures and publishes over real API/PostgreSQL',
+    'real browser publication, upload, approval/return V2, conflict, deadline and handover feedback',
     { timeout: 90000 },
     () => materialBrowserTest({ config, tokens, sql }),
   );

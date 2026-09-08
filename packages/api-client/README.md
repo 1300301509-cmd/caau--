@@ -33,3 +33,5 @@ Web 从本包及 `@caau/api-client/fetch` 导入；小程序从本包及 `@caau/
 已验证生成/类型/适配器单测、两端共享真实 HTTP 接口与 Web 浏览器；小程序 HTTP 联调使用 Node 传输替身，不代表微信开发者工具/真机验收。数据库成功与停启恢复已由独立 db:test 在本机验证，非微信平台验收。详情见 [数据库与契约文档](../../docs/runbooks/database-contract.md)。
 
 第二段契约由 Nest DTO/控制器生成，包括材料执行/草稿/上传/提交/审核/延期/交接。`uploadPrivateContent` 的 body 与 `downloadPrivateContent` 成功结果为 ArrayBuffer；Fetch 适配器直接传字节，错误仍解析 JSON，Taro 传递 responseType=arraybuffer。真实 Fetch+API+PostgreSQL/私有文件测试已纳入 db:test；微信平台二进制传输尚未验收。
+
+第三段增加 getUploadCapabilities 生成契约，以及平台无关的 MaterialEditor 客户端命令助手：保留本地草稿输入/409 对照、确认后加入附件、固定幂等键重试、进行中锁与可观察状态。这里只编排客户端协议，不包含 React/Taro UI、数据库实体或服务端权限替代。SHA-256 按 ArrayBuffer 计算，uuidFromBytes 要求调用方提供平台密码学随机字节；摘要已和 Node 标准实现比对至 10 MiB，平台最大文件性能另验。

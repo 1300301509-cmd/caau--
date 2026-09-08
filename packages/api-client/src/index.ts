@@ -1,4 +1,11 @@
 import { operations as wire } from './generated/operations.js';
+export {
+  MaterialEditor,
+  executionLabels,
+  executionStatus,
+  workflowError,
+} from './material-editor.js';
+export { sha256, uuidFromBytes } from './sha256.js';
 import type { operations } from './generated/schema.js';
 export type { paths, components, operations } from './generated/schema.js';
 

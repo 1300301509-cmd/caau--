@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
 import { Alert, Button, Card, Modal, Tag, Typography } from 'antd';
-import { ApiError, createApiClient } from '@caau/api-client';
-import { createFetchTransport } from '@caau/api-client/fetch';
+import { ApiError, type components } from '@caau/api-client';
+import { client } from './client';
+import { OrganizerPanel } from './OrganizerPanel';
+import { ReviewPanel, ReviewQueue } from './ReviewPanel';
 import { AssignmentForm } from './AssignmentForm';
 import { RequirementsEditor } from './RequirementsEditor';
 import {
@@ -12,13 +14,11 @@ import {
   type Task,
 } from './types';
 
-const client = createApiClient(
-  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3000',
-  createFetchTransport(),
-);
 const emptyDirectory: Directory = { users: [], organizations: [], members: [] };
 export function WorkspacePage() {
   const [token, setToken] = useState('');
+  const [capabilities, setCapabilities] =
+    useState<components['schemas']['UploadCapabilitiesDto']>();
   const [identity, setIdentity] = useState<Identity>();
   const [directory, setDirectory] = useState<Directory>(emptyDirectory);
   const [events, setEvents] = useState<Event[]>([]);
@@ -61,22 +61,37 @@ export function WorkspacePage() {
     }
   }
   async function refresh(session = token, user = identity) {
-    const [newEvents, newTasks, newDirectory] = await Promise.all([
-      client.request('listEvents', { token: session }),
-      client.request('listMaterialTasks', { token: session }),
-      user?.roles.some((r) => r === 'EVENT_MANAGER' || r === 'SYSTEM_ADMIN') &&
-      !user.roles.includes('ORGANIZER')
-        ? client.request('getWorkspaceDirectory', { token: session })
-        : Promise.resolve(emptyDirectory),
-    ]);
+    const [newEvents, newTasks, newDirectory, capabilities] = await Promise.all(
+      [
+        client.request('listEvents', { token: session }),
+        client.request('listMaterialTasks', { token: session }),
+        user?.roles.some(
+          (r) => r === 'EVENT_MANAGER' || r === 'SYSTEM_ADMIN',
+        ) && !user.roles.includes('ORGANIZER')
+          ? client.request('getWorkspaceDirectory', { token: session })
+          : Promise.resolve(emptyDirectory),
+        client.request('getUploadCapabilities', { token: session }),
+      ],
+    );
+    setCapabilities(capabilities);
     setEvents(newEvents);
     setTasks(newTasks);
     setDirectory(newDirectory);
   }
   async function loadTask(id: string) {
-    setSelected(
-      await client.request('getMaterialTask', { token, path: { id } }),
-    );
+    if (
+      selected?.id !== id &&
+      identity?.roles.includes('ORGANIZER') &&
+      selected &&
+      !window.confirm('离开当前任务？未保存输入和未确认提交命令不会自动保留。')
+    )
+      return;
+    const task = await client.request('getMaterialTask', {
+      token,
+      path: { id },
+    });
+    setSelected(task);
+    setEventId(task.eventId);
   }
   function clear() {
     setToken('');
@@ -108,7 +123,7 @@ export function WorkspacePage() {
         type="info"
         showIcon
         title="本地测试身份 · 非微信登录"
-        description="本段仅创建、指派和发布任务；材料上传、提交与审核尚未开放。会话仅保存在当前页面内存。"
+        description="会话仅保存在当前页面内存。总部创建发布、审核与任务管理；承办身份可进入 Web 联调办理区，非微信运行验收。"
       />
       <Card
         title={
@@ -129,6 +144,11 @@ export function WorkspacePage() {
                 e.target.value = '';
                 if (!file) return;
                 void run(async () => {
+                  if (
+                    identity?.roles.includes('ORGANIZER') &&
+                    !window.confirm('切换身份将丢弃未保存输入，是否继续？')
+                  )
+                    return;
                   clear();
                   if (file.size > 4096) throw new Error('Invalid session file');
                   const data: unknown = JSON.parse(await file.text());
@@ -167,6 +187,13 @@ export function WorkspacePage() {
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
+                    if (
+                      identity?.roles.includes('ORGANIZER') &&
+                      !window.confirm(
+                        '退出会话将丢弃未保存输入；未确认的提交请先核实。继续退出？',
+                      )
+                    )
+                      return;
                     try {
                       await client.request('logout', { token });
                     } finally {
@@ -190,6 +217,15 @@ export function WorkspacePage() {
           />
         )}
       </div>
+      {identity &&
+        !identity.roles.includes('ORGANIZER') &&
+        (manager || identity.roles.includes('REVIEWER')) && (
+          <ReviewQueue
+            tasks={tasks}
+            token={token}
+            open={(id) => void run(() => loadTask(id))}
+          />
+        )}
       {administrator && (
         <Card title="账号与组织登记">
           <p>
@@ -359,6 +395,14 @@ export function WorkspacePage() {
               value={eventId}
               disabled={busy}
               onChange={(e) => {
+                if (
+                  selected &&
+                  identity?.roles.includes('ORGANIZER') &&
+                  !window.confirm(
+                    '切换赛事将离开当前任务，未保存输入不会保留。继续？',
+                  )
+                )
+                  return;
                 setEventId(e.target.value);
                 setSelected(undefined);
               }}
@@ -482,6 +526,7 @@ export function WorkspacePage() {
               <RequirementsEditor
                 key={`${selected.id}:${selected.revision}`}
                 task={selected}
+                capabilities={capabilities}
                 busy={busy}
                 save={(requirements) =>
                   void run(async () => {
@@ -503,7 +548,7 @@ export function WorkspacePage() {
                 <h3>4 · 发布任务</h3>
                 <p>
                   发布后指定承办方可读取
-                  V1。本段暂不支持发布后改要求或换人；上传、提交和审核尚未开放。
+                  V1。发布后要求不可改；同机构交接、延期与关闭使用专用操作。
                 </p>
                 <Button
                   type="primary"
@@ -519,13 +564,13 @@ export function WorkspacePage() {
               <Alert
                 type="success"
                 title="已发布要求受保护"
-                description="以下为本任务发布快照；不提供修改提交内容或上传入口。"
+                description="以下为不可变发布要求；材料办理与当前有效截止见下方执行区域。"
               />
               <p>
                 任务截止：
                 {selected.requirements &&
                   new Date(selected.requirements.deadline).toLocaleString()}
-                （截止后的提交规则待业务确认）
+                （原发布截止；当前有效截止见办理进度。逾期须总部延期方可提交。）
               </p>
               {selected.requirements?.materials.map((m) => (
                 <section className="requirement-read" key={m.id}>
@@ -545,6 +590,28 @@ export function WorkspacePage() {
           )}
         </Card>
       )}
+      {selected?.state === 'PUBLISHED' &&
+        identity &&
+        (identity.roles.includes('ORGANIZER') ? (
+          <OrganizerPanel
+            key={`${selected.id}:${token}`}
+            id={selected.id}
+            token={token}
+          />
+        ) : (
+          <ReviewPanel
+            key={`${selected.id}:${token}`}
+            task={selected}
+            token={token}
+            manager={!!manager}
+            reviewer={identity.roles.includes('REVIEWER')}
+            directory={directory}
+            changed={async () => {
+              await loadTask(selected.id);
+              await refresh();
+            }}
+          />
+        ))}
       <Modal
         title="确认发布材料任务"
         open={publishConfirm}

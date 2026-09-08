@@ -12,7 +12,7 @@ body {
 
 :root {
   --surface: #fff;
-  --border: #b6c2d2;
+  --border: #64748b;
   --ink: #172033;
   --focus: #1d4ed8;
 }
@@ -165,4 +165,68 @@ body {
   .workspace {
     scroll-behavior: auto;
   }
+}
+
+.material-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.review-issue {
+  padding: 16px;
+  border-left: 3px solid #b91c1c;
+  background: #fff7f7;
+  margin: 16px 0;
+}
+.workspace pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workspace fieldset {
+  min-width: 0;
+  margin: 20px 0;
+}
+.workspace section {
+  overflow-wrap: anywhere;
+}
+.workflow-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.workflow-modal input:not([type='checkbox']),
+.workflow-modal select,
+.workflow-modal textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+}
+.workflow-modal textarea {
+  min-height: 100px;
+}
+.workflow-modal fieldset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.workflow-modal legend label {
+  flex-direction: row;
+  align-items: center;
+  min-height: 44px;
+}
+.workflow-modal .ant-btn {
+  min-height: 44px;
+}
+.workflow-modal :is(input, select, textarea):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }

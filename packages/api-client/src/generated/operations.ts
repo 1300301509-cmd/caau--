@@ -1685,4 +1685,23 @@ export const operations = {
     body: null,
     authenticated: true,
   },
+  getUploadCapabilities: {
+    path: '/api/v1/workspace/upload-capabilities',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: {
+          formats: { items: { type: 'string' }, type: 'array' },
+          maxBytes: { type: 'integer' },
+        },
+        required: ['formats', 'maxBytes'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
 } as const;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from 'antd';
+import type { components } from '@caau/api-client';
 import type { Requirements, Task } from './types';
 const names = [
   '办赛基础信息确认表',
@@ -18,10 +19,12 @@ function localTime(iso?: string) {
 export function RequirementsEditor({
   task,
   busy,
+  capabilities,
   save,
 }: {
   task: Task;
   busy: boolean;
+  capabilities?: components['schemas']['UploadCapabilitiesDto'];
   save: (requirements: Requirements) => void;
 }) {
   const [items, setItems] = useState(
@@ -59,6 +62,7 @@ export function RequirementsEditor({
       className="workflow-form"
       onSubmit={(event) => {
         event.preventDefault();
+        if (!capabilities) return;
         save({
           deadline: new Date(deadline).toISOString(),
           materials: items.map((m) => ({
@@ -76,8 +80,9 @@ export function RequirementsEditor({
       }}
     >
       <p>
-        时间按本机时区填写，保存为
-        UTC。格式、大小和模板由总部配置；本段不提供上传或逾期提交规则。
+        时间按本机时区填写，保存为 UTC。当前上传格式：
+        {capabilities?.formats.join(', ')}；技术上限 {capabilities?.maxBytes}{' '}
+        字节。总部仅可在此范围配置。模板仅版本标识，暂无真实模板下载。
       </p>
       <label>
         任务截止时间
@@ -122,7 +127,7 @@ export function RequirementsEditor({
               支持格式（小写扩展名，逗号分隔）
               <input
                 required
-                pattern="[a-z0-9]{1,12}(,[a-z0-9]{1,12})*"
+                pattern={`(${capabilities?.formats.join('|') ?? ''})(,(${capabilities?.formats.join('|') ?? ''}))*`}
                 value={m.formatsText}
                 onChange={(e) => change(i, 'formatsText', e.target.value)}
               />
@@ -133,7 +138,7 @@ export function RequirementsEditor({
                 required
                 type="number"
                 min={1}
-                max={2147483647}
+                max={capabilities?.maxBytes ?? 0}
                 step={1}
                 value={m.sizeText}
                 onChange={(e) => change(i, 'sizeText', e.target.value)}
@@ -207,6 +212,7 @@ export function RequirementsEditor({
           type="primary"
           htmlType="submit"
           loading={busy}
+          disabled={!capabilities}
         >
           保存材料要求
         </Button>

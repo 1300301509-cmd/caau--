@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import type { Prisma } from '@caau/database';
 import {
   AuthorizationService,
@@ -13,7 +17,22 @@ import {
   type Actor,
 } from '../authorization/policy.js';
 import { initializeExecution } from '../workflow/execution.js';
+import { FILE_EXTENSIONS, MAX_FILE_BYTES } from '../workflow/private-store.js';
 import { requirements, revision } from './requirements.js';
+
+function uploadCompatible(config: ReturnType<typeof requirements>) {
+  if (
+    config.materials.some(
+      (m) =>
+        m.maxBytes > MAX_FILE_BYTES ||
+        m.formats.some((f) => !FILE_EXTENSIONS.includes(f)),
+    )
+  )
+    throw new BadRequestException(
+      'Requirements exceed current upload capabilities',
+    );
+  return config;
+}
 
 const includeTask = {
   scope: {
@@ -240,7 +259,7 @@ export class MaterialsService {
         if (revision(b.expectedRevision) !== task.revision)
           throw new ConflictException('Task changed; refresh before saving');
         if (action === 'materials.configure') {
-          const configuration = requirements(b.requirements);
+          const configuration = uploadCompatible(requirements(b.requirements));
           return view(
             await tx.materialTask.update({
               where: { id: task.id, revision: task.revision },
@@ -284,7 +303,9 @@ export class MaterialsService {
           );
         }
         if (action === 'materials.publish') {
-          const configuration = requirements(task.configuration);
+          const configuration = uploadCompatible(
+            requirements(task.configuration),
+          );
           // Revalidate current users/members and conflicts at publication, not only on creation.
           await this.auth.assignTaskAnchor(
             tx,
