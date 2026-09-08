@@ -1,0 +1,42 @@
+# Dependencies and build products
+node_modules/
+.pnpm-store/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Local secrets; sanitized examples may be committed
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local data and uploads; migrations and synthetic fixtures remain tracked
+.local/
+.data/
+uploads/
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.dump
+
+# Logs and test artifacts
+*.log
+playwright-report/
+test-results/
+
+# Machine-specific files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+project.private.config.json

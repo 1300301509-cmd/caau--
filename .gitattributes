@@ -1,0 +1,16 @@
+* text=auto
+# Markdown permits trailing spaces for explicit line breaks.
+*.md text eol=lf whitespace=-blank-at-eol
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.sh text eol=lf
+*.sql text eol=lf
+*.prisma text eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
