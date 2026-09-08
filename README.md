@@ -8,6 +8,7 @@
 
 - [开发入口](AGENTS.md)：开发者与代理的工作规则。
 - [代码组织](docs/architecture/repository.md)：目录职责、依赖方向与模块边界。
+- [业务模块映射](docs/architecture/module-map.md)：12 个导航板块对应的前端功能与后端职责。
 - [协作规范](CONTRIBUTING.md)：任务、分支、提交、评审与验收。
 - [开发计划与状态](docs/planning/roadmap.md)：当前成果和后续任务。
 - [需求登记](docs/product/requirements.md)：区分已确认内容与待验证假设。
