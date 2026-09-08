@@ -65,6 +65,111 @@
         ],
         "type": "object"
       },
+      "ConfigureTaskDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/RequirementsDto"
+          }
+        },
+        "required": ["expectedRevision", "requirements"],
+        "type": "object"
+      },
+      "CreateTaskDto": {
+        "properties": {
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "handlerMemberId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reviewerMemberId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 160,
+            "type": "string"
+          }
+        },
+        "required": [
+          "organizationId",
+          "handlerMemberId",
+          "reviewerMemberId",
+          "eventId",
+          "title"
+        ],
+        "type": "object"
+      },
+      "DirectoryDto": {
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MemberChoiceDto"
+            },
+            "type": "array"
+          },
+          "organizations": {
+            "items": {
+              "$ref": "#/components/schemas/OrganizationChoiceDto"
+            },
+            "type": "array"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/PersonDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["users", "organizations", "members"],
+        "type": "object"
+      },
+      "EventInputDto": {
+        "properties": {
+          "description": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "type": "string"
+          }
+        },
+        "required": ["name", "description"],
+        "type": "object"
+      },
+      "EventViewDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "type": "string"
+          }
+        },
+        "required": ["name", "description", "id", "createdAt"],
+        "type": "object"
+      },
       "GrantDto": {
         "properties": {
           "eventId": {
@@ -103,6 +208,83 @@
         "required": ["id"],
         "type": "object"
       },
+      "MaterialRequirementDto": {
+        "properties": {
+          "acceptanceStandard": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "formats": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "instructions": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "maxBytes": {
+            "maximum": 2147483647,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "templateVersion": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 160,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "required",
+          "instructions",
+          "templateVersion",
+          "formats",
+          "maxBytes",
+          "deadline",
+          "acceptanceStandard"
+        ],
+        "type": "object"
+      },
+      "MemberChoiceDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "enum": ["EVENT_MANAGER", "ORGANIZER", "REVIEWER", "SYSTEM_ADMIN"],
+            "type": "string"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["id", "userId", "organizationId", "role"],
+        "type": "object"
+      },
       "MemberDto": {
         "properties": {
           "organizationId": {
@@ -139,6 +321,19 @@
         "required": ["status", "service", "code"],
         "type": "object"
       },
+      "OrganizationChoiceDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
       "OrganizationDto": {
         "properties": {
           "name": {
@@ -147,6 +342,19 @@
           }
         },
         "required": ["name"],
+        "type": "object"
+      },
+      "PersonDto": {
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["id", "displayName"],
         "type": "object"
       },
       "ReadyDto": {
@@ -163,6 +371,24 @@
         "required": ["status", "service"],
         "type": "object"
       },
+      "RequirementsDto": {
+        "properties": {
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "materials": {
+            "items": {
+              "$ref": "#/components/schemas/MaterialRequirementDto"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": ["deadline", "materials"],
+        "type": "object"
+      },
       "ReviewerDto": {
         "properties": {
           "reviewerGrantId": {
@@ -172,6 +398,16 @@
           }
         },
         "required": ["reviewerGrantId"],
+        "type": "object"
+      },
+      "RevisionDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": ["expectedRevision"],
         "type": "object"
       },
       "TaskDto": {
@@ -188,6 +424,100 @@
         "required": ["eventId", "handlerGrantId"],
         "type": "object"
       },
+      "TaskViewDto": {
+        "properties": {
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "handlerMemberId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "requirementVersion": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "requirements": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RequirementsDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "reviewerMemberId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "state": {
+            "enum": ["DRAFT", "PUBLISHED"],
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 160,
+            "type": "string"
+          }
+        },
+        "required": [
+          "organizationId",
+          "handlerMemberId",
+          "reviewerMemberId",
+          "eventId",
+          "title",
+          "id",
+          "state",
+          "revision",
+          "requirements",
+          "requirementVersion",
+          "publishedAt"
+        ],
+        "type": "object"
+      },
+      "UpdateAssignmentDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "handlerMemberId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reviewerMemberId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organizationId",
+          "handlerMemberId",
+          "reviewerMemberId",
+          "expectedRevision"
+        ],
+        "type": "object"
+      },
       "UserDto": {
         "properties": {
           "displayName": {
@@ -196,6 +526,25 @@
           }
         },
         "required": ["displayName"],
+        "type": "object"
+      },
+      "WorkspaceIdentityDto": {
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["id", "displayName", "roles"],
         "type": "object"
       }
     },
@@ -209,9 +558,9 @@
   },
   "info": {
     "contact": {},
-    "description": "Health and authorization foundation. Local test identity only; no material workflow or WeChat login.",
+    "description": "Health, local identity, events and material-task preparation/publication. No material upload, submission, review or WeChat login.",
     "title": "CAAU API",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -1012,6 +1361,146 @@
         "tags": ["Authorization"]
       }
     },
+    "/api/v1/events": {
+      "get": {
+        "operationId": "listEvents",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      },
+      "post": {
+        "operationId": "createEvent",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/events/{id}": {
+      "get": {
+        "operationId": "getEvent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "getHealth",
@@ -1030,6 +1519,323 @@
         },
         "summary": "API process liveness; independent of database",
         "tags": ["system"]
+      }
+    },
+    "/api/v1/material-tasks": {
+      "get": {
+        "operationId": "listMaterialTasks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      },
+      "post": {
+        "operationId": "createMaterialTask",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/material-tasks/{id}": {
+      "get": {
+        "operationId": "getMaterialTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/assignment": {
+      "patch": {
+        "operationId": "assignMaterialTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAssignmentDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/publish": {
+      "post": {
+        "operationId": "publishMaterialTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/requirements": {
+      "patch": {
+        "operationId": "configureMaterialTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigureTaskDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
       }
     },
     "/api/v1/ready": {
@@ -1060,6 +1866,86 @@
         },
         "summary": "Database connectivity; 1500ms application deadline, not schema readiness",
         "tags": ["system"]
+      }
+    },
+    "/api/v1/workspace/directory": {
+      "get": {
+        "operationId": "getWorkspaceDirectory",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/workspace/identity": {
+      "get": {
+        "operationId": "getWorkspaceIdentity",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceIdentityDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
       }
     }
   },

@@ -45,6 +45,7 @@ model OrganizationMember {
 model EventScope {
   id     String @id @default(uuid()) @db.Uuid
   grants EventGrant[]
+  businessEvent Event?
 }
 
 model EventGrant {
@@ -66,6 +67,8 @@ model TaskScope {
   reviewerGrantId String? @db.Uuid
   handler         EventGrant @relation("Handler", fields: [handlerGrantId, eventId], references: [id, eventId], onDelete: Restrict)
   reviewer        EventGrant? @relation("Reviewer", fields: [reviewerGrantId, eventId], references: [id, eventId], onDelete: Restrict)
+  businessTask    MaterialTask?
+  @@unique([id, eventId])
 }
 
 model Session {
@@ -87,4 +90,61 @@ model AuditRecord {
   requestId  String @db.Uuid
   context    Json @default("{}")
   @@index([occurredAt])
+}
+
+
+model Event {
+  id          String @id @db.Uuid
+  scope       EventScope @relation(fields: [id], references: [id], onDelete: Restrict)
+  name        String @db.VarChar(120)
+  description String @db.VarChar(2000)
+  createdBy   String @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  tasks       MaterialTask[]
+}
+
+enum TaskPublicationState {
+  DRAFT
+  PUBLISHED
+}
+
+model MaterialTask {
+  id          String @id @db.Uuid
+  eventId     String @db.Uuid
+  scope       TaskScope @relation(fields: [id, eventId], references: [id, eventId], onDelete: Restrict)
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  title       String @db.VarChar(160)
+  configuration Json
+  revision    Int @default(1)
+  state       TaskPublicationState @default(DRAFT)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  publishedAt DateTime? @db.Timestamptz(3)
+  requirements RequirementVersion[]
+  assignments AssignmentHistory[]
+  @@index([eventId, state])
+  @@unique([id, eventId])
+}
+
+model RequirementVersion {
+  id          String @id @default(uuid()) @db.Uuid
+  taskId      String @unique @db.Uuid
+  task        MaterialTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  version     Int
+  configuration Json
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdBy   String @db.Uuid
+  @@unique([taskId, version])
+}
+
+model AssignmentHistory {
+  id          String @id @default(uuid()) @db.Uuid
+  taskId      String @db.Uuid
+  task        MaterialTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  previousHandlerGrantId String? @db.Uuid
+  previousReviewerGrantId String? @db.Uuid
+  handlerGrantId String @db.Uuid
+  reviewerGrantId String @db.Uuid
+  actorId     String @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  @@index([taskId, createdAt])
 }

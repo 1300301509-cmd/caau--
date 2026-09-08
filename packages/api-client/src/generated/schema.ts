@@ -257,6 +257,38 @@ export interface paths {
     patch: operations['setUserActive'];
     trace?: never;
   };
+  '/api/v1/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listEvents'];
+    put?: never;
+    post: operations['createEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getEvent'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/health': {
     parameters: {
       query?: never;
@@ -274,6 +306,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/material-tasks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listMaterialTasks'];
+    put?: never;
+    post: operations['createMaterialTask'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getMaterialTask'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/assignment': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['assignMaterialTask'];
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/publish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['publishMaterialTask'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/requirements': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['configureMaterialTask'];
+    trace?: never;
+  };
   '/api/v1/ready': {
     parameters: {
       query?: never;
@@ -283,6 +395,38 @@ export interface paths {
     };
     /** Database connectivity; 1500ms application deadline, not schema readiness */
     get: operations['getReadiness'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/workspace/directory': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getWorkspaceDirectory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/workspace/identity': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getWorkspaceIdentity'];
     put?: never;
     post?: never;
     delete?: never;
@@ -317,6 +461,38 @@ export interface components {
       requestId: string;
       resourceId: string | null;
     };
+    ConfigureTaskDto: {
+      expectedRevision: number;
+      requirements: components['schemas']['RequirementsDto'];
+    };
+    CreateTaskDto: {
+      /** Format: uuid */
+      eventId: string;
+      /** Format: uuid */
+      handlerMemberId: string;
+      /** Format: uuid */
+      organizationId: string;
+      /** Format: uuid */
+      reviewerMemberId: string;
+      title: string;
+    };
+    DirectoryDto: {
+      members: components['schemas']['MemberChoiceDto'][];
+      organizations: components['schemas']['OrganizationChoiceDto'][];
+      users: components['schemas']['PersonDto'][];
+    };
+    EventInputDto: {
+      description: string;
+      name: string;
+    };
+    EventViewDto: {
+      /** Format: date-time */
+      createdAt: string;
+      description: string;
+      /** Format: uuid */
+      id: string;
+      name: string;
+    };
     GrantDto: {
       /** Format: uuid */
       eventId: string;
@@ -332,6 +508,29 @@ export interface components {
     IdDto: {
       /** Format: uuid */
       id: string;
+    };
+    MaterialRequirementDto: {
+      acceptanceStandard: string;
+      /** Format: date-time */
+      deadline: string;
+      formats: string[];
+      /** Format: uuid */
+      id: string;
+      instructions: string;
+      maxBytes: number;
+      required: boolean;
+      templateVersion: string;
+      title: string;
+    };
+    MemberChoiceDto: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      organizationId: string;
+      /** @enum {string} */
+      role: 'EVENT_MANAGER' | 'ORGANIZER' | 'REVIEWER' | 'SYSTEM_ADMIN';
+      /** Format: uuid */
+      userId: string;
     };
     MemberDto: {
       /** Format: uuid */
@@ -349,8 +548,18 @@ export interface components {
       /** @enum {string} */
       status: 'not_ready';
     };
+    OrganizationChoiceDto: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+    };
     OrganizationDto: {
       name: string;
+    };
+    PersonDto: {
+      displayName: string;
+      /** Format: uuid */
+      id: string;
     };
     ReadyDto: {
       /** @enum {string} */
@@ -358,9 +567,17 @@ export interface components {
       /** @enum {string} */
       status: 'ready';
     };
+    RequirementsDto: {
+      /** Format: date-time */
+      deadline: string;
+      materials: components['schemas']['MaterialRequirementDto'][];
+    };
     ReviewerDto: {
       /** Format: uuid */
       reviewerGrantId: string | null;
+    };
+    RevisionDto: {
+      expectedRevision: number;
     };
     TaskDto: {
       /** Format: uuid */
@@ -368,8 +585,43 @@ export interface components {
       /** Format: uuid */
       handlerGrantId: string;
     };
+    TaskViewDto: {
+      /** Format: uuid */
+      eventId: string;
+      /** Format: uuid */
+      handlerMemberId: string;
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      organizationId: string;
+      /** Format: date-time */
+      publishedAt: string | null;
+      requirementVersion: number | null;
+      requirements: components['schemas']['RequirementsDto'] | null;
+      /** Format: uuid */
+      reviewerMemberId: string;
+      revision: number;
+      /** @enum {string} */
+      state: 'DRAFT' | 'PUBLISHED';
+      title: string;
+    };
+    UpdateAssignmentDto: {
+      expectedRevision: number;
+      /** Format: uuid */
+      handlerMemberId: string;
+      /** Format: uuid */
+      organizationId: string;
+      /** Format: uuid */
+      reviewerMemberId: string;
+    };
     UserDto: {
       displayName: string;
+    };
+    WorkspaceIdentityDto: {
+      displayName: string;
+      /** Format: uuid */
+      id: string;
+      roles: string[];
     };
   };
   responses: never;
@@ -1294,6 +1546,174 @@ export interface operations {
       };
     };
   };
+  listEvents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventViewDto'][];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  createEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EventInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventViewDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventViewDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   getHealth: {
     parameters: {
       query?: never;
@@ -1310,6 +1730,354 @@ export interface operations {
         content: {
           'application/json': components['schemas']['HealthDto'];
         };
+      };
+    };
+  };
+  listMaterialTasks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TaskViewDto'][];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  createMaterialTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateTaskDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TaskViewDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getMaterialTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TaskViewDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  assignMaterialTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateAssignmentDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TaskViewDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  publishMaterialTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RevisionDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TaskViewDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  configureMaterialTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConfigureTaskDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TaskViewDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };
@@ -1337,6 +2105,114 @@ export interface operations {
         content: {
           'application/json': components['schemas']['NotReadyDto'];
         };
+      };
+    };
+  };
+  getWorkspaceDirectory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DirectoryDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getWorkspaceIdentity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WorkspaceIdentityDto'];
+        };
+      };
+      /** @description Invalid configuration or revision */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Resource not accessible */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Concurrent change or published task protected */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

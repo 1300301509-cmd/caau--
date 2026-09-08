@@ -1,6 +1,6 @@
 # 本地数据库、迁移与接口契约（CAAU-003）
 
-**状态：CAAU-003 本地工程验收完成（2026-09-08）；真实 dev/test PostgreSQL、连接/断连恢复、迁移与 shadow 流程均已验证。** 三应用启动和 Node 工具链见 [本地工程文档](local-tooling.md)，逐项证据见 [任务状态](../planning/roadmap.md)。CAAU-004 已在此基础上新增身份/权限锚点、会话与审计正式迁移，操作及验证见 [权限文档](authorization.md)。下文 CAAU-003 的“空模型/无正式迁移”描述保留为当时证据，不代表当前 schema；无原型数据迁移。
+**状态：CAAU-003 本地工程验收完成（2026-09-08）；真实 dev/test PostgreSQL、连接/断连恢复、迁移与 shadow 流程均已验证。** 三应用启动和 Node 工具链见 [本地工程文档](local-tooling.md)，逐项证据见 [任务状态](../planning/roadmap.md)。CAAU-004 已新增身份/权限锚点、会话与审计迁移；CAAU-005 第一段追加赛事/材料任务发布迁移，旧数据/checksum 升级保留及真实业务 Web/API 已验证，见 [任务文档](material-tasks.md)。下文 CAAU-003 的“空模型/无正式迁移”描述保留为当时证据，不代表当前 schema；无原型数据迁移。
 
 ## 1. 当前 Mac 与 Docker Desktop
 
@@ -104,7 +104,7 @@ corepack pnpm db:migrate:status --test
 corepack pnpm db:test
 ```
 
-此命令检查本地 Docker → 构建 API/database → 只启动 test → 执行 `scripts/database.integration.mjs`，无跳过即成功的 fallback：
+CAAU-005 后此命令还需要 Chromium 及空闲 3000/4173 端口，构建 admin 并运行真实业务浏览器，见任务文档。此命令检查本地 Docker → 构建 API/database/api-client/admin → 只启动 test → 执行 `scripts/database.integration.mjs`，无跳过即成功的 fallback：
 
 1. 真实 Prisma 连接与 ready=200；停止 **postgres-test** 后 ready=503，health=200；重启容器后同一 API 进程恢复 ready=200。
 2. 真实查询 app 账号属性，验证不能建表；负向 DDL 在事务中回滚，避免污染测试库。

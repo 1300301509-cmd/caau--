@@ -19,4 +19,6 @@ corepack pnpm --filter @caau/api start
 
 CAAU-004 新增 `/api/v1/authorization/*`：内部用户、组织/成员、赛事/任务权限锚点、审核员指派、本地会话鉴权和审计。默认关闭身份模式，开启必须回环且非 production；使用方法、权限矩阵、dev 迁移和离线会话见 [权限操作文档](../../docs/runbooks/authorization.md)。仅权限底座，不实现材料或真实微信登录。
 
+CAAU-005 第一段提供 `/api/v1/events`、`material-tasks`、`workspace` 真实业务接口；创建、指派、配置、发布和审计同事务，发布前后可见性分离，已发布要求 V1 受数据库保护。操作和限制见 [任务文档](../../docs/runbooks/material-tasks.md)。
+
 完整步骤与限制见 [本地工程文档](../../docs/runbooks/local-tooling.md)。不建立未确认的业务模块或业务表。

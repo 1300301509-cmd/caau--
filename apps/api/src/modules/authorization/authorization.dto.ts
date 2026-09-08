@@ -46,7 +46,7 @@ export class AccessDto {
 }
 export class AuditDto {
   @ApiProperty({ type: 'object', additionalProperties: true })
-  context!: Record<string, string | boolean | null>;
+  context!: Record<string, string | number | boolean | null>;
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'date-time' }) occurredAt!: string;
   @ApiProperty({ nullable: true, type: String }) actorId!: string | null;

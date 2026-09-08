@@ -220,6 +220,8 @@ async function main() {
       '@caau/api...',
       '--filter',
       '@caau/api-client',
+      '--filter',
+      '@caau/admin',
       'build',
     ]);
     await run('docker', [

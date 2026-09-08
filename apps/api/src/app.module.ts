@@ -6,7 +6,9 @@ import { HealthModule } from './modules/health/health.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 import type { AuthorizationConfig } from './modules/authorization/authorization.service.js';
 
-@Module({ imports: [HealthModule] })
+import { MaterialsModule } from './modules/materials/materials.module.js';
+
+@Module({ imports: [HealthModule, MaterialsModule] })
 export class AppModule {
   static register(
     probe: DatabaseProbe,

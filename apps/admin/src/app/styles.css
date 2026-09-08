@@ -9,3 +9,160 @@ body {
   margin: 48px auto;
   padding: 0 20px;
 }
+
+:root {
+  --surface: #fff;
+  --border: #b6c2d2;
+  --ink: #172033;
+  --focus: #1d4ed8;
+}
+.home-nav {
+  margin: 24px;
+}
+.workspace {
+  max-width: 1120px;
+  margin: 32px auto;
+  padding: 0 24px 64px;
+  display: grid;
+  gap: 24px;
+}
+.workspace-header {
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  align-items: center;
+}
+.workspace h1 {
+  margin: 8px 0 !important;
+}
+.workspace p {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.workspace label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.5;
+  min-width: 0;
+}
+.workspace input:not([type='checkbox']),
+.workspace select,
+.workspace textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.workspace input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+}
+.workspace .checkbox-label {
+  flex-direction: row;
+  align-items: center;
+}
+.workspace textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.workspace input:focus-visible,
+.workspace select:focus-visible,
+.workspace textarea:focus-visible,
+.workspace summary:focus-visible,
+.workspace a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.workflow-form {
+  display: grid;
+  gap: 20px;
+  margin: 16px 0;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.workspace fieldset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  padding: 20px;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+}
+.workspace legend {
+  font-weight: 600;
+  padding: 0 8px;
+}
+.workspace .ant-btn {
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.task-list {
+  display: grid;
+  gap: 16px;
+}
+.task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.publish-panel,
+.requirement-read {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.workspace summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .workspace {
+    margin: 16px auto;
+    padding: 0 12px 32px;
+    gap: 16px;
+  }
+  .workspace-header,
+  .task-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .workspace .ant-card-body {
+    padding: 16px;
+  }
+  .workspace fieldset {
+    padding: 12px;
+  }
+}
+/* AntD motion is disabled via ConfigProvider, preserving component lifecycle.
+   Do not cancel library leave animations in CSS: overlays could remain mounted. */
+@media (prefers-reduced-motion: reduce) {
+  .workspace {
+    scroll-behavior: auto;
+  }
+}

@@ -1,4 +1,4 @@
-import { Module, type DynamicModule } from '@nestjs/common';
+import { Global, Module, type DynamicModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthorizationController } from './authorization.controller.js';
 import {
@@ -6,12 +6,14 @@ import {
   type AuthorizationConfig,
 } from './authorization.service.js';
 import { AuthorizationGuard } from './authorization.guard.js';
+@Global()
 @Module({})
 export class AuthorizationModule {
   static register(config: AuthorizationConfig): DynamicModule {
     return {
       module: AuthorizationModule,
       controllers: [AuthorizationController],
+      exports: [AuthorizationService],
       providers: [
         {
           provide: AuthorizationService,

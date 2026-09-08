@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { deployAuthorizationBaseline } from './authorization-upgrade.mjs';
+import { materialsIntegration } from './materials.integration.mjs';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import path from 'node:path';
 import pg from 'pg';
@@ -34,6 +36,7 @@ export async function authorizationIntegration(t) {
     url.pathname = '/' + name;
     const appUrl = new URL(process.env.DATABASE_URL);
     appUrl.pathname = '/' + name;
+    const baseline = await deployAuthorizationBaseline(url.href);
     const migrationEnv = { ...process.env, MIGRATION_DATABASE_URL: url.href };
     for (const command of ['deploy', 'status', 'deploy'])
       await run('corepack', ['pnpm', 'exec', 'prisma', 'migrate', command], {
@@ -57,6 +60,37 @@ export async function authorizationIntegration(t) {
     );
     sql = new pg.Client({ connectionString: url.href });
     await sql.connect();
+    await t.test(
+      '004 to 005 migration preserves internal identity, audit and original checksum',
+      async () => {
+        assert.equal(
+          (
+            await sql.query(
+              'SELECT "displayName" FROM "InternalUser" WHERE id=$1',
+              [baseline.userId],
+            )
+          ).rows[0].displayName,
+          'Synthetic preserved 004 user',
+        );
+        assert.equal(
+          (
+            await sql.query('SELECT action FROM "AuditRecord" WHERE id=$1', [
+              baseline.auditId,
+            ])
+          ).rows[0].action,
+          'upgrade.baseline',
+        );
+        assert.equal(
+          (
+            await sql.query(
+              'SELECT checksum FROM _prisma_migrations WHERE migration_name=$1',
+              ['202609080001_authorization'],
+            )
+          ).rows[0].checksum,
+          baseline.checksum,
+        );
+      },
+    );
     await sql.query(`REVOKE CONNECT ON DATABASE "${name}" FROM PUBLIC`);
     await sql.query(`GRANT CONNECT ON DATABASE "${name}" TO caau_test_app`);
     await sql.query('GRANT USAGE ON SCHEMA public TO caau_test_app');
@@ -585,10 +619,22 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          1,
+          2,
         );
       },
     );
+    await materialsIntegration(t, {
+      base,
+      config,
+      sql,
+      runtime,
+      tokens,
+      users,
+      members,
+      orgA,
+      orgB,
+      session,
+    });
   } finally {
     await app?.close();
     await runtime?.end();

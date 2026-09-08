@@ -34,7 +34,10 @@ export function uuid(value: unknown): string {
     throw new BadRequestException('UUID required');
   return value;
 }
-function bodyObject(input: unknown, keys: string[]): Record<string, unknown> {
+export function bodyObject(
+  input: unknown,
+  keys: string[],
+): Record<string, unknown> {
   if (
     !input ||
     typeof input !== 'object' ||
@@ -44,7 +47,7 @@ function bodyObject(input: unknown, keys: string[]): Record<string, unknown> {
     throw new BadRequestException('Invalid body');
   return input as Record<string, unknown>;
 }
-function text(value: unknown, max: number) {
+export function text(value: unknown, max: number) {
   if (typeof value !== 'string' || !value.trim() || value.length > max)
     throw new BadRequestException('Invalid text');
   return value.trim();
@@ -63,10 +66,15 @@ function auditContext(input: unknown): Prisma.InputJsonObject {
           'memberId',
           'handlerGrantId',
           'reviewerGrantId',
+          'handlerMemberId',
+          'reviewerMemberId',
         ].includes(key) &&
           (value === null ||
             (typeof value === 'string' && uuidPattern.test(value)))) ||
         (key === 'active' && typeof value === 'boolean') ||
+        (key === 'expectedRevision' &&
+          Number.isInteger(value) &&
+          Number(value) > 0) ||
         (key === 'role' && roles.includes(value as (typeof roles)[number])) ||
         (key === 'action' &&
           taskActions.includes(value as (typeof taskActions)[number])),
@@ -131,12 +139,22 @@ export class AuthorizationService {
       throw new ServiceUnavailableException('Authorization unavailable');
     }
   }
-  async execute(
+  execute(token: string, action: string, resource?: string, input?: unknown) {
+    return this.run(token, action, resource, input, (tx, actor, id) =>
+      this.dispatch(tx, actor, token, action, id, input),
+    );
+  }
+  async run<T>(
     token: string,
     action: string,
-    resource?: string,
-    input?: unknown,
-  ) {
+    resource: string | undefined,
+    input: unknown,
+    work: (
+      tx: Prisma.TransactionClient,
+      actor: Actor,
+      id: string | undefined,
+    ) => Promise<T>,
+  ): Promise<T> {
     const db = this.db();
     const requestId = randomUUID();
     const context = auditContext(input);
@@ -147,14 +165,7 @@ export class AuthorizationService {
           const actor = await this.actor(tx, token);
           actorId = actor.id;
           const id = resource === undefined ? undefined : uuid(resource);
-          const result = await this.dispatch(
-            tx,
-            actor,
-            token,
-            action,
-            id,
-            input,
-          );
+          const result = await work(tx, actor, id);
           await tx.auditRecord.create({
             data: {
               actorId,
@@ -195,6 +206,123 @@ export class AuthorizationService {
         throw new ConflictException('Conflicting authorization change');
       throw new ServiceUnavailableException('Authorization unavailable');
     }
+  }
+  async createEventAnchor(
+    tx: Prisma.TransactionClient,
+    actor: Actor,
+  ): Promise<{ id: string }> {
+    return (await this.dispatch(
+      tx,
+      actor,
+      '',
+      'event.create',
+      undefined,
+      undefined,
+    )) as { id: string };
+  }
+  async requireEventManager(
+    tx: Prisma.TransactionClient,
+    actor: Actor,
+    eventId: string,
+  ) {
+    if (hasRole(actor, 'ORGANIZER')) deny();
+    await eventManager(tx, actor, eventId);
+  }
+  async assignTaskAnchor(
+    tx: Prisma.TransactionClient,
+    actor: Actor,
+    eventId: string,
+    organizationId: string,
+    handlerMemberId: string,
+    reviewerMemberId: string,
+    taskId?: string,
+  ) {
+    await this.requireEventManager(tx, actor, eventId);
+    const handler = await tx.organizationMember.findUnique({
+      where: { id: handlerMemberId },
+      include: { user: true },
+    });
+    const reviewer = await tx.organizationMember.findUnique({
+      where: { id: reviewerMemberId },
+      include: { user: { include: { memberships: true } } },
+    });
+    if (
+      !handler?.active ||
+      !handler.user.active ||
+      handler.role !== 'ORGANIZER' ||
+      handler.organizationId !== organizationId ||
+      !reviewer?.active ||
+      !reviewer.user.active ||
+      reviewer.role !== 'REVIEWER' ||
+      reviewer.userId === handler.userId ||
+      reviewer.user.memberships.some(
+        (m) =>
+          m.active &&
+          (m.role === 'ORGANIZER' || m.organizationId === organizationId),
+      )
+    )
+      deny();
+    const grant = (memberId: string) =>
+      tx.eventGrant.upsert({
+        where: { eventId_memberId: { eventId, memberId } },
+        create: { eventId, memberId },
+        update: {},
+      });
+    const handlerGrant = await grant(handler.id);
+    const reviewerGrant = await grant(reviewer.id);
+    const data = {
+      eventId,
+      handlerGrantId: handlerGrant.id,
+      reviewerGrantId: reviewerGrant.id,
+    };
+    return taskId
+      ? tx.taskScope.update({ where: { id: taskId }, data })
+      : tx.taskScope.create({ data });
+  }
+  async directory(tx: Prisma.TransactionClient, actor: Actor) {
+    if (
+      (!hasRole(actor, 'EVENT_MANAGER') && !hasRole(actor, 'SYSTEM_ADMIN')) ||
+      hasRole(actor, 'ORGANIZER')
+    )
+      deny();
+    const administrator = hasRole(actor, 'SYSTEM_ADMIN');
+    const members = await tx.organizationMember.findMany({
+      where: {
+        active: true,
+        user: { active: true },
+        ...(administrator
+          ? {}
+          : {
+              role: {
+                in: ['ORGANIZER', 'REVIEWER'] as Array<
+                  'ORGANIZER' | 'REVIEWER'
+                >,
+              },
+            }),
+      },
+      select: { id: true, userId: true, organizationId: true, role: true },
+      orderBy: { id: 'asc' },
+    });
+    return {
+      users: await tx.internalUser.findMany({
+        where: {
+          active: true,
+          ...(administrator
+            ? {}
+            : { id: { in: members.map((m) => m.userId) } }),
+        },
+        select: { id: true, displayName: true },
+        orderBy: { id: 'asc' },
+      }),
+      organizations: await tx.organization.findMany({
+        where: administrator
+          ? {}
+          : { id: { in: members.map((m) => m.organizationId) } },
+        select: { id: true, name: true },
+        orderBy: { id: 'asc' },
+      }),
+      members,
+    };
   }
   private async dispatch(
     tx: Prisma.TransactionClient,
@@ -274,11 +402,26 @@ export class AuthorizationService {
           select: { id: true },
         });
       }
-      if (action === 'admin.grant.delete')
+      if (action === 'admin.grant.delete') {
+        const referenced = await tx.assignmentHistory.count({
+          where: {
+            OR: [
+              { handlerGrantId: id! },
+              { reviewerGrantId: id! },
+              { previousHandlerGrantId: id! },
+              { previousReviewerGrantId: id! },
+            ],
+          },
+        });
+        if (referenced)
+          throw new ConflictException(
+            'Historical assignment grants must be retained; deactivate membership to revoke access',
+          );
         return tx.eventGrant.delete({
           where: { id: id! },
           select: { id: true },
         });
+      }
       if (action === 'admin.audit.read')
         return tx.auditRecord.findMany({
           orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
@@ -345,6 +488,10 @@ export class AuthorizationService {
       if (!task) deny();
       await eventManager(tx, actor, task.eventId);
       if (hasRole(actor, 'ORGANIZER')) deny();
+      if (await tx.materialTask.findUnique({ where: { id: id! } }))
+        throw new ConflictException(
+          'Use the business task assignment operation',
+        );
       const reviewerGrantId =
         b.reviewerGrantId === null ? null : uuid(b.reviewerGrantId);
       if (reviewerGrantId) {

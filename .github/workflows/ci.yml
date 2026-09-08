@@ -52,6 +52,8 @@ jobs:
         run: corepack pnpm db:setup
       - name: Validate actual Compose configuration
         run: docker compose -f deploy/compose.database.yml --profile test config --quiet
+      - name: Install Chromium for real business Web and database integration
+        run: corepack pnpm exec playwright install --with-deps chromium
       - name: PostgreSQL connection, outage, recovery and isolated migrations
         run: corepack pnpm db:test
       - name: Confirm no tracked schema or credential drift
