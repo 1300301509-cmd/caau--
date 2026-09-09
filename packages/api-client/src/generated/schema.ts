@@ -579,6 +579,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/uploads/{id}/info': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getPrivateFileInfo'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/workspace/directory': {
     parameters: {
       query?: never;
@@ -680,6 +696,7 @@ export interface components {
     DeadlineHistoryDto: {
       /** Format: uuid */
       actorId: string;
+      actorName: string;
       /** Format: uuid */
       id: string;
       next: components['schemas']['DeadlinesDto'];
@@ -749,6 +766,14 @@ export interface components {
       /** Format: date-time */
       newDeadline: string;
       reason: string;
+    };
+    FileInfoDto: {
+      bytes: number;
+      extension: string;
+      /** Format: uuid */
+      id: string;
+      name: string;
+      originalNameKnown: boolean;
     };
     GrantDto: {
       /** Format: uuid */
@@ -850,6 +875,7 @@ export interface components {
     ReviewViewDto: {
       /** Format: uuid */
       actorId: string;
+      actorName: string;
       /** @enum {string} */
       decision: 'PASS' | 'RETURN';
       /** Format: uuid */
@@ -874,6 +900,7 @@ export interface components {
     SubmissionViewDto: {
       /** Format: uuid */
       actorId: string;
+      actorName: string;
       deadlines: components['schemas']['DeadlinesDto'];
       entries: components['schemas']['EntryDto'][];
       generation: number;
@@ -938,6 +965,7 @@ export interface components {
       extension: 'txt' | 'pdf' | 'png' | 'jpg' | 'jpeg';
       /** Format: uuid */
       materialId: string;
+      originalName?: string;
       sha256: string;
     };
     UploadViewDto: {
@@ -3275,6 +3303,62 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid material, upload, review or deadline input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Current task/organization/assignment does not allow access */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Deadline, revision, state, idempotency or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getPrivateFileInfo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FileInfoDto'];
         };
       };
       /** @description Invalid material, upload, review or deadline input */

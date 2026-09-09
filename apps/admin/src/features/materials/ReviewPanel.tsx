@@ -16,6 +16,7 @@ export function ReviewPanel({
   reviewer,
   directory,
   changed,
+  reauthenticate,
 }: {
   task: Task;
   token: string;
@@ -23,6 +24,7 @@ export function ReviewPanel({
   reviewer: boolean;
   directory: Directory;
   changed: () => Promise<void>;
+  reauthenticate: () => void;
 }) {
   const [execution, setExecution] = useState<S['ExecutionViewDto']>();
   const [versions, setVersions] = useState<S['SubmissionViewDto'][]>([]);
@@ -34,6 +36,7 @@ export function ReviewPanel({
   const [action, setAction] = useState<
     'PASS' | 'RETURN' | 'EXTEND' | 'HANDOVER' | 'CLOSE'
   >();
+  const [reviewTarget, setReviewTarget] = useState<string>();
   const [issues, setIssues] = useState<S['IssueDto'][]>([]),
     [reason, setReason] = useState(''),
     [deadline, setDeadline] = useState(''),
@@ -86,7 +89,7 @@ export function ReviewPanel({
         token,
         path,
         body: {
-          submissionId: current.id,
+          submissionId: reviewTarget ?? current.id,
           decision: action,
           issues: action === 'PASS' ? [] : issues,
         },
@@ -115,6 +118,7 @@ export function ReviewPanel({
         body: { expectedRevision, reason },
       });
     setAction(undefined);
+    setReviewTarget(undefined);
     setIssues([]);
     await refresh();
     await changed();
@@ -140,6 +144,17 @@ export function ReviewPanel({
   return (
     <section aria-label="总部材料执行">
       <Card title="办理进度与总部操作">
+        {error && (
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setAction(undefined);
+              reauthenticate();
+            }}
+          >
+            重新认证（保留输入）
+          </Button>
+        )}
         <p>
           当前状态：{executionStatus(execution)} · 当前提交{' '}
           {current ? `V${current.version}` : '无'}
@@ -165,14 +180,20 @@ export function ReviewPanel({
               <Button
                 type="primary"
                 disabled={busy}
-                onClick={() => setAction('PASS')}
+                onClick={() => {
+                  if (!reviewTarget) setReviewTarget(current?.id);
+                  setAction('PASS');
+                }}
               >
                 整包通过
               </Button>
               <Button
                 danger
                 disabled={busy}
-                onClick={() => setAction('RETURN')}
+                onClick={() => {
+                  if (!reviewTarget) setReviewTarget(current?.id);
+                  setAction('RETURN');
+                }}
               >
                 整包退回
               </Button>
@@ -203,8 +224,8 @@ export function ReviewPanel({
             <summary>延期历史（{history.length}）</summary>
             {history.map((h) => (
               <p key={h.id}>
-                {new Date(h.occurredAt).toLocaleString()} · {h.actorId} ·{' '}
-                {h.reason}
+                {new Date(h.occurredAt).toLocaleString()} · {h.actorName}（
+                {h.actorId}） · {h.reason}
                 <br />
                 {h.previous.task} → {h.next.task}
               </p>
@@ -224,7 +245,12 @@ export function ReviewPanel({
         confirmLoading={busy}
         okText="确认执行"
         cancelText="返回核对"
-        okButtonProps={{ disabled: !valid }}
+        okButtonProps={{
+          disabled:
+            !valid ||
+            ((action === 'PASS' || action === 'RETURN') &&
+              reviewTarget !== current?.id),
+        }}
         onCancel={() => {
           if (!busy) setAction(undefined);
         }}
@@ -234,6 +260,36 @@ export function ReviewPanel({
           任务：{task.title} · 当前提交 {current ? `V${current.version}` : '无'}
           。请核对后执行，不修改原提交与审核记录。
         </p>
+        {error && (
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setAction(undefined);
+              reauthenticate();
+            }}
+          >
+            重新认证（保留输入）
+          </Button>
+        )}
+        {(action === 'PASS' || action === 'RETURN') &&
+          reviewTarget !== current?.id && (
+            <Alert
+              type="warning"
+              title="当前版本已变化，旧审核输入保留但不能直接用于新版本"
+              action={
+                <Button
+                  onClick={() => {
+                    if (window.confirm('放弃旧审核输入，重新核对当前版本？')) {
+                      setIssues([]);
+                      setReviewTarget(current?.id);
+                    }
+                  }}
+                >
+                  放弃旧审核输入，重新核对
+                </Button>
+              }
+            />
+          )}
         {action === 'PASS' && <p>通过后材料冻结，不再允许修改或重交。</p>}
         {action === 'RETURN' && (
           <>
@@ -359,8 +415,10 @@ export function ReviewQueue({
   tasks,
   token,
   open,
+  mode = 'review',
 }: {
   tasks: Task[];
+  mode?: 'review' | 'todo';
   token: string;
   open: (id: string) => void;
 }) {
@@ -385,7 +443,11 @@ export function ReviewQueue({
         if (live) {
           setQueue(
             rows
-              .filter((r) => r.execution.state === 'SUBMITTED')
+              .filter(
+                (r) =>
+                  r.execution.state ===
+                  (mode === 'todo' ? 'EDITING' : 'SUBMITTED'),
+              )
               .map((r) => r.task),
           );
           setError('');
@@ -400,9 +462,9 @@ export function ReviewQueue({
     return () => {
       live = false;
     };
-  }, [tasks, token]);
+  }, [tasks, token, mode]);
   return (
-    <Card title="待审核列表">
+    <Card title={mode === 'todo' ? '我的待办 · 填写或修改材料' : '待审核列表'}>
       {loading ? (
         <p>正在读取队列…</p>
       ) : error ? (
@@ -411,11 +473,17 @@ export function ReviewQueue({
         queue.map((t) => (
           <div className="task-row" key={t.id}>
             <strong>{t.title}</strong>
-            <Button onClick={() => open(t.id)}>审核 {t.title}</Button>
+            <Button onClick={() => open(t.id)}>
+              {mode === 'todo' ? '办理' : '审核'} {t.title}
+            </Button>
           </div>
         ))
       ) : (
-        <p>暂无待审核材料。处理后可刷新数据核对队列。</p>
+        <p>
+          {mode === 'todo'
+            ? '暂无待办理材料；已提交任务可从赛事列表查看进度与历史。'
+            : '暂无待审核材料。处理后可刷新数据核对队列。'}
+        </p>
       )}
     </Card>
   );

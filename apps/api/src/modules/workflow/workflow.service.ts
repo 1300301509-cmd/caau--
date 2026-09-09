@@ -26,6 +26,7 @@ import {
   digest,
   verifyFile,
 } from './private-store.js';
+import { safeFilename } from './filename.js';
 import type { DeadlinesDto, EntryDto } from './workflow.dto.js';
 
 function entries(input: unknown, materialIds: string[]): EntryDto[] {
@@ -56,6 +57,31 @@ function entries(input: unknown, materialIds: string[]): EntryDto[] {
   });
 }
 const json = (value: unknown) => value as Prisma.InputJsonValue;
+async function actorLabels<
+  T extends { actorId: string; review?: { actorId: string } | null },
+>(tx: Prisma.TransactionClient, rows: T[]) {
+  const ids = [
+    ...new Set(
+      rows.flatMap((row) => [
+        row.actorId,
+        ...(row.review ? [row.review.actorId] : []),
+      ]),
+    ),
+  ];
+  const people = await tx.internalUser.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, displayName: true },
+  });
+  const name = (id: string) =>
+    people.find((p) => p.id === id)?.displayName ?? '历史人员（目录无姓名）';
+  return rows.map((row) => ({
+    ...row,
+    actorName: name(row.actorId),
+    ...(row.review
+      ? { review: { ...row.review, actorName: name(row.review.actorId) } }
+      : {}),
+  }));
+}
 const submissionInclude = {
   review: true,
 } satisfies Prisma.SubmissionVersionInclude;
@@ -247,6 +273,7 @@ export class WorkflowService {
             'extension',
             'expectedBytes',
             'sha256',
+            'originalName',
           ]);
           const material = config.materials.find(
             (m) => m.id === uuid(b.materialId),
@@ -274,6 +301,7 @@ export class WorkflowService {
               actorId: actor.id,
               generation: execution.generation,
               storageKey: randomUUID(),
+              originalName: safeFilename(b.originalName, b.extension),
               extension: b.extension,
               expectedBytes: Number(b.expectedBytes),
               sha256: b.sha256,
@@ -336,7 +364,7 @@ export class WorkflowService {
             select: { id: true, state: true, expiresAt: true },
           });
         }
-        if (action === 'file.download') {
+        if (action === 'file.download' || action === 'file.info') {
           await taskPolicy(tx, actor, taskId, 'file.download');
           if (
             upload!.state !== 'CONFIRMED' ||
@@ -362,15 +390,27 @@ export class WorkflowService {
             upload!.expectedBytes,
             upload!.sha256,
           );
-          return data;
+          const info = {
+            id: upload!.id,
+            name:
+              upload!.originalName ??
+              `material-${upload!.id}.${upload!.extension}`,
+            extension: upload!.extension,
+            bytes: upload!.expectedBytes,
+            originalNameKnown: !!upload!.originalName,
+          };
+          return action === 'file.info' ? info : { data, info };
         }
         if (action === 'submission.list') {
           await taskPolicy(tx, actor, taskId, 'task.read');
-          return tx.submissionVersion.findMany({
-            where: { taskId },
-            include: submissionInclude,
-            orderBy: { version: 'asc' },
-          });
+          return actorLabels(
+            tx,
+            await tx.submissionVersion.findMany({
+              where: { taskId },
+              include: submissionInclude,
+              orderBy: { version: 'asc' },
+            }),
+          );
         }
         if (action === 'submission.create') {
           await this.draftAccess(tx, actor, taskId, true);
@@ -389,10 +429,14 @@ export class WorkflowService {
           if (command) {
             if (command.requestHash !== requestHash)
               throw new ConflictException('Idempotency key payload differs');
-            return tx.submissionVersion.findUniqueOrThrow({
-              where: { id: command.submissionId },
-              include: submissionInclude,
-            });
+            return (
+              await actorLabels(tx, [
+                await tx.submissionVersion.findUniqueOrThrow({
+                  where: { id: command.submissionId },
+                  include: submissionInclude,
+                }),
+              ])
+            )[0];
           }
           await editable();
           if (draft.revision !== expected)
@@ -464,7 +508,7 @@ export class WorkflowService {
               revision: { increment: 1 },
             },
           });
-          return created;
+          return (await actorLabels(tx, [created]))[0];
         }
         if (action === 'review.create') {
           await taskPolicy(tx, actor, taskId, 'review');
@@ -554,14 +598,17 @@ export class WorkflowService {
               revision: { increment: 1 },
             },
           });
-          return reviewed;
+          return (await actorLabels(tx, [reviewed]))[0];
         }
         if (action === 'deadline.history') {
           await taskPolicy(tx, actor, taskId, 'task.read');
-          return tx.deadlineHistory.findMany({
-            where: { taskId },
-            orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
-          });
+          return actorLabels(
+            tx,
+            await tx.deadlineHistory.findMany({
+              where: { taskId },
+              orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+            }),
+          );
         }
         if (action === 'deadline.extend') {
           await manager();

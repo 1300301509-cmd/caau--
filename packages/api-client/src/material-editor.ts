@@ -36,6 +36,8 @@ export class MaterialEditor {
   versions: S['SubmissionViewDto'][] = [];
   entries: S['EntryDto'][] = [];
   capabilities?: S['UploadCapabilitiesDto'];
+  fileInfo: Record<string, S['FileInfoDto']> = {};
+  principalId?: string;
   busy = '';
   notice = '';
   error = false;
@@ -46,7 +48,7 @@ export class MaterialEditor {
   pending?: S['SubmitDto'];
   constructor(
     readonly client: ReturnType<typeof createApiClient>,
-    readonly token: string,
+    public token: string,
     readonly id: string,
     readonly newKey: () => Promise<string>,
     readonly changed: () => void,
@@ -69,6 +71,34 @@ export class MaterialEditor {
       this.changed();
     }
   }
+  async refreshFileInfo(draft: S['DraftViewDto']) {
+    const ids = [...new Set(draft.entries.flatMap((e) => e.fileIds))];
+    const rows = await Promise.all(
+      ids.map((id) =>
+        this.client.request('getPrivateFileInfo', {
+          token: this.token,
+          path: { id },
+        }),
+      ),
+    );
+    this.fileInfo = Object.fromEntries(rows.map((row) => [row.id, row]));
+  }
+  async resume(token: string) {
+    while (this.busy) await new Promise((resolve) => setTimeout(resolve, 20));
+    const actor = await this.client.request('getWorkspaceIdentity', { token });
+    if (this.principalId && actor.id !== this.principalId)
+      throw new Error('Different identity requires a new editor');
+    // An upload/save may have started while identity validation was in flight.
+    while (this.busy) await new Promise((resolve) => setTimeout(resolve, 20));
+    this.token = token;
+    await this.load();
+    if (!this.error) {
+      this.notice = this.latest
+        ? '身份已恢复；输入已保留，服务器草稿有变化，请先核对。'
+        : '身份已恢复，已重新核对权限与版本；输入保留，不会自动提交。';
+      this.changed();
+    }
+  }
   async load() {
     await this.perform('读取中', async () => {
       const path = { id: this.id },
@@ -81,12 +111,18 @@ export class MaterialEditor {
           this.client.request('listSubmissionVersions', { token, path }),
           this.client.request('getUploadCapabilities', { token }),
         ]);
+      const actor = await this.client.request('getWorkspaceIdentity', {
+        token,
+      });
+      if (this.principalId && this.principalId !== actor.id)
+        throw new Error('Identity mismatch');
+      this.principalId = actor.id;
       this.task = task;
       this.execution = execution;
       this.versions = versions;
       this.capabilities = capabilities;
       this.denied = false;
-      if (this.dirty) {
+      if (this.dirty || this.pending) {
         if (draft.revision !== this.draft?.revision) this.latest = draft;
       } else {
         this.draft = draft;
@@ -95,6 +131,7 @@ export class MaterialEditor {
           fileIds: [...e.fileIds],
         }));
       }
+      await this.refreshFileInfo(draft);
     });
   }
   entry(id: string) {
@@ -157,6 +194,7 @@ export class MaterialEditor {
           path: { id: this.id },
           body: {
             materialId: id,
+            originalName: name,
             extension: extension as 'txt' | 'pdf' | 'png' | 'jpg' | 'jpeg',
             expectedBytes: bytes.byteLength,
             sha256: sha256(bytes),
@@ -201,6 +239,7 @@ export class MaterialEditor {
           },
         });
         this.dirty = false;
+        await this.refreshFileInfo(this.draft);
         this.notice = '草稿已保存';
       } catch (e) {
         if (e instanceof ApiError && e.status === 409) {

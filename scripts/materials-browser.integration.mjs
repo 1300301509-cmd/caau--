@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { webPolishBrowserFlows } from './web-polish-browser.integration.mjs';
 import { workflowBrowserFlows } from './workflow-browser.integration.mjs';
 import { createServer } from 'node:http';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -229,6 +230,7 @@ export async function materialBrowserTest({ config, tokens, sql }) {
     ).toBeVisible();
     assert.deepEqual(pageErrors, []);
     await workflowBrowserFlows({ browser, tokens, sql });
+    await webPolishBrowserFlows({ browser, tokens, sql });
   } finally {
     await browser?.close();
     await app.close();

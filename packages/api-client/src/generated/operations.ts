@@ -934,6 +934,7 @@ export const operations = {
         items: {
           properties: {
             actorId: { format: 'uuid', type: 'string' },
+            actorName: { type: 'string' },
             id: { format: 'uuid', type: 'string' },
             next: {
               properties: {
@@ -976,6 +977,7 @@ export const operations = {
           },
           required: [
             'id',
+            'actorName',
             'actorId',
             'occurredAt',
             'reason',
@@ -1270,6 +1272,7 @@ export const operations = {
       '200': {
         properties: {
           actorId: { format: 'uuid', type: 'string' },
+          actorName: { type: 'string' },
           decision: { enum: ['PASS', 'RETURN'], type: 'string' },
           id: { format: 'uuid', type: 'string' },
           issues: {
@@ -1292,6 +1295,7 @@ export const operations = {
           'submissionId',
           'decision',
           'issues',
+          'actorName',
           'id',
           'actorId',
           'reviewedAt',
@@ -1335,6 +1339,7 @@ export const operations = {
         items: {
           properties: {
             actorId: { format: 'uuid', type: 'string' },
+            actorName: { type: 'string' },
             deadlines: {
               properties: {
                 materials: {
@@ -1384,6 +1389,7 @@ export const operations = {
           },
           required: [
             'id',
+            'actorName',
             'taskId',
             'requirementVersionId',
             'version',
@@ -1414,6 +1420,7 @@ export const operations = {
       '200': {
         properties: {
           actorId: { format: 'uuid', type: 'string' },
+          actorName: { type: 'string' },
           deadlines: {
             properties: {
               materials: {
@@ -1463,6 +1470,7 @@ export const operations = {
         },
         required: [
           'id',
+          'actorName',
           'taskId',
           'requirementVersionId',
           'version',
@@ -1518,6 +1526,7 @@ export const operations = {
           type: 'string',
         },
         materialId: { format: 'uuid', type: 'string' },
+        originalName: { maxLength: 1024, type: 'string' },
         sha256: { pattern: '^[a-f0-9]{64}$', type: 'string' },
       },
       required: ['materialId', 'extension', 'expectedBytes', 'sha256'],
@@ -1603,6 +1612,30 @@ export const operations = {
     requestMediaType: 'application/octet-stream',
     responseMediaType: 'application/json',
     body: { format: 'binary', type: 'string' },
+    authenticated: true,
+  },
+  getPrivateFileInfo: {
+    path: '/api/v1/uploads/{id}/info',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: {
+          bytes: { type: 'integer' },
+          extension: { type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          name: { type: 'string' },
+          originalNameKnown: { type: 'boolean' },
+        },
+        required: ['id', 'name', 'extension', 'bytes', 'originalNameKnown'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
     authenticated: true,
   },
   getWorkspaceDirectory: {

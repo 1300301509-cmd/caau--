@@ -91,6 +91,15 @@ export async function authorizationIntegration(t) {
           ).rows[0].checksum,
           baseline.checksum,
         );
+        const legacyFile = (
+          await sql.query(
+            'SELECT to_jsonb(f) data FROM "FileUpload" f WHERE id=$1',
+            [baseline.legacyFileId],
+          )
+        ).rows[0].data;
+        assert.equal(legacyFile.originalName, null);
+        delete legacyFile.originalName;
+        assert.deepEqual(legacyFile, baseline.legacyFile);
         assert.deepEqual(
           (
             await sql.query(
@@ -641,7 +650,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          3,
+          4,
         );
       },
     );

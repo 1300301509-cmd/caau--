@@ -143,6 +143,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "actorName": {
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -163,6 +166,7 @@
         },
         "required": [
           "id",
+          "actorName",
           "actorId",
           "occurredAt",
           "reason",
@@ -378,6 +382,28 @@
           }
         },
         "required": ["expectedRevision", "newDeadline", "reason"],
+        "type": "object"
+      },
+      "FileInfoDto": {
+        "properties": {
+          "bytes": {
+            "type": "integer"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "originalNameKnown": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "name", "extension", "bytes", "originalNameKnown"],
         "type": "object"
       },
       "GrantDto": {
@@ -658,6 +684,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "actorName": {
+            "type": "string"
+          },
           "decision": {
             "enum": ["PASS", "RETURN"],
             "type": "string"
@@ -686,6 +715,7 @@
           "submissionId",
           "decision",
           "issues",
+          "actorName",
           "id",
           "actorId",
           "reviewedAt"
@@ -736,6 +766,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "actorName": {
+            "type": "string"
+          },
           "deadlines": {
             "$ref": "#/components/schemas/DeadlinesDto"
           },
@@ -779,6 +812,7 @@
         },
         "required": [
           "id",
+          "actorName",
           "taskId",
           "requirementVersionId",
           "version",
@@ -941,6 +975,10 @@
           },
           "materialId": {
             "format": "uuid",
+            "type": "string"
+          },
+          "originalName": {
+            "maxLength": 1024,
             "type": "string"
           },
           "sha256": {
@@ -3107,6 +3145,55 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid material, upload, review or deadline input"
+          },
+          "401": {
+            "description": "Invalid session"
+          },
+          "403": {
+            "description": "Current task/organization/assignment does not allow access"
+          },
+          "409": {
+            "description": "Deadline, revision, state, idempotency or concurrent change conflict"
+          },
+          "503": {
+            "description": "Database, private storage or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/uploads/{id}/info": {
+      "get": {
+        "operationId": "getPrivateFileInfo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileInfoDto"
                 }
               }
             },

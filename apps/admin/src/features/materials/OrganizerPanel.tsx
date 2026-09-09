@@ -1,9 +1,23 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Alert, Button, Card, Modal } from 'antd';
-import { MaterialEditor, executionStatus } from '@caau/api-client';
+import {
+  MaterialEditor,
+  executionStatus,
+  workflowError,
+} from '@caau/api-client';
 import { client } from './client';
 import { VersionHistory } from './VersionHistory';
-export function OrganizerPanel({ id, token }: { id: string; token: string }) {
+export function OrganizerPanel({
+  id,
+  token,
+  reauthenticate,
+  changed,
+}: {
+  id: string;
+  token: string;
+  reauthenticate: () => void;
+  changed: () => Promise<void>;
+}) {
   const [, update] = useReducer((x) => x + 1, 0);
   const [editor] = useState(
     () =>
@@ -16,9 +30,23 @@ export function OrganizerPanel({ id, token }: { id: string; token: string }) {
       ),
   );
   const [confirm, setConfirm] = useState(false);
+  const onChanged = useRef(changed);
+  onChanged.current = changed;
+  const revision = editor.execution?.revision,
+    state = editor.execution?.state;
   useEffect(() => {
-    void editor.load();
-  }, [editor]);
+    if (state) void onChanged.current();
+  }, [revision, state]);
+  useEffect(() => {
+    void (editor.token === token ? editor.load() : editor.resume(token)).catch(
+      (e) => {
+        editor.error = true;
+        editor.denied = true;
+        editor.notice = workflowError(e);
+        update();
+      },
+    );
+  }, [editor, token]);
   useEffect(() => {
     const leave = (e: BeforeUnloadEvent) => {
       if (editor.dirty || editor.pending) {
@@ -33,6 +61,18 @@ export function OrganizerPanel({ id, token }: { id: string; token: string }) {
   return (
     <section aria-label="承办材料办理">
       <Card title="承办材料办理 · Web 本地联调入口">
+        {editor.denied && (
+          <Alert
+            type="warning"
+            title="输入仍保留在本页，请重新认证"
+            description="同一身份恢复会重新核对权限与版本，不自动提交；切换其他身份会清除本页旧输入。"
+            action={
+              <Button disabled={!!editor.busy} onClick={reauthenticate}>
+                重新认证（保留输入）
+              </Button>
+            }
+          />
+        )}
         <p>与小程序使用同一业务契约；此浏览器页面不是微信平台验收。</p>
         <Button disabled={!!editor.busy} onClick={() => void editor.load()}>
           核对最新状态（保留输入）
@@ -143,7 +183,9 @@ export function OrganizerPanel({ id, token }: { id: string; token: string }) {
               )}
               {entry.fileIds.map((file, i) => (
                 <p key={file}>
-                  附件 {i + 1} · 已确认{' '}
+                  {editor.fileInfo[file]?.name ??
+                    `新附件 ${i + 1}（保存后显示安全文件名）`}{' '}
+                  · 已确认{' '}
                   <Button
                     onClick={() =>
                       editor.edit(m.id, {

@@ -123,3 +123,75 @@ test('failed confirmation never binds a file or permits submission until failure
   await editor.submit();
   assert.equal(submit, 0);
 });
+
+test('same identity recovery preserves input and checks latest revision without writing; another identity is rejected', async () => {
+  let revision = 1;
+  const validating = Promise.withResolvers(),
+    release = Promise.withResolvers();
+  const commands = [];
+  const client = {
+    request: async (op, input) => {
+      commands.push(op);
+      if (op === 'getWorkspaceIdentity') {
+        if (input.token === 'queued') {
+          validating.resolve();
+          await release.promise;
+        }
+        return { id: input.token === 'other' ? 'B' : 'A' };
+      }
+      if (op === 'getMaterialTask')
+        return {
+          id: 'task',
+          requirements: { materials: [{ id: 'm', required: true }] },
+        };
+      if (op === 'getTaskExecution')
+        return {
+          state: 'EDITING',
+          currentSubmissionId: null,
+          deadlines: { task: '2099-01-01', materials: [] },
+        };
+      if (op === 'getMaterialDraft')
+        return {
+          id: 'task',
+          revision,
+          entries: [{ materialId: 'm', text: 'remote', fileIds: [] }],
+        };
+      if (op === 'listSubmissionVersions') return [];
+      if (op === 'getUploadCapabilities')
+        return { formats: ['txt'], maxBytes: 1024 };
+      if (op === 'saveMaterialDraft') throw new ApiError(401);
+    },
+  };
+  const editor = new MaterialEditor(
+    client,
+    'old',
+    'task',
+    async () => '',
+    () => {},
+  );
+  await editor.load();
+  editor.edit('m', { text: 'unsaved input' });
+  await editor.save();
+  assert.equal(editor.denied, true);
+  revision = 2;
+  await editor.resume('fresh');
+  assert.equal(editor.entry('m').text, 'unsaved input');
+  assert.equal(editor.latest.revision, 2);
+  assert.equal(editor.draft.revision, 1);
+  assert.equal(editor.denied, false);
+  assert.equal(commands.filter((x) => x === 'saveMaterialDraft').length, 1);
+  assert.ok(!commands.includes('submitMaterialPackage'));
+  await assert.rejects(editor.resume('other'));
+  assert.equal(editor.token, 'fresh');
+  assert.equal(editor.entry('m').text, 'unsaved input');
+  const recovering = editor.resume('queued');
+  await validating.promise;
+  editor.busy = 'upload';
+  release.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(editor.token, 'fresh');
+  editor.busy = '';
+  await recovering;
+  assert.equal(editor.token, 'queued');
+  assert.equal(editor.entry('m').text, 'unsaved input');
+});

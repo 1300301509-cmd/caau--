@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import { Alert, Button, Card, Tag } from 'antd';
-import { workflowError, type components } from '@caau/api-client';
-import { client } from './client';
+import { Card, Tag } from 'antd';
+import type { components } from '@caau/api-client';
 import type { Requirements } from './types';
+import { FileAttachment } from './FileAttachment';
 export function VersionHistory({
   versions,
   requirements,
@@ -12,17 +11,18 @@ export function VersionHistory({
   requirements: Requirements | null;
   token: string;
 }) {
-  const [busy, setBusy] = useState(''),
-    [error, setError] = useState('');
   return (
     <section aria-label="提交版本与审核历史">
       <h3>提交版本与审核历史</h3>
-      {error && <Alert type="error" title={error} />}{' '}
+      <p>姓名为当前目录显示名；稳定身份 ID、原提交及审核时间保留。</p>
       {!versions.length && <p>尚无正式提交。</p>}
       {[...versions].reverse().map((v) => (
         <Card key={v.id} title={`提交 V${v.version}`}>
           <p>
-            提交人：{v.actorId} · {new Date(v.submittedAt).toLocaleString()}
+            提交人：<strong>{v.actorName}</strong> ·{' '}
+            {new Date(v.submittedAt).toLocaleString()}
+            <br />
+            <small>身份 ID：{v.actorId}</small>
           </p>
           <Tag>
             {v.review
@@ -32,51 +32,29 @@ export function VersionHistory({
               : '待审核'}
           </Tag>
           {v.entries.map((e) => (
-            <section key={e.materialId} className="requirement-read">
+            <section className="requirement-read" key={e.materialId}>
               <h4>
                 {requirements?.materials.find((m) => m.id === e.materialId)
                   ?.title ?? e.materialId}
               </h4>
               <p className="material-text">{e.text || '无文字内容'}</p>
               {e.fileIds.map((id, i) => (
-                <Button
+                <FileAttachment
                   key={id}
-                  disabled={!!busy}
-                  loading={busy === id}
-                  onClick={() => {
-                    setBusy(id);
-                    setError('');
-                    void client
-                      .request('downloadPrivateContent', {
-                        token,
-                        path: { id },
-                      })
-                      .then((bytes) => {
-                        const url = URL.createObjectURL(
-                          new Blob([bytes], {
-                            type: 'application/octet-stream',
-                          }),
-                        );
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `material-${id}.bin`;
-                        a.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
-                      })
-                      .catch((e) => setError(workflowError(e)))
-                      .finally(() => setBusy(''));
-                  }}
-                >
-                  下载 V{v.version} 附件 {i + 1}
-                </Button>
+                  id={id}
+                  token={token}
+                  label={`下载 V${v.version} 附件 ${i + 1}`}
+                />
               ))}
             </section>
           ))}
           {v.review && (
             <section>
               <p>
-                审核人：{v.review.actorId} ·{' '}
+                审核人：<strong>{v.review.actorName}</strong> ·{' '}
                 {new Date(v.review.reviewedAt).toLocaleString()}
+                <br />
+                <small>身份 ID：{v.review.actorId}</small>
               </p>
               {v.review.issues.map((i) => (
                 <div className="review-issue" key={i.materialId}>

@@ -230,3 +230,22 @@ body {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-block: 8px;
+  overflow-wrap: anywhere;
+}
+.task-row .ant-btn {
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#execution-panel {
+  scroll-margin-top: 16px;
+}

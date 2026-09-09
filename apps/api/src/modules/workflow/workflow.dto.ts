@@ -35,6 +35,7 @@ export class ExecutionViewDto extends IdDto {
   @ApiProperty({ type: DeadlinesDto }) deadlines!: DeadlinesDto;
 }
 export class UploadDto {
+  @ApiProperty({ required: false, maxLength: 1024 }) originalName?: string;
   @ApiProperty({ format: 'uuid' }) materialId!: string;
   @ApiProperty({ enum: ['txt', 'pdf', 'png', 'jpg', 'jpeg'] })
   extension!: string;
@@ -45,6 +46,12 @@ export class UploadDto {
 export class UploadViewDto extends IdDto {
   @ApiProperty({ enum: ['PENDING', 'CONFIRMED'] }) state!: string;
   @ApiProperty({ format: 'date-time' }) expiresAt!: string;
+}
+export class FileInfoDto extends IdDto {
+  @ApiProperty() name!: string;
+  @ApiProperty() extension!: string;
+  @ApiProperty({ type: 'integer' }) bytes!: number;
+  @ApiProperty() originalNameKnown!: boolean;
 }
 export class SubmitDto {
   @ApiProperty({ format: 'uuid' }) idempotencyKey!: string;
@@ -61,11 +68,13 @@ export class ReviewDto {
   @ApiProperty({ type: [IssueDto], maxItems: 50 }) issues!: IssueDto[];
 }
 export class ReviewViewDto extends ReviewDto {
+  @ApiProperty() actorName!: string;
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) actorId!: string;
   @ApiProperty({ format: 'date-time' }) reviewedAt!: string;
 }
 export class SubmissionViewDto extends IdDto {
+  @ApiProperty() actorName!: string;
   @ApiProperty({ format: 'uuid' }) taskId!: string;
   @ApiProperty({ format: 'uuid' }) requirementVersionId!: string;
   @ApiProperty({ type: 'integer' }) version!: number;
@@ -95,6 +104,7 @@ export class DraftEditViewDto extends IdDto {
   @ApiProperty({ format: 'date-time' }) occurredAt!: string;
 }
 export class DeadlineHistoryDto extends IdDto {
+  @ApiProperty() actorName!: string;
   @ApiProperty({ format: 'uuid' }) actorId!: string;
   @ApiProperty({ format: 'date-time' }) occurredAt!: string;
   @ApiProperty() reason!: string;

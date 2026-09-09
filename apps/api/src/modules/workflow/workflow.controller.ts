@@ -38,7 +38,9 @@ import {
   SubmitDto,
   UploadDto,
   UploadViewDto,
+  FileInfoDto,
 } from './workflow.dto.js';
+import { downloadDisposition } from './filename.js';
 import { WorkflowService } from './workflow.service.js';
 @Controller()
 @ApiBearerAuth()
@@ -122,6 +124,13 @@ export class WorkflowController {
   confirm(@Req() r: AuthRequest, @Param('id') id: string) {
     return this.service.execute(r.token!, 'file.confirm', id);
   }
+  @Get('uploads/:id/info')
+  @Permission('file.info')
+  @ApiOperation({ operationId: 'getPrivateFileInfo' })
+  @ApiOkResponse({ type: FileInfoDto })
+  info(@Req() r: AuthRequest, @Param('id') id: string) {
+    return this.service.execute(r.token!, 'file.info', id);
+  }
   @Get('uploads/:id/content')
   @Permission('file.download')
   @ApiOperation({ operationId: 'downloadPrivateContent' })
@@ -129,11 +138,15 @@ export class WorkflowController {
   @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
   @Header('X-Content-Type-Options', 'nosniff')
   async download(@Req() r: AuthRequest, @Param('id') id: string) {
-    const data = await this.service.execute(r.token!, 'file.download', id);
-    return new StreamableFile(data as Buffer, {
+    const { data, info } = (await this.service.execute(
+      r.token!,
+      'file.download',
+      id,
+    )) as { data: Buffer; info: FileInfoDto };
+    return new StreamableFile(data, {
       type: 'application/octet-stream',
-      disposition: 'attachment; filename="material.bin"',
-      length: (data as Buffer).length,
+      disposition: downloadDisposition(info.name, info.extension),
+      length: data.length,
     });
   }
   @Post('material-tasks/:id/submissions')

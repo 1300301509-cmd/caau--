@@ -10,6 +10,8 @@
 *.css text eol=lf
 *.sh text eol=lf
 *.sql text eol=lf
+# Preserve Prisma-generated migration bytes/checksums, including its final blank line.
+database/prisma/migrations/**/migration.sql whitespace=-blank-at-eof
 *.prisma text eol=lf
 *.png binary
 *.jpg binary

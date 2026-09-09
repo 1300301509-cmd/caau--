@@ -211,6 +211,7 @@ model FileUpload {
   actorId String @db.Uuid
   generation Int
   storageKey String @unique @db.Uuid
+  originalName String? @db.VarChar(180)
   extension String @db.VarChar(12)
   expectedBytes Int
   sha256 String @db.Char(64)

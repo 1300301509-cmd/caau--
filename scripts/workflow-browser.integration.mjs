@@ -141,7 +141,11 @@ export async function workflowBrowserFlows({ browser, tokens, sql }) {
     await expect(
       reviewer.getByText('操作已完成，历史已保留', { exact: true }),
     ).toBeVisible();
-    await expect(reviewer.getByText(/当前状态：已通过/)).toBeVisible();
+    await expect(
+      reviewer
+        .getByRole('region', { name: '总部材料执行', exact: true })
+        .getByText(/当前状态：已通过/),
+    ).toBeVisible();
   }
   try {
     await mkdir('.local/evidence/caau-005-phase3', { recursive: true });
@@ -374,7 +378,11 @@ export async function workflowBrowserFlows({ browser, tokens, sql }) {
     await manager
       .getByRole('button', { name: '确认执行', exact: true })
       .click();
-    await expect(manager.getByText(/当前状态：已关闭/)).toBeVisible();
+    await expect(
+      manager
+        .getByRole('region', { name: '总部材料执行', exact: true })
+        .getByText(/当前状态：已关闭/),
+    ).toBeVisible();
     assert.equal(
       (await api('a2', 'GET', `material-tasks/${late}/execution`)).state,
       'CLOSED',

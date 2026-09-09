@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Alert, Button, Card, Modal, Tag, Typography } from 'antd';
 import { ApiError, type components } from '@caau/api-client';
 import { client } from './client';
+import { TaskAction } from './TaskAction';
 import { OrganizerPanel } from './OrganizerPanel';
 import { ReviewPanel, ReviewQueue } from './ReviewPanel';
 import { AssignmentForm } from './AssignmentForm';
@@ -27,8 +28,16 @@ export function WorkspacePage() {
   const [selected, setSelected] = useState<Task>();
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  const activeToken = useRef('');
   const [notice, setNotice] = useState<{ error: boolean; text: string }>();
   const [publishConfirm, setPublishConfirm] = useState(false);
+  const [editorRole, setEditorRole] = useState('');
+  const [configurationDirty, setConfigurationDirty] = useState(false);
+  const [formEpoch, setFormEpoch] = useState(0);
+  const [recoveryTask, setRecoveryTask] = useState<Task>();
+  const [selectionDenied, setSelectionDenied] = useState(false);
+  const reauthenticate = () =>
+    document.getElementById('local-session-input')?.click();
   const manager =
     identity?.roles.includes('EVENT_MANAGER') &&
     !identity.roles.includes('ORGANIZER');
@@ -61,6 +70,7 @@ export function WorkspacePage() {
     }
   }
   async function refresh(session = token, user = identity) {
+    if (session !== activeToken.current) return;
     const [newEvents, newTasks, newDirectory, capabilities] = await Promise.all(
       [
         client.request('listEvents', { token: session }),
@@ -73,12 +83,21 @@ export function WorkspacePage() {
         client.request('getUploadCapabilities', { token: session }),
       ],
     );
+    if (session !== activeToken.current) return;
     setCapabilities(capabilities);
     setEvents(newEvents);
     setTasks(newTasks);
     setDirectory(newDirectory);
   }
   async function loadTask(id: string) {
+    if (token !== activeToken.current) return;
+    if (
+      configurationDirty &&
+      !window.confirm(
+        '读取任务将替换未保存配置，请先确认已保存或放弃当前输入。继续？',
+      )
+    )
+      return;
     if (
       selected?.id !== id &&
       identity?.roles.includes('ORGANIZER') &&
@@ -90,10 +109,23 @@ export function WorkspacePage() {
       token,
       path: { id },
     });
+    if (token !== activeToken.current) return;
     setSelected(task);
     setEventId(task.eventId);
+    setConfigurationDirty(false);
+    setFormEpoch((n) => n + 1);
+    setRecoveryTask(undefined);
+    setSelectionDenied(false);
+    setTimeout(() => {
+      const target = document.getElementById(
+        task.state === 'PUBLISHED' ? 'execution-panel' : 'task-detail',
+      );
+      target?.scrollIntoView({ block: 'start' });
+      target?.focus({ preventScroll: true });
+    }, 0);
   }
   function clear() {
+    activeToken.current = '';
     setToken('');
     setIdentity(undefined);
     setDirectory(emptyDirectory);
@@ -101,6 +133,12 @@ export function WorkspacePage() {
     setEvents([]);
     setSelected(undefined);
     setEventId('');
+    setEditorRole('');
+    setConfigurationDirty(false);
+    setRecoveryTask(undefined);
+    setSelectionDenied(false);
+    setPublishConfirm(false);
+    setFormEpoch((n) => n + 1);
   }
   const person = (memberId: string) => {
     const m = directory.members.find((x) => x.id === memberId);
@@ -110,7 +148,7 @@ export function WorkspacePage() {
     );
   };
   return (
-    <main className="workspace">
+    <main key={identity?.id ?? 'anonymous'} className="workspace">
       <header className="workspace-header">
         <div>
           <Typography.Text>CAAU · 总部工作台</Typography.Text>
@@ -136,6 +174,7 @@ export function WorkspacePage() {
           <label>
             本地会话 JSON 文件
             <input
+              id="local-session-input"
               type="file"
               accept="application/json,.json"
               disabled={busy}
@@ -144,12 +183,6 @@ export function WorkspacePage() {
                 e.target.value = '';
                 if (!file) return;
                 void run(async () => {
-                  if (
-                    identity?.roles.includes('ORGANIZER') &&
-                    !window.confirm('切换身份将丢弃未保存输入，是否继续？')
-                  )
-                    return;
-                  clear();
                   if (file.size > 4096) throw new Error('Invalid session file');
                   const data: unknown = JSON.parse(await file.text());
                   if (
@@ -163,9 +196,42 @@ export function WorkspacePage() {
                   const user = await client.request('getWorkspaceIdentity', {
                     token: data.token,
                   });
-                  await refresh(data.token, user);
+                  const sameIdentity = identity?.id === user.id;
+                  if (
+                    identity &&
+                    !sameIdentity &&
+                    !window.confirm(
+                      '切换为其他身份将清除上一身份的输入和材料；已发送操作不能撤回，需切回原身份核对。是否继续？',
+                    )
+                  )
+                    return;
+                  if (!sameIdentity) {
+                    clear();
+                    setEditorRole(
+                      user.roles.includes('ORGANIZER')
+                        ? 'ORGANIZER'
+                        : user.roles.includes('EVENT_MANAGER')
+                          ? 'EVENT_MANAGER'
+                          : 'REVIEWER',
+                    );
+                  }
+                  activeToken.current = data.token;
                   setToken(data.token);
                   setIdentity(user);
+                  await refresh(data.token, user);
+                  if (sameIdentity && selected && editorRole !== 'ORGANIZER') {
+                    try {
+                      const latest = await client.request('getMaterialTask', {
+                        token: data.token,
+                        path: { id: selected.id },
+                      });
+                      setSelectionDenied(false);
+                      if (selected.state === 'DRAFT') setRecoveryTask(latest);
+                    } catch (error) {
+                      setSelectionDenied(true);
+                      throw error;
+                    }
+                  }
                 }, '本地身份已载入');
               }}
             />
@@ -217,6 +283,14 @@ export function WorkspacePage() {
           />
         )}
       </div>
+      {identity?.roles.includes('ORGANIZER') && (
+        <ReviewQueue
+          mode="todo"
+          tasks={tasks}
+          token={token}
+          open={(id) => void run(() => loadTask(id))}
+        />
+      )}
       {identity &&
         !identity.roles.includes('ORGANIZER') &&
         (manager || identity.roles.includes('REVIEWER')) && (
@@ -465,6 +539,13 @@ export function WorkspacePage() {
                         : ' · 尚未发布要求'}
                     </p>
                   </div>
+                  <TaskAction
+                    task={task}
+                    token={token}
+                    organizer={identity.roles.includes('ORGANIZER')}
+                    reviewer={identity.roles.includes('REVIEWER')}
+                    open={() => void run(() => loadTask(task.id))}
+                  />
                   <Button
                     disabled={busy}
                     onClick={() => void run(() => loadTask(task.id))}
@@ -477,8 +558,49 @@ export function WorkspacePage() {
           </div>
         </Card>
       )}
+      {selected?.state === 'PUBLISHED' && identity && (
+        <section id="execution-panel" tabIndex={-1}>
+          {editorRole === 'ORGANIZER' ? (
+            <OrganizerPanel
+              key={`${selected.id}:${identity.id}`}
+              id={selected.id}
+              token={token}
+              reauthenticate={reauthenticate}
+              changed={async () => {
+                try {
+                  await refresh();
+                } catch {
+                  if (token === activeToken.current)
+                    setNotice({
+                      error: true,
+                      text: '列表状态刷新失败，请刷新数据或重新认证后核对。',
+                    });
+                }
+              }}
+            />
+          ) : (
+            <ReviewPanel
+              key={`${selected.id}:${identity.id}`}
+              task={selected}
+              token={token}
+              manager={!!manager}
+              reviewer={identity.roles.includes('REVIEWER')}
+              directory={directory}
+              changed={async () => {
+                await loadTask(selected.id);
+                await refresh();
+              }}
+              reauthenticate={reauthenticate}
+            />
+          )}
+        </section>
+      )}
       {selected && (
-        <Card title={`任务详情 · ${selected.title}`}>
+        <Card
+          id="task-detail"
+          tabIndex={-1}
+          title={`任务详情 · ${selected.title}`}
+        >
           <p>
             {selected.state === 'PUBLISHED'
               ? `已发布 · 要求 V${selected.requirementVersion} · ${new Date(selected.publishedAt!).toLocaleString()}`
@@ -496,7 +618,8 @@ export function WorkspacePage() {
               {person(selected.reviewerMemberId)}
             </p>
           )}
-          {selected.state === 'DRAFT' && manager ? (
+          {selected.state === 'DRAFT' &&
+          (manager || editorRole === 'EVENT_MANAGER') ? (
             <>
               <details>
                 <summary>调整发布前指派</summary>
@@ -523,11 +646,60 @@ export function WorkspacePage() {
                 />
               </details>
               <Typography.Title level={3}>3 · 配置材料要求</Typography.Title>
+              {selectionDenied && (
+                <Alert
+                  type="error"
+                  title="当前权限核对失败，输入保留，禁止保存或发布"
+                />
+              )}
+              {recoveryTask && (
+                <Alert
+                  type="warning"
+                  title={`同一身份恢复：当前输入保留；服务器修订 ${recoveryTask.revision}，状态 ${recoveryTask.state}`}
+                  description={
+                    <>
+                      <details>
+                        <summary>核对最新服务器配置（只读）</summary>
+                        <pre>
+                          {JSON.stringify(recoveryTask.requirements, null, 2)}
+                        </pre>
+                      </details>
+                      {recoveryTask.state === 'DRAFT' && (
+                        <Button
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                '已核对服务器配置？保留当前输入并采用最新修订，仍需显式保存。',
+                              )
+                            ) {
+                              setSelected({
+                                ...selected,
+                                revision: recoveryTask.revision,
+                              });
+                              setRecoveryTask(undefined);
+                              setConfigurationDirty(true);
+                            }
+                          }}
+                        >
+                          已核对，保留输入采用最新修订
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              )}
               <RequirementsEditor
-                key={`${selected.id}:${selected.revision}`}
+                key={`${selected.id}:${identity?.id}:${formEpoch}`}
                 task={selected}
+                reusable={tasks.filter(
+                  (t) =>
+                    t.id !== selected.id &&
+                    t.state === 'PUBLISHED' &&
+                    t.requirements,
+                )}
+                onDirty={() => setConfigurationDirty(true)}
                 capabilities={capabilities}
-                busy={busy}
+                busy={busy || !manager || selectionDenied || !!recoveryTask}
                 save={(requirements) =>
                   void run(async () => {
                     setSelected(
@@ -540,6 +712,7 @@ export function WorkspacePage() {
                         },
                       }),
                     );
+                    setConfigurationDirty(false);
                     await refresh();
                   }, '材料要求已保存，核对后可发布')
                 }
@@ -552,7 +725,14 @@ export function WorkspacePage() {
                 </p>
                 <Button
                   type="primary"
-                  disabled={busy || !selected.requirements}
+                  disabled={
+                    busy ||
+                    !selected.requirements ||
+                    configurationDirty ||
+                    selectionDenied ||
+                    !!recoveryTask ||
+                    !manager
+                  }
                   onClick={() => setPublishConfirm(true)}
                 >
                   发布任务
@@ -564,7 +744,7 @@ export function WorkspacePage() {
               <Alert
                 type="success"
                 title="已发布要求受保护"
-                description="以下为不可变发布要求；材料办理与当前有效截止见下方执行区域。"
+                description="以下为不可变发布要求；材料办理与当前有效截止见上方执行区域。"
               />
               <p>
                 任务截止：
@@ -590,28 +770,6 @@ export function WorkspacePage() {
           )}
         </Card>
       )}
-      {selected?.state === 'PUBLISHED' &&
-        identity &&
-        (identity.roles.includes('ORGANIZER') ? (
-          <OrganizerPanel
-            key={`${selected.id}:${token}`}
-            id={selected.id}
-            token={token}
-          />
-        ) : (
-          <ReviewPanel
-            key={`${selected.id}:${token}`}
-            task={selected}
-            token={token}
-            manager={!!manager}
-            reviewer={identity.roles.includes('REVIEWER')}
-            directory={directory}
-            changed={async () => {
-              await loadTask(selected.id);
-              await refresh();
-            }}
-          />
-        ))}
       <Modal
         title="确认发布材料任务"
         open={publishConfirm}

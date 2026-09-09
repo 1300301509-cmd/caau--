@@ -109,8 +109,9 @@ export async function workflowIntegration(
     key,
     task,
     bytes = Buffer.from('synthetic private material'),
+    originalName,
   ) {
-    const value = await intent(key, task, bytes);
+    const value = await intent(key, task, bytes, { originalName });
     await sdk.request('uploadPrivateContent', {
       token: tokens[key],
       path: { id: value.id },
@@ -128,7 +129,7 @@ export async function workflowIntegration(
   await t.test(
     'real private upload confirmation/binding/download rejects cross-organization and unbound access',
     async () => {
-      fileA = await upload('a', a);
+      fileA = await upload('a', a, undefined, '../方案\r\n.exe');
       await api('a', 'GET', `uploads/${fileA}/content`, undefined, 403);
       await api('b', 'POST', `uploads/${fileA}/confirm`, undefined, 403);
       await save('b', b, 1, '', [fileA], 403);
@@ -143,8 +144,24 @@ export async function workflowIntegration(
         Buffer.from(downloaded).toString(),
         'synthetic private material',
       );
-      for (const key of ['b', 'sys', 'a2', 'reviewer'])
+      const info = await api('a', 'GET', `uploads/${fileA}/info`);
+      assert.equal(info.name, '方案.txt');
+      assert.equal(info.originalNameKnown, true);
+      assert.equal(info.extension, 'txt');
+      assert.ok(!('storageKey' in info));
+      const response = await fetch(`${base}/api/v1/uploads/${fileA}/content`, {
+        headers: { Authorization: `Bearer ${tokens.a}` },
+      });
+      assert.equal(response.status, 200);
+      assert.equal(
+        response.headers.get('content-disposition'),
+        `attachment; filename="material.txt"; filename*=UTF-8''${encodeURIComponent('方案.txt')}`,
+      );
+      await response.arrayBuffer();
+      for (const key of ['b', 'sys', 'a2', 'reviewer']) {
         await api(key, 'GET', `uploads/${fileA}/content`, undefined, 403);
+        await api(key, 'GET', `uploads/${fileA}/info`, undefined, 403);
+      }
       const unauth = await fetch(`${base}/api/v1/uploads/${fileA}/content`);
       assert.equal(unauth.status, 401);
       assert.equal((await fetch(`${base}/files/${fileA}`)).status, 404);

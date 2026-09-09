@@ -118,7 +118,46 @@ export async function deployAuthorizationBaseline(connectionString) {
         [taskId],
       )
     ).rows;
-    return { userId, auditId, checksum, taskId, configuration, snapshots };
+    await cp(
+      path.join(
+        root,
+        'database/prisma/migrations/202609080003_material_execution',
+      ),
+      path.join(migrations, '202609080003_material_execution'),
+      { recursive: true },
+    );
+    await runPrisma({ directory, config }, ['migrate', 'deploy'], {
+      CAAU_FIXTURE_MIGRATION_URL: connectionString,
+    });
+    const legacyFileId = randomUUID();
+    await client.query(
+      'INSERT INTO "FileUpload" (id,"taskId","materialId","organizationId","actorId",generation,"storageKey",extension,"expectedBytes",sha256,"expiresAt") VALUES ($1,$2,$3,$4,$5,1,$6,\'txt\',10,$7,\'2099-01-01\')',
+      [
+        legacyFileId,
+        taskId,
+        configuration.materials[0].id,
+        orgId,
+        userId,
+        randomUUID(),
+        '0'.repeat(64),
+      ],
+    );
+    const legacyFile = (
+      await client.query(
+        'SELECT to_jsonb(f) data FROM "FileUpload" f WHERE id=$1',
+        [legacyFileId],
+      )
+    ).rows[0].data;
+    return {
+      userId,
+      auditId,
+      checksum,
+      taskId,
+      configuration,
+      snapshots,
+      legacyFileId,
+      legacyFile,
+    };
   } finally {
     await client.end();
     await rm(directory, { recursive: true, force: true });
