@@ -7,15 +7,21 @@ import {
   Patch,
   Post,
   Req,
+  Header,
+  StreamableFile,
 } from '@nestjs/common';
+import type { IncomingMessage } from 'node:http';
 import {
   ApiBearerAuth,
   ApiBody,
   ApiOkResponse,
   ApiOperation,
   ApiResponse,
+  ApiConsumes,
+  ApiProduces,
 } from '@nestjs/swagger';
 import { Permission } from '../authorization/authorization.guard.js';
+import { IdDto } from '../authorization/authorization.dto.js';
 import type { AuthRequest } from '../authorization/authorization.service.js';
 import {
   ConfigureTaskDto,
@@ -28,6 +34,12 @@ import {
   UpdateAssignmentDto,
   WorkspaceIdentityDto,
 } from './materials.dto.js';
+import {
+  TemplateFileDto,
+  TemplateUploadDto,
+  TemplateUploadViewDto,
+} from './template.dto.js';
+import { downloadDisposition } from '../workflow/filename.js';
 import { UploadCapabilitiesDto } from '../workflow/capabilities.dto.js';
 import { FILE_EXTENSIONS, MAX_FILE_BYTES } from '../workflow/private-store.js';
 import { MaterialsService } from './materials.service.js';
@@ -121,6 +133,72 @@ export class MaterialsController {
     @Body() b: ConfigureTaskDto,
   ) {
     return this.service.execute(r.token!, 'materials.configure', id, b);
+  }
+  @Post('material-tasks/:id/templates')
+  @HttpCode(200)
+  @Permission('template.create')
+  @ApiOperation({ operationId: 'createTemplateUploadIntent' })
+  @ApiBody({ type: TemplateUploadDto })
+  @ApiOkResponse({ type: TemplateUploadViewDto })
+  templateIntent(
+    @Req() r: AuthRequest,
+    @Param('id') id: string,
+    @Body() b: TemplateUploadDto,
+  ) {
+    return this.service.execute(r.token!, 'template.create', id, b);
+  }
+  @Post('templates/:id/content')
+  @HttpCode(200)
+  @Permission('template.content')
+  @ApiOperation({ operationId: 'uploadTemplateContent' })
+  @ApiConsumes('application/octet-stream')
+  @ApiBody({ schema: { type: 'string', format: 'binary' } })
+  @ApiOkResponse({ type: IdDto })
+  templateContent(
+    @Req() r: IncomingMessage & AuthRequest,
+    @Param('id') id: string,
+  ) {
+    return this.service.execute(r.token!, 'template.content', id, undefined, r);
+  }
+  @Post('templates/:id/confirm')
+  @HttpCode(200)
+  @Permission('template.confirm')
+  @ApiOperation({ operationId: 'confirmTemplateUpload' })
+  @ApiOkResponse({ type: TemplateUploadViewDto })
+  templateConfirm(@Req() r: AuthRequest, @Param('id') id: string) {
+    return this.service.execute(r.token!, 'template.confirm', id);
+  }
+  @Patch('templates/:id/remove')
+  @Permission('template.remove')
+  @ApiOperation({ operationId: 'removeDraftTemplate' })
+  @ApiOkResponse({ type: IdDto })
+  templateRemove(@Req() r: AuthRequest, @Param('id') id: string) {
+    return this.service.execute(r.token!, 'template.remove', id);
+  }
+  @Get('templates/:id/info')
+  @Permission('template.info')
+  @ApiOperation({ operationId: 'getTemplateInfo' })
+  @ApiOkResponse({ type: TemplateFileDto })
+  templateInfo(@Req() r: AuthRequest, @Param('id') id: string) {
+    return this.service.execute(r.token!, 'template.info', id);
+  }
+  @Get('templates/:id/content')
+  @Permission('template.download')
+  @ApiOperation({ operationId: 'downloadTemplateContent' })
+  @ApiProduces('application/octet-stream')
+  @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
+  @Header('X-Content-Type-Options', 'nosniff')
+  async templateDownload(@Req() r: AuthRequest, @Param('id') id: string) {
+    const { data, info } = (await this.service.execute(
+      r.token!,
+      'template.download',
+      id,
+    )) as { data: Buffer; info: TemplateFileDto };
+    return new StreamableFile(data, {
+      type: 'application/octet-stream',
+      disposition: downloadDisposition(info.name, info.extension),
+      length: data.length,
+    });
   }
   @Patch('material-tasks/:id/assignment')
   @Permission('materials.assign')

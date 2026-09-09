@@ -91,6 +91,23 @@ export async function workflowBrowserFlows({ browser, tokens, sql }) {
     await expect(
       manager.getByText('材料要求已保存，核对后可发布', { exact: true }),
     ).toBeVisible();
+    const confirmed = manager.waitForResponse(
+      (r) =>
+        r.url().includes('/templates/') &&
+        r.url().endsWith('/confirm') &&
+        r.status() === 200,
+    );
+    await manager
+      .getByLabel('上传模板 · 办赛基础信息确认表', { exact: true })
+      .setInputFiles({
+        name: '总部办赛模板.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('synthetic template browser bytes'),
+      });
+    await confirmed;
+    await expect(
+      manager.getByText('总部办赛模板.txt', { exact: true }),
+    ).toBeVisible();
     await manager
       .getByRole('button', { name: '发布任务', exact: true })
       .click();
@@ -165,6 +182,15 @@ export async function workflowBrowserFlows({ browser, tokens, sql }) {
     const one = await createTask('UI direct approval');
     await login(organizer, 'a');
     await open(organizer, 'UI direct approval');
+    await expect(organizer.getByText(/模板：总部办赛模板\.txt/)).toBeVisible();
+    const templateDownload = organizer.waitForEvent('download');
+    await organizer
+      .getByRole('button', { name: '下载模板', exact: true })
+      .click();
+    assert.equal(
+      (await templateDownload).suggestedFilename(),
+      '总部办赛模板.txt',
+    );
     await submit();
     await expect(
       organizer.getByText('必交材料：请填写内容或上传并确认附件。', {

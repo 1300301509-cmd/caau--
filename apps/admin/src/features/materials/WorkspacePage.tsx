@@ -698,6 +698,14 @@ export function WorkspacePage() {
                     t.requirements,
                 )}
                 onDirty={() => setConfigurationDirty(true)}
+                token={token}
+                templateChanged={async () => {
+                  const updated = await client.request('getMaterialTask', {
+                    token,
+                    path: { id: selected.id },
+                  });
+                  setSelected(updated);
+                }}
                 capabilities={capabilities}
                 busy={busy || !manager || selectionDenied || !!recoveryTask}
                 save={(requirements) =>
@@ -763,6 +771,13 @@ export function WorkspacePage() {
                     · 上限：{m.maxBytes} 字节
                   </p>
                   <p>截止：{new Date(m.deadline).toLocaleString()}</p>
+                  <p>
+                    模板文件：
+                    {selected.templateFiles.find(
+                      (file) => file.materialId === m.id,
+                    )?.name ?? '未附模板文件'}
+                    （发布快照，只读）
+                  </p>
                   <p>示例或标准：{m.acceptanceStandard}</p>
                 </section>
               ))}

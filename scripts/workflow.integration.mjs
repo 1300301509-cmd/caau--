@@ -123,9 +123,183 @@ export async function workflowIntegration(
     );
     return value.id;
   }
+  async function templateTask() {
+    const created = await api('manager', 'POST', 'material-tasks', {
+      eventId,
+      title: 'Synthetic template task',
+      organizationId: orgA,
+      handlerMemberId: members.a,
+      reviewerMemberId: members.reviewer,
+    });
+    const materialId = randomUUID(),
+      deadline = new Date(Date.now() + 3600000).toISOString(),
+      requirements = {
+        deadline,
+        materials: [
+          {
+            id: materialId,
+            title: 'Synthetic template material',
+            required: true,
+            instructions: 'Synthetic template instruction',
+            templateVersion: 'template-v1',
+            formats: ['txt'],
+            maxBytes: 1048576,
+            deadline,
+            acceptanceStandard: 'Synthetic template standard',
+          },
+        ],
+      };
+    const configured = await api(
+      'manager',
+      'PATCH',
+      `material-tasks/${created.id}/requirements`,
+      { expectedRevision: created.revision, requirements },
+    );
+    return { id: configured.id, materialId, revision: configured.revision };
+  }
+  async function templateIntent(key, task, bytes, extra = {}) {
+    return api(key, 'POST', `material-tasks/${task.id}/templates`, {
+      materialId: task.materialId,
+      originalName: '安全模板.txt',
+      extension: 'txt',
+      expectedBytes: bytes.length,
+      sha256: hash(bytes),
+      ...extra,
+    });
+  }
+  async function putTemplate(key, id, bytes, status = 200) {
+    const response = await fetch(`${base}/api/v1/templates/${id}/content`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${tokens[key]}`,
+        'Content-Type': 'application/octet-stream',
+      },
+      body: bytes,
+    });
+    assert.equal(response.status, status);
+    return response.status === 200 ? response.json() : response;
+  }
   const a = await task();
   const b = await task('b');
   let fileA;
+  await t.test(
+    'private template upload freezes with requirements and only current assigned organizer downloads',
+    async () => {
+      const draftTask = await templateTask(),
+        bytes = Buffer.from('synthetic template bytes');
+      const failed = await templateIntent('manager', draftTask, bytes, {
+        expectedBytes: bytes.length + 1,
+        originalName: '../bad\r\n.txt',
+      });
+      await putTemplate('manager', failed.id, bytes, 400);
+      await api(
+        'manager',
+        'POST',
+        `templates/${failed.id}/confirm`,
+        undefined,
+        409,
+      );
+      await api(
+        'manager',
+        'POST',
+        `material-tasks/${draftTask.id}/publish`,
+        { expectedRevision: draftTask.revision },
+        409,
+      );
+      await api('manager', 'PATCH', `templates/${failed.id}/remove`);
+      const current = await templateIntent('manager', draftTask, bytes, {
+        originalName: '../安全模板\r\n.exe',
+      });
+      await putTemplate('manager', current.id, bytes);
+      await api('manager', 'POST', `templates/${current.id}/confirm`);
+      const preview = await api(
+        'manager',
+        'GET',
+        `material-tasks/${draftTask.id}`,
+      );
+      assert.equal(preview.templateFiles[0].name, '安全模板.txt');
+      const published = await api(
+        'manager',
+        'POST',
+        `material-tasks/${draftTask.id}/publish`,
+        { expectedRevision: draftTask.revision },
+      );
+      assert.equal(published.templateFiles[0].name, '安全模板.txt');
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "TemplateAttachment" WHERE "templateId"=$1',
+            [current.id],
+          )
+        ).rows[0].n,
+        1,
+      );
+      await api(
+        'manager',
+        'POST',
+        `material-tasks/${draftTask.id}/templates`,
+        {
+          materialId: draftTask.materialId,
+          originalName: 'replacement.txt',
+          extension: 'txt',
+          expectedBytes: bytes.length,
+          sha256: hash(bytes),
+        },
+        409,
+      );
+      await api(
+        'manager',
+        'PATCH',
+        `templates/${current.id}/remove`,
+        undefined,
+        409,
+      );
+      const info = await api('a', 'GET', `templates/${current.id}/info`);
+      assert.equal(info.name, '安全模板.txt');
+      const download = await fetch(
+        `${base}/api/v1/templates/${current.id}/content`,
+        { headers: { Authorization: `Bearer ${tokens.a}` } },
+      );
+      assert.equal(download.status, 200);
+      assert.equal(
+        download.headers.get('content-disposition'),
+        `attachment; filename="material.txt"; filename*=UTF-8''${encodeURIComponent('安全模板.txt')}`,
+      );
+      assert.deepEqual(Buffer.from(await download.arrayBuffer()), bytes);
+      for (const key of ['b', 'sys', 'reviewer', 'manager']) {
+        await api(key, 'GET', `templates/${current.id}/info`, undefined, 403);
+        await api(
+          key,
+          'GET',
+          `templates/${current.id}/content`,
+          undefined,
+          403,
+        );
+      }
+      await save('a', draftTask, 1, 'Template history');
+      const historical = await submit('a', draftTask.id, 2);
+      assert.equal(
+        (await api('a', 'GET', `material-tasks/${draftTask.id}/submissions`))[0]
+          .requirementVersionId,
+        historical.requirementVersionId,
+      );
+      assert.equal(
+        (await api('a', 'GET', `material-tasks/${draftTask.id}`))
+          .templateFiles[0].id,
+        current.id,
+      );
+      const state = await execution(draftTask.id);
+      await api('manager', 'POST', `material-tasks/${draftTask.id}/handover`, {
+        handlerMemberId: members.a2,
+        expectedRevision: state.revision,
+      });
+      await api('a', 'GET', `templates/${current.id}/info`, undefined, 403);
+      assert.equal(
+        (await api('a2', 'GET', `templates/${current.id}/info`)).name,
+        '安全模板.txt',
+      );
+    },
+  );
   await t.test(
     'real private upload confirmation/binding/download rejects cross-organization and unbound access',
     async () => {

@@ -120,6 +120,7 @@ model MaterialTask {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   publishedAt DateTime? @db.Timestamptz(3)
   requirements RequirementVersion[]
+  templateUploads TemplateUpload[]
   assignments AssignmentHistory[]
   execution   TaskExecution?
   @@index([eventId, state])
@@ -134,6 +135,7 @@ model RequirementVersion {
   configuration Json
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   createdBy   String @db.Uuid
+  templateAttachments TemplateAttachment[]
   @@unique([taskId, version])
 }
 
@@ -222,6 +224,34 @@ model FileUpload {
   boundAt DateTime? @db.Timestamptz(3)
   attachments SubmissionAttachment[]
   @@unique([id, taskId])
+}
+
+model TemplateUpload {
+  id String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  task MaterialTask @relation(fields:[taskId],references:[id],onDelete:Restrict)
+  materialId String @db.Uuid
+  actorId String @db.Uuid
+  storageKey String @unique @db.Uuid
+  originalName String @db.VarChar(180)
+  extension String @db.VarChar(12)
+  expectedBytes Int
+  sha256 String @db.Char(64)
+  state UploadState @default(PENDING)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  confirmedAt DateTime? @db.Timestamptz(3)
+  attachments TemplateAttachment[]
+  @@unique([taskId,materialId])
+}
+
+model TemplateAttachment {
+  requirementVersionId String @db.Uuid
+  materialId String @db.Uuid
+  templateId String @unique @db.Uuid
+  requirement RequirementVersion @relation(fields:[requirementVersionId],references:[id],onDelete:Restrict)
+  template TemplateUpload @relation(fields:[templateId],references:[id],onDelete:Restrict)
+  @@id([requirementVersionId,materialId])
 }
 
 model SubmissionVersion {

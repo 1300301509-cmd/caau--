@@ -48,6 +48,37 @@ export default function TaskPage() {
   }, [editor.dirty, editor.pending]);
   const disabled = !!editor.busy || reading || editor.denied,
     editable = editor.execution?.state === 'EDITING' && !editor.denied;
+  async function downloadTemplate(id: string) {
+    if (lock.current) return;
+    lock.current = true;
+    setReading(true);
+    setFileError('');
+    try {
+      const info = await client.request('getTemplateInfo', {
+        token: session.token,
+        path: { id },
+      });
+      const bytes = await client.request('downloadTemplateContent', {
+        token: session.token,
+        path: { id },
+      });
+      const path = `${Taro.env.USER_DATA_PATH}/${info.name}`;
+      await new Promise<void>((resolve, reject) =>
+        Taro.getFileSystemManager().writeFile({
+          filePath: path,
+          data: bytes,
+          success: () => resolve(),
+          fail: reject,
+        }),
+      );
+      await Taro.openDocument({ filePath: path, showMenu: true });
+    } catch (e) {
+      setFileError(`${workflowError(e)} 可重新认证或刷新后重试。`);
+    } finally {
+      setReading(false);
+      lock.current = false;
+    }
+  }
   async function choose(id: string) {
     if (lock.current) return;
     lock.current = true;
@@ -153,7 +184,35 @@ export default function TaskPage() {
               {m.title} · {m.required ? '必交' : '选交'}
             </Text>
             <Text className="description">{m.instructions}</Text>
-            <Text>模板版本：{m.templateVersion}（仅标识，无模板下载）</Text>
+            <Text>模板版本：{m.templateVersion}</Text>
+            {editor.task?.templateFiles.find(
+              (file) => file.materialId === m.id,
+            ) ? (
+              <View>
+                <Text>
+                  模板文件：
+                  {
+                    editor.task.templateFiles.find(
+                      (file) => file.materialId === m.id,
+                    )?.name
+                  }
+                </Text>
+                <Button
+                  disabled={disabled}
+                  onClick={() =>
+                    void downloadTemplate(
+                      editor.task!.templateFiles.find(
+                        (file) => file.materialId === m.id,
+                      )!.id,
+                    )
+                  }
+                >
+                  下载模板
+                </Button>
+              </View>
+            ) : (
+              <Text>本项未附模板文件。</Text>
+            )}
             <Text>
               格式：{m.formats.join(', ')} · 上限{' '}
               {Math.min(m.maxBytes, editor.capabilities?.maxBytes ?? 0)} 字节

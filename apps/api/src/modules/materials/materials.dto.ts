@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IdDto } from '../authorization/authorization.dto.js';
+import { TemplateFileDto } from './template.dto.js';
 export class EventInputDto {
   @ApiProperty({ maxLength: 120 }) name!: string;
   @ApiProperty({ maxLength: 2000 }) description!: string;
@@ -49,6 +50,7 @@ export class TaskViewDto extends CreateTaskDto {
   @ApiProperty({ type: 'integer' }) revision!: number;
   @ApiProperty({ type: RequirementsDto, nullable: true })
   requirements!: RequirementsDto | null;
+  @ApiProperty({ type: [TemplateFileDto] }) templateFiles!: TemplateFileDto[];
   @ApiProperty({ type: 'integer', nullable: true }) requirementVersion!:
     | number
     | null;

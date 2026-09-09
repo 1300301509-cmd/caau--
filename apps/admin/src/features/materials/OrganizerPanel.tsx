@@ -7,6 +7,7 @@ import {
 } from '@caau/api-client';
 import { client } from './client';
 import { VersionHistory } from './VersionHistory';
+import { TemplateDownload } from './TemplateDownload';
 export function OrganizerPanel({
   id,
   token,
@@ -122,7 +123,22 @@ export function OrganizerPanel({
                 {m.title} · {m.required ? '必交' : '选交'}
               </legend>
               <p>{m.instructions}</p>
-              <p>模板版本 {m.templateVersion}（仅标识，暂无模板下载）</p>
+              <p>模板版本 {m.templateVersion}</p>
+              {editor.task &&
+              editor.task.templateFiles.find(
+                (file) => file.materialId === m.id,
+              ) ? (
+                <TemplateDownload
+                  token={token}
+                  file={
+                    editor.task.templateFiles.find(
+                      (file) => file.materialId === m.id,
+                    )!
+                  }
+                />
+              ) : (
+                <p>本项未附模板文件。</p>
+              )}
               <p>
                 格式 {m.formats.join(', ')} · 上限{' '}
                 {Math.min(m.maxBytes, editor.capabilities?.maxBytes ?? 0)} 字节

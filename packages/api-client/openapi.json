@@ -900,6 +900,12 @@
             "enum": ["DRAFT", "PUBLISHED"],
             "type": "string"
           },
+          "templateFiles": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateFileDto"
+            },
+            "type": "array"
+          },
           "title": {
             "maxLength": 160,
             "type": "string"
@@ -915,9 +921,94 @@
           "state",
           "revision",
           "requirements",
+          "templateFiles",
           "requirementVersion",
           "publishedAt"
         ],
+        "type": "object"
+      },
+      "TemplateFileDto": {
+        "properties": {
+          "bytes": {
+            "type": "integer"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "materialId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "originalNameKnown": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "materialId",
+          "name",
+          "extension",
+          "bytes",
+          "originalNameKnown"
+        ],
+        "type": "object"
+      },
+      "TemplateUploadDto": {
+        "properties": {
+          "expectedBytes": {
+            "maximum": 10485760,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "extension": {
+            "enum": ["txt", "pdf", "png", "jpg", "jpeg"],
+            "type": "string"
+          },
+          "materialId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "originalName": {
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "materialId",
+          "originalName",
+          "extension",
+          "expectedBytes",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "TemplateUploadViewDto": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "state": {
+            "enum": ["PENDING", "CONFIRMED"],
+            "type": "string"
+          }
+        },
+        "required": ["id", "state", "expiresAt"],
         "type": "object"
       },
       "UpdateAssignmentDto": {
@@ -2929,6 +3020,65 @@
         "tags": ["Workflow"]
       }
     },
+    "/api/v1/material-tasks/{id}/templates": {
+      "post": {
+        "operationId": "createTemplateUploadIntent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateUploadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateUploadViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
     "/api/v1/material-tasks/{id}/uploads": {
       "post": {
         "operationId": "createUploadIntent",
@@ -3016,6 +3166,261 @@
         },
         "summary": "Database connectivity; 1500ms application deadline, not schema readiness",
         "tags": ["system"]
+      }
+    },
+    "/api/v1/templates/{id}/confirm": {
+      "post": {
+        "operationId": "confirmTemplateUpload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateUploadViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/templates/{id}/content": {
+      "get": {
+        "operationId": "downloadTemplateContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      },
+      "post": {
+        "operationId": "uploadTemplateContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/templates/{id}/info": {
+      "get": {
+        "operationId": "getTemplateInfo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateFileDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
+      }
+    },
+    "/api/v1/templates/{id}/remove": {
+      "patch": {
+        "operationId": "removeDraftTemplate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid configuration or revision"
+          },
+          "401": {
+            "description": "Invalid local session"
+          },
+          "403": {
+            "description": "Resource not accessible"
+          },
+          "409": {
+            "description": "Concurrent change or published task protected"
+          },
+          "503": {
+            "description": "Database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Materials"]
       }
     },
     "/api/v1/uploads/{id}/confirm": {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Button, Modal } from 'antd';
 import type { components } from '@caau/api-client';
 import type { Requirements, Task } from './types';
+import { TemplateControl } from './TemplateControl';
 const names = [
   '办赛基础信息确认表',
   '场馆及场地确认材料',
@@ -43,6 +44,8 @@ export function RequirementsEditor({
   save,
   reusable,
   onDirty,
+  templateChanged,
+  token,
 }: {
   task: Task;
   busy: boolean;
@@ -50,6 +53,8 @@ export function RequirementsEditor({
   save: (requirements: Requirements) => void;
   reusable: Task[];
   onDirty: () => void;
+  templateChanged: () => Promise<void>;
+  token: string;
 }) {
   const [items, setItems] = useState(
     () => task.requirements?.materials.map(editable) ?? names.map(blank),
@@ -152,7 +157,11 @@ export function RequirementsEditor({
             />
           </label>
         </div>
-        <Button disabled={!batchValid} onClick={() => setConfirm('batch')}>
+        <Button
+          htmlType="button"
+          disabled={!batchValid}
+          onClick={() => setConfirm('batch')}
+        >
           核对并批量应用
         </Button>
         <label>
@@ -171,6 +180,7 @@ export function RequirementsEditor({
           </select>
         </label>
         <Button
+          htmlType="button"
           disabled={!selected?.requirements}
           onClick={() => setConfirm('reuse')}
         >
@@ -274,7 +284,15 @@ export function RequirementsEditor({
               onChange={(e) => set(i, 'acceptanceStandard', e.target.value)}
             />
           </label>
+          <TemplateControl
+            task={task}
+            material={m}
+            token={token}
+            busy={busy}
+            changed={templateChanged}
+          />
           <Button
+            htmlType="button"
             disabled={busy || items.length === 1}
             onClick={() => {
               onDirty();
@@ -287,6 +305,7 @@ export function RequirementsEditor({
       ))}
       <div className="actions">
         <Button
+          htmlType="button"
           disabled={busy || items.length >= 50}
           onClick={() => {
             onDirty();

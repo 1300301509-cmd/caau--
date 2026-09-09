@@ -471,6 +471,28 @@ export const operations = {
             reviewerMemberId: { format: 'uuid', type: 'string' },
             revision: { type: 'integer' },
             state: { enum: ['DRAFT', 'PUBLISHED'], type: 'string' },
+            templateFiles: {
+              items: {
+                properties: {
+                  bytes: { type: 'integer' },
+                  extension: { type: 'string' },
+                  id: { format: 'uuid', type: 'string' },
+                  materialId: { format: 'uuid', type: 'string' },
+                  name: { type: 'string' },
+                  originalNameKnown: { type: 'boolean' },
+                },
+                required: [
+                  'id',
+                  'materialId',
+                  'name',
+                  'extension',
+                  'bytes',
+                  'originalNameKnown',
+                ],
+                type: 'object',
+              },
+              type: 'array',
+            },
             title: { maxLength: 160, type: 'string' },
           },
           required: [
@@ -483,6 +505,7 @@ export const operations = {
             'state',
             'revision',
             'requirements',
+            'templateFiles',
             'requirementVersion',
             'publishedAt',
           ],
@@ -518,6 +541,28 @@ export const operations = {
           reviewerMemberId: { format: 'uuid', type: 'string' },
           revision: { type: 'integer' },
           state: { enum: ['DRAFT', 'PUBLISHED'], type: 'string' },
+          templateFiles: {
+            items: {
+              properties: {
+                bytes: { type: 'integer' },
+                extension: { type: 'string' },
+                id: { format: 'uuid', type: 'string' },
+                materialId: { format: 'uuid', type: 'string' },
+                name: { type: 'string' },
+                originalNameKnown: { type: 'boolean' },
+              },
+              required: [
+                'id',
+                'materialId',
+                'name',
+                'extension',
+                'bytes',
+                'originalNameKnown',
+              ],
+              type: 'object',
+            },
+            type: 'array',
+          },
           title: { maxLength: 160, type: 'string' },
         },
         required: [
@@ -530,6 +575,7 @@ export const operations = {
           'state',
           'revision',
           'requirements',
+          'templateFiles',
           'requirementVersion',
           'publishedAt',
         ],
@@ -579,6 +625,28 @@ export const operations = {
           reviewerMemberId: { format: 'uuid', type: 'string' },
           revision: { type: 'integer' },
           state: { enum: ['DRAFT', 'PUBLISHED'], type: 'string' },
+          templateFiles: {
+            items: {
+              properties: {
+                bytes: { type: 'integer' },
+                extension: { type: 'string' },
+                id: { format: 'uuid', type: 'string' },
+                materialId: { format: 'uuid', type: 'string' },
+                name: { type: 'string' },
+                originalNameKnown: { type: 'boolean' },
+              },
+              required: [
+                'id',
+                'materialId',
+                'name',
+                'extension',
+                'bytes',
+                'originalNameKnown',
+              ],
+              type: 'object',
+            },
+            type: 'array',
+          },
           title: { maxLength: 160, type: 'string' },
         },
         required: [
@@ -591,6 +659,7 @@ export const operations = {
           'state',
           'revision',
           'requirements',
+          'templateFiles',
           'requirementVersion',
           'publishedAt',
         ],
@@ -626,6 +695,28 @@ export const operations = {
           reviewerMemberId: { format: 'uuid', type: 'string' },
           revision: { type: 'integer' },
           state: { enum: ['DRAFT', 'PUBLISHED'], type: 'string' },
+          templateFiles: {
+            items: {
+              properties: {
+                bytes: { type: 'integer' },
+                extension: { type: 'string' },
+                id: { format: 'uuid', type: 'string' },
+                materialId: { format: 'uuid', type: 'string' },
+                name: { type: 'string' },
+                originalNameKnown: { type: 'boolean' },
+              },
+              required: [
+                'id',
+                'materialId',
+                'name',
+                'extension',
+                'bytes',
+                'originalNameKnown',
+              ],
+              type: 'object',
+            },
+            type: 'array',
+          },
           title: { maxLength: 160, type: 'string' },
         },
         required: [
@@ -638,6 +729,7 @@ export const operations = {
           'state',
           'revision',
           'requirements',
+          'templateFiles',
           'requirementVersion',
           'publishedAt',
         ],
@@ -1137,6 +1229,28 @@ export const operations = {
           reviewerMemberId: { format: 'uuid', type: 'string' },
           revision: { type: 'integer' },
           state: { enum: ['DRAFT', 'PUBLISHED'], type: 'string' },
+          templateFiles: {
+            items: {
+              properties: {
+                bytes: { type: 'integer' },
+                extension: { type: 'string' },
+                id: { format: 'uuid', type: 'string' },
+                materialId: { format: 'uuid', type: 'string' },
+                name: { type: 'string' },
+                originalNameKnown: { type: 'boolean' },
+              },
+              required: [
+                'id',
+                'materialId',
+                'name',
+                'extension',
+                'bytes',
+                'originalNameKnown',
+              ],
+              type: 'object',
+            },
+            type: 'array',
+          },
           title: { maxLength: 160, type: 'string' },
         },
         required: [
@@ -1149,6 +1263,7 @@ export const operations = {
           'state',
           'revision',
           'requirements',
+          'templateFiles',
           'requirementVersion',
           'publishedAt',
         ],
@@ -1188,6 +1303,28 @@ export const operations = {
           reviewerMemberId: { format: 'uuid', type: 'string' },
           revision: { type: 'integer' },
           state: { enum: ['DRAFT', 'PUBLISHED'], type: 'string' },
+          templateFiles: {
+            items: {
+              properties: {
+                bytes: { type: 'integer' },
+                extension: { type: 'string' },
+                id: { format: 'uuid', type: 'string' },
+                materialId: { format: 'uuid', type: 'string' },
+                name: { type: 'string' },
+                originalNameKnown: { type: 'boolean' },
+              },
+              required: [
+                'id',
+                'materialId',
+                'name',
+                'extension',
+                'bytes',
+                'originalNameKnown',
+              ],
+              type: 'object',
+            },
+            type: 'array',
+          },
           title: { maxLength: 160, type: 'string' },
         },
         required: [
@@ -1200,6 +1337,7 @@ export const operations = {
           'state',
           'revision',
           'requirements',
+          'templateFiles',
           'requirementVersion',
           'publishedAt',
         ],
@@ -1499,6 +1637,47 @@ export const operations = {
     },
     authenticated: true,
   },
+  createTemplateUploadIntent: {
+    path: '/api/v1/material-tasks/{id}/templates',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          expiresAt: { format: 'date-time', type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+        },
+        required: ['id', 'state', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        expectedBytes: { maximum: 10485760, minimum: 1, type: 'integer' },
+        extension: {
+          enum: ['txt', 'pdf', 'png', 'jpg', 'jpeg'],
+          type: 'string',
+        },
+        materialId: { format: 'uuid', type: 'string' },
+        originalName: { maxLength: 1024, type: 'string' },
+        sha256: { pattern: '^[a-f0-9]{64}$', type: 'string' },
+      },
+      required: [
+        'materialId',
+        'originalName',
+        'extension',
+        'expectedBytes',
+        'sha256',
+      ],
+      type: 'object',
+    },
+    authenticated: true,
+  },
   createUploadIntent: {
     path: '/api/v1/material-tasks/{id}/uploads',
     method: 'POST',
@@ -1561,6 +1740,108 @@ export const operations = {
     responseMediaType: 'application/json',
     body: null,
     authenticated: false,
+  },
+  confirmTemplateUpload: {
+    path: '/api/v1/templates/{id}/confirm',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          expiresAt: { format: 'date-time', type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+        },
+        required: ['id', 'state', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  downloadTemplateContent: {
+    path: '/api/v1/templates/{id}/content',
+    method: 'GET',
+    responses: { '200': { format: 'binary', type: 'string' } },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/octet-stream',
+    body: null,
+    authenticated: true,
+  },
+  uploadTemplateContent: {
+    path: '/api/v1/templates/{id}/content',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: { id: { format: 'uuid', type: 'string' } },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/octet-stream',
+    responseMediaType: 'application/json',
+    body: { format: 'binary', type: 'string' },
+    authenticated: true,
+  },
+  getTemplateInfo: {
+    path: '/api/v1/templates/{id}/info',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: {
+          bytes: { type: 'integer' },
+          extension: { type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          materialId: { format: 'uuid', type: 'string' },
+          name: { type: 'string' },
+          originalNameKnown: { type: 'boolean' },
+        },
+        required: [
+          'id',
+          'materialId',
+          'name',
+          'extension',
+          'bytes',
+          'originalNameKnown',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  removeDraftTemplate: {
+    path: '/api/v1/templates/{id}/remove',
+    method: 'PATCH',
+    responses: {
+      '200': {
+        properties: { id: { format: 'uuid', type: 'string' } },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
   },
   confirmPrivateUpload: {
     path: '/api/v1/uploads/{id}/confirm',

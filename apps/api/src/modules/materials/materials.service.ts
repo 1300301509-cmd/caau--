@@ -3,6 +3,8 @@ import {
   ConflictException,
   Injectable,
 } from '@nestjs/common';
+import type { IncomingMessage } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@caau/database';
 import {
   AuthorizationService,
@@ -17,7 +19,13 @@ import {
   type Actor,
 } from '../authorization/policy.js';
 import { initializeExecution } from '../workflow/execution.js';
-import { FILE_EXTENSIONS, MAX_FILE_BYTES } from '../workflow/private-store.js';
+import {
+  FILE_EXTENSIONS,
+  MAX_FILE_BYTES,
+  PrivateStore,
+  verifyFile,
+} from '../workflow/private-store.js';
+import { safeFilename } from '../workflow/filename.js';
 import { requirements, revision } from './requirements.js';
 
 function uploadCompatible(config: ReturnType<typeof requirements>) {
@@ -41,7 +49,10 @@ const includeTask = {
       reviewer: { include: { member: true } },
     },
   },
-  requirements: true,
+  requirements: {
+    include: { templateAttachments: { include: { template: true } } },
+  },
+  templateUploads: true,
 } satisfies Prisma.MaterialTaskInclude;
 type LoadedTask = Prisma.MaterialTaskGetPayload<{
   include: typeof includeTask;
@@ -100,7 +111,31 @@ function visibleEvents(actor: Actor): Prisma.EventWhereInput {
     };
   return { tasks: { some: visibleTasks(actor) } };
 }
+function templateView(file: {
+  id: string;
+  materialId: string;
+  originalName: string;
+  extension: string;
+  expectedBytes: number;
+}) {
+  return {
+    id: file.id,
+    materialId: file.materialId,
+    name: file.originalName,
+    extension: file.extension,
+    bytes: file.expectedBytes,
+    originalNameKnown: true,
+  };
+}
 function view(t: LoadedTask) {
+  const templateFiles =
+    t.state === 'PUBLISHED'
+      ? (t.requirements[0]?.templateAttachments.map((a) =>
+          templateView(a.template),
+        ) ?? [])
+      : t.templateUploads
+          .filter((f) => f.state === 'CONFIRMED')
+          .map(templateView);
   return {
     id: t.id,
     eventId: t.eventId,
@@ -117,13 +152,23 @@ function view(t: LoadedTask) {
           ? t.configuration
           : null,
     requirementVersion: t.requirements[0]?.version ?? null,
+    templateFiles,
     publishedAt: t.publishedAt?.toISOString() ?? null,
   };
 }
 @Injectable()
 export class MaterialsService {
-  constructor(private readonly auth: AuthorizationService) {}
-  execute(token: string, action: string, resource?: string, input?: unknown) {
+  constructor(
+    private readonly auth: AuthorizationService,
+    private readonly store: PrivateStore,
+  ) {}
+  execute(
+    token: string,
+    action: string,
+    resource?: string,
+    input?: unknown,
+    stream?: IncomingMessage,
+  ) {
     return this.auth.run(
       token,
       action,
@@ -180,6 +225,176 @@ export class MaterialsService {
           });
           if (!event) deny();
           return event;
+        }
+        if (action.startsWith('template.')) {
+          const template =
+            action === 'template.create'
+              ? null
+              : await tx.templateUpload.findUnique({ where: { id: id! } });
+          const taskId = template?.taskId ?? id!;
+          await tx.$queryRaw`SELECT id FROM "MaterialTask" WHERE id=${taskId}::uuid FOR UPDATE`;
+          const task = await tx.materialTask.findUnique({
+            where: { id: taskId },
+            include: includeTask,
+          });
+          if (!task) deny();
+          const manager = () =>
+            this.auth.requireEventManager(tx, actor, task.eventId);
+          const config =
+            task.state === 'DRAFT'
+              ? requirements(task.configuration)
+              : requirements(task.requirements[0]!.configuration);
+          if (action === 'template.create') {
+            await manager();
+            if (task.state !== 'DRAFT')
+              throw new ConflictException(
+                'Published task templates are protected',
+              );
+            const b = bodyObject(input, [
+              'materialId',
+              'originalName',
+              'extension',
+              'expectedBytes',
+              'sha256',
+            ]);
+            const material = config.materials.find(
+              (m) => m.id === uuid(b.materialId),
+            );
+            if (
+              !material ||
+              typeof b.extension !== 'string' ||
+              !FILE_EXTENSIONS.includes(b.extension) ||
+              !Number.isInteger(b.expectedBytes) ||
+              Number(b.expectedBytes) < 1 ||
+              Number(b.expectedBytes) > MAX_FILE_BYTES ||
+              typeof b.sha256 !== 'string' ||
+              !/^[a-f0-9]{64}$/.test(b.sha256)
+            )
+              throw new BadRequestException(
+                'Invalid template metadata or unsupported format',
+              );
+            const existing = await tx.templateUpload.findUnique({
+              where: { taskId_materialId: { taskId, materialId: material.id } },
+            });
+            if (existing)
+              throw new ConflictException(
+                'Remove the current draft template before replacing it',
+              );
+            const now = (
+              await tx.$queryRaw<
+                Array<{ now: Date }>
+              >`SELECT clock_timestamp() AS now`
+            )[0]!.now;
+            return tx.templateUpload.create({
+              data: {
+                taskId,
+                materialId: material.id,
+                actorId: actor.id,
+                storageKey: randomUUID(),
+                originalName: safeFilename(b.originalName, b.extension)!,
+                extension: b.extension,
+                expectedBytes: Number(b.expectedBytes),
+                sha256: b.sha256,
+                expiresAt: new Date(now.getTime() + 30 * 60000),
+              },
+              select: { id: true, state: true, expiresAt: true },
+            });
+          }
+          if (!template) deny();
+          if (
+            action === 'template.content' ||
+            action === 'template.confirm' ||
+            action === 'template.remove'
+          ) {
+            await manager();
+            if (task.state !== 'DRAFT')
+              throw new ConflictException(
+                'Published task templates are protected',
+              );
+            const now = (
+              await tx.$queryRaw<
+                Array<{ now: Date }>
+              >`SELECT clock_timestamp() AS now`
+            )[0]!.now;
+            if (action === 'template.remove') {
+              await tx.templateUpload.delete({ where: { id: template.id } });
+              return { id: template.id };
+            }
+            if (action === 'template.confirm' && template.state === 'CONFIRMED')
+              return {
+                id: template.id,
+                state: template.state,
+                expiresAt: template.expiresAt,
+              };
+            if (template.state !== 'PENDING' || template.expiresAt <= now)
+              throw new ConflictException(
+                'Template upload expired or already confirmed',
+              );
+            if (action === 'template.content') {
+              if (
+                !stream ||
+                stream.headers['content-type']?.split(';')[0] !==
+                  'application/octet-stream'
+              )
+                throw new BadRequestException(
+                  'Binary upload requires application/octet-stream',
+                );
+              await this.store.put(
+                template.storageKey,
+                stream,
+                template.expectedBytes,
+              );
+              return { id: template.id };
+            }
+            let bytes: Buffer;
+            try {
+              bytes = await this.store.read(template.storageKey);
+            } catch {
+              throw new ConflictException('Template upload not completed');
+            }
+            verifyFile(
+              bytes,
+              template.extension,
+              template.expectedBytes,
+              template.sha256,
+            );
+            return tx.templateUpload.update({
+              where: { id: template.id },
+              data: { state: 'CONFIRMED', confirmedAt: now },
+              select: { id: true, state: true, expiresAt: true },
+            });
+          }
+          if (action === 'template.info' || action === 'template.download') {
+            if (task.state !== 'PUBLISHED' || template.state !== 'CONFIRMED')
+              deny();
+            const allowed =
+              hasRole(actor, 'ORGANIZER') &&
+              task.scope.handler.member.userId === actor.id &&
+              task.scope.handler.member.active &&
+              task.scope.handler.member.role === 'ORGANIZER';
+            if (!allowed) deny();
+            const snapshot = await tx.templateAttachment.findFirst({
+              where: { templateId: template.id, requirement: { taskId } },
+              select: { templateId: true },
+            });
+            if (!snapshot) deny();
+            const info = templateView(template);
+            if (action === 'template.info') return info;
+            let bytes: Buffer;
+            try {
+              bytes = await this.store.read(template.storageKey);
+            } catch {
+              throw new ConflictException('Confirmed template is unavailable');
+            }
+            verifyFile(
+              bytes,
+              template.extension,
+              template.expectedBytes,
+              template.sha256,
+            );
+            return { data: bytes, info };
+          }
+          deny();
         }
         if (action === 'materials.list')
           return (
@@ -316,7 +531,26 @@ export class MaterialsService {
             task.scope.reviewer!.memberId,
             task.id,
           );
-          await tx.requirementVersion.create({
+          const templates = await tx.templateUpload.findMany({
+            where: { taskId: task.id },
+          });
+          for (const file of templates) {
+            if (
+              file.state !== 'CONFIRMED' ||
+              !configuration.materials.some((m) => m.id === file.materialId)
+            )
+              throw new ConflictException(
+                'Template must be confirmed before publication',
+              );
+            let bytes: Buffer;
+            try {
+              bytes = await this.store.read(file.storageKey);
+            } catch {
+              throw new ConflictException('Confirmed template is unavailable');
+            }
+            verifyFile(bytes, file.extension, file.expectedBytes, file.sha256);
+          }
+          const snapshot = await tx.requirementVersion.create({
             data: {
               taskId: task.id,
               version: 1,
@@ -324,6 +558,14 @@ export class MaterialsService {
               createdBy: actor.id,
             },
           });
+          if (templates.length)
+            await tx.templateAttachment.createMany({
+              data: templates.map((file) => ({
+                requirementVersionId: snapshot.id,
+                materialId: file.materialId,
+                templateId: file.id,
+              })),
+            });
           await initializeExecution(tx, task.id, configuration);
           return view(
             await tx.materialTask.update({

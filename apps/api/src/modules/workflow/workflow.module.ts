@@ -1,7 +1,8 @@
-import { Module, type DynamicModule } from '@nestjs/common';
+import { Global, Module, type DynamicModule } from '@nestjs/common';
 import { WorkflowController } from './workflow.controller.js';
 import { WorkflowService } from './workflow.service.js';
 import { PrivateStore } from './private-store.js';
+@Global()
 @Module({})
 export class WorkflowModule {
   static register(root?: string): DynamicModule {
@@ -12,6 +13,7 @@ export class WorkflowModule {
         WorkflowService,
         { provide: PrivateStore, useFactory: () => new PrivateStore(root) },
       ],
+      exports: [PrivateStore],
     };
   }
 }

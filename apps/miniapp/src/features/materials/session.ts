@@ -7,7 +7,13 @@ import {
 import { createTaroTransport } from '@caau/api-client/taro';
 export const client = createApiClient(
   __API_BASE_URL__,
-  createTaroTransport((options) => Taro.request<unknown>(options)),
+  createTaroTransport((options) =>
+    Taro.request<unknown>({
+      ...options,
+      responseType:
+        options.responseType === 'arraybuffer' ? 'arraybuffer' : 'text',
+    }),
+  ),
 );
 export const session: {
   token: string;
