@@ -1,6 +1,6 @@
 # 总部—承办方—俱乐部：下一阶段模块与数据归属梳理
 
-> 2026-09-15 更新：以下为历史候选规划，不是当前执行指令。用户已明确外部小程序负责报名、俱乐部可跨承办方参赛、承办方仅看本赛事相关资料，以及未来人工标记缴费状态。原“优先自建 registrations”建议撤回；当前优先改造承办方单份材料审核。以 [最新产品规格](../product/individual-material-review-spec.md) 为准，未被确认的实体、接口及球队审核规则继续待定。
+> 2026-09-15 更新：以下为历史候选规划，不是当前执行指令。用户已明确外部小程序负责报名、俱乐部可跨承办方参赛、承办方仅看本赛事相关资料，以及未来人工标记缴费状态。原“优先自建 registrations”建议撤回。当前正式现状以 [三方产品功能清单](../product/current-function-matrix.md) 为准，赛事创建/承办指定/变更问题见 [赛事管理缺口](../product/event-management-gap-analysis.md)；未被确认的实体、接口及球队审核规则继续待定。
 
 状态：CAAU-010 平台资源暂缺时的只读规划。来源为现有 [模块映射](../architecture/module-map.md)、[原型清单](../product/feature-inventory.md)、[权限候选](../product/role-permissions.md)、[MVP 范围](../product/mvp-scope.md) 和 [首版规格](../product/mvp-material-review-spec.md)。本文件不确认新业务规则，不创建俱乐部表/页面，也不改变总部—承办方权限。
 
