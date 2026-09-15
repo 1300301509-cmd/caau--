@@ -1395,6 +1395,7 @@ export interface components {
       individualChannel: boolean;
       /** Format: uuid */
       organizationId: string;
+      organizationName: string;
       /** Format: date-time */
       publishedAt: string | null;
       requirementVersion: number | null;

@@ -53,6 +53,7 @@ export class TaskViewDto {
   @ApiProperty({ format: 'uuid' }) eventId!: string;
   @ApiProperty() title!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({ maxLength: 120 }) organizationName!: string;
   @ApiProperty({ format: 'uuid' }) handlerMemberId!: string;
   @ApiProperty({ type: String, nullable: true }) reviewerMemberId!:
     | string

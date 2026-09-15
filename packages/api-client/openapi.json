@@ -1353,6 +1353,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "organizationName": {
+            "maxLength": 120,
+            "type": "string"
+          },
           "publishedAt": {
             "format": "date-time",
             "nullable": true,
@@ -1396,6 +1400,7 @@
           "eventId",
           "title",
           "organizationId",
+          "organizationName",
           "handlerMemberId",
           "reviewerMemberId",
           "individualChannel",

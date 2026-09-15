@@ -99,6 +99,10 @@ export async function individualBrowserTest({
     page.on('dialog', (d) => d.accept());
     await page.goto(`http://127.0.0.1:4173${url}`);
     await login(page, key);
+    await expect(
+      page.getByRole('heading', { name: '承办方列表', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Logo 待提供').first()).toBeVisible();
     return page;
   }
   async function createTask(eventId, handler, title) {

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { Alert, Button, Card, Modal, Tag } from 'antd';
 import {
   IndividualWorkspace,
@@ -141,6 +147,48 @@ export function IndividualPage() {
   }, [model]);
   const organizer = s.identity?.roles.includes('ORGANIZER');
   const reviewer = s.identity?.roles.includes('REVIEWER') && !organizer;
+  const [organizationQuery, setOrganizationQuery] = useState('');
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState('');
+  const allOrganizations = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { id: string; name: string; tasks: S['TaskViewDto'][] }
+    >();
+    for (const task of s.tasks) {
+      if (!task.individualChannel || task.state !== 'PUBLISHED') continue;
+      const organization = grouped.get(task.organizationId) ?? {
+        id: task.organizationId,
+        name: task.organizationName,
+        tasks: [],
+      };
+      organization.tasks.push(task);
+      grouped.set(task.organizationId, organization);
+    }
+    return [...grouped.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, 'zh-CN'),
+    );
+  }, [s.tasks]);
+  const organizations = useMemo(
+    () =>
+      allOrganizations.filter((organization) =>
+        organization.name
+          .toLocaleLowerCase('zh-CN')
+          .includes(organizationQuery.trim().toLocaleLowerCase('zh-CN')),
+      ),
+    [allOrganizations, organizationQuery],
+  );
+  const selectedOrganization = allOrganizations.find(
+    (organization) => organization.id === selectedOrganizationId,
+  );
+  useEffect(() => {
+    setOrganizationQuery('');
+    setSelectedOrganizationId('');
+  }, [s.identity?.id]);
+  useEffect(() => {
+    if (selectedOrganizationId || !s.selected) return;
+    const task = s.tasks.find((item) => item.id === s.selected?.taskId);
+    if (task) setSelectedOrganizationId(task.organizationId);
+  }, [s.selected, s.tasks, selectedOrganizationId]);
   const selected = s.selected;
   const editable =
     organizer &&
@@ -241,7 +289,118 @@ export function IndividualPage() {
       )}
       {s.identity && (
         <div key={s.protectionEpoch}>
-          <div className="individual-layout">
+          <Card className="contractor-directory">
+            <div className="contractor-directory-heading">
+              <div>
+                <h2>承办方列表</h2>
+                <p>
+                  当前身份可访问 {allOrganizations.length} 个承办方 ·{' '}
+                  {allOrganizations.reduce(
+                    (total, organization) => total + organization.tasks.length,
+                    0,
+                  )}{' '}
+                  个单份材料任务
+                </p>
+              </div>
+              <label className="contractor-search">
+                <span>搜索承办方</span>
+                <input
+                  type="search"
+                  value={organizationQuery}
+                  placeholder="输入承办方名称"
+                  onChange={(event) =>
+                    setOrganizationQuery(event.currentTarget.value)
+                  }
+                />
+              </label>
+            </div>
+            <div className="contractor-list">
+              {organizations.map((organization) => (
+                <article
+                  className={`contractor-row${
+                    selectedOrganizationId === organization.id
+                      ? ' selected'
+                      : ''
+                  }`}
+                  key={organization.id}
+                >
+                  <div
+                    className="contractor-logo-placeholder"
+                    role="img"
+                    aria-label={`${organization.name} Logo 占位`}
+                  >
+                    {organization.name.trim().slice(0, 1).toUpperCase() || '承'}
+                  </div>
+                  <div className="contractor-summary">
+                    <div className="contractor-name-line">
+                      <strong>{organization.name}</strong>
+                      <Tag>Logo 待提供</Tag>
+                    </div>
+                    <span>
+                      {organization.tasks.length} 个当前有权访问的资料任务
+                    </span>
+                  </div>
+                  <Button
+                    type={
+                      selectedOrganizationId === organization.id
+                        ? 'primary'
+                        : 'link'
+                    }
+                    disabled={s.busy || !!s.pending}
+                    onClick={() =>
+                      leave(() => {
+                        setSelectedOrganizationId(organization.id);
+                        model.query({
+                          taskId: organization.tasks[0]?.id ?? '',
+                          offset: 0,
+                        });
+                        setTimeout(
+                          () =>
+                            document
+                              .getElementById('materials-workspace')
+                              ?.scrollIntoView({ block: 'start' }),
+                          0,
+                        );
+                      })
+                    }
+                  >
+                    {selectedOrganizationId === organization.id
+                      ? '已选择'
+                      : '查看资料'}
+                  </Button>
+                </article>
+              ))}
+              {organizations.length === 0 && (
+                <p className="contractor-empty">
+                  {organizationQuery
+                    ? '没有匹配的承办方。'
+                    : '当前身份暂无可访问的承办方资料任务。'}
+                </p>
+              )}
+            </div>
+          </Card>
+          <div className="selected-contractor-context">
+            <div>
+              <span>当前资料范围</span>
+              <strong>
+                {selectedOrganizationId
+                  ? (selectedOrganization?.name ??
+                    '已选承办方（当前无可访问任务）')
+                  : '全部有权承办方'}
+              </strong>
+            </div>
+            {selectedOrganizationId && (
+              <Button
+                onClick={() => {
+                  setSelectedOrganizationId('');
+                  model.query({ taskId: '', offset: 0 });
+                }}
+              >
+                返回全部承办方
+              </Button>
+            )}
+          </div>
+          <div id="materials-workspace" className="individual-layout">
             <section aria-label={reviewer ? '共享审核队列' : '我的材料列表'}>
               <Card title={reviewer ? '共享审核队列' : '办赛材料列表'}>
                 <div className="workflow-form">
@@ -264,7 +423,11 @@ export function IndividualPage() {
                       <option value="">全部有权任务</option>
                       {s.tasks
                         .filter(
-                          (t) => t.individualChannel && t.state === 'PUBLISHED',
+                          (t) =>
+                            t.individualChannel &&
+                            t.state === 'PUBLISHED' &&
+                            (!selectedOrganizationId ||
+                              t.organizationId === selectedOrganizationId),
                         )
                         .map((t) => (
                           <option key={t.id} value={t.id}>
@@ -352,7 +515,9 @@ export function IndividualPage() {
                     aria-label="材料上一页"
                     disabled={s.offset === 0 || s.busy || !!s.pending}
                     onClick={() =>
-                      model.query({ offset: Math.max(0, s.offset - s.limit) })
+                      model.query({
+                        offset: Math.max(0, s.offset - s.limit),
+                      })
                     }
                   >
                     上一页
@@ -514,7 +679,9 @@ export function IndividualPage() {
                             maxLength={2000}
                             value={s.modification}
                             onChange={(e) =>
-                              model.opinion({ modification: e.target.value })
+                              model.opinion({
+                                modification: e.target.value,
+                              })
                             }
                             disabled={blocked}
                           />
@@ -719,7 +886,8 @@ export function IndividualPage() {
                         time={selected.submission.occurredAt}
                       />
                       <p>
-                        类别：{selected.submission.content.category || '未分类'}
+                        类别：
+                        {selected.submission.content.category || '未分类'}
                       </p>
                       <p className="material-text">
                         {selected.submission.content.text}

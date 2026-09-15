@@ -52,7 +52,7 @@ const includeTask = {
   individualChannel: true,
   scope: {
     include: {
-      handler: { include: { member: true } },
+      handler: { include: { member: { include: { organization: true } } } },
       reviewer: { include: { member: true } },
     },
   },
@@ -157,6 +157,7 @@ function view(t: LoadedTask) {
     state: t.state,
     revision: t.revision,
     organizationId: t.scope.handler.member.organizationId,
+    organizationName: t.scope.handler.member.organization.name,
     handlerMemberId: t.scope.handler.memberId,
     reviewerMemberId: t.scope.reviewer?.memberId ?? null,
     individualChannel: !!t.individualChannel,

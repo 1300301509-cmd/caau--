@@ -576,6 +576,143 @@ summary {
   box-shadow: none;
 }
 
+.contractor-directory .ant-card-body {
+  padding: 0;
+}
+
+.contractor-directory-heading {
+  display: flex;
+  min-height: 94px;
+  padding: 20px 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid #e7eaee;
+}
+
+.contractor-directory-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.contractor-directory-heading p {
+  margin: 6px 0 0;
+  color: var(--shell-muted);
+}
+
+.review-content .workspace .contractor-search {
+  width: min(100%, 320px);
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  color: #475467;
+  font-size: 13px;
+}
+
+.contractor-search span {
+  flex: 0 0 auto;
+}
+
+.contractor-list {
+  padding-inline: 24px;
+}
+
+.contractor-row {
+  display: grid;
+  min-height: 104px;
+  padding: 18px 0;
+  grid-template-columns: 58px minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid #e7eaee;
+}
+
+.contractor-row:last-child {
+  border-bottom: 0;
+}
+
+.contractor-row.selected {
+  background: linear-gradient(90deg, #f2f8ff 0%, transparent 72%);
+}
+
+.contractor-logo-placeholder {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 1px solid #cfe2f8;
+  border-radius: 9px;
+  background: #eaf4ff;
+  color: #1268b3;
+  font-size: 25px;
+  font-weight: 750;
+}
+
+.contractor-summary {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.contractor-name-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.contractor-name-line strong {
+  color: var(--shell-text);
+  font-size: 17px;
+}
+
+.contractor-summary > span {
+  color: var(--shell-muted);
+  font-size: 14px;
+}
+
+.contractor-row > .ant-btn {
+  min-width: 92px;
+}
+
+.contractor-empty {
+  margin: 0;
+  padding: 36px 0;
+  color: var(--shell-muted);
+  text-align: center;
+}
+
+.selected-contractor-context {
+  display: flex;
+  min-height: 58px;
+  padding: 10px 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--shell-border);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.selected-contractor-context > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.selected-contractor-context span {
+  color: var(--shell-muted);
+  font-size: 13px;
+}
+
+.selected-contractor-context strong {
+  font-size: 15px;
+}
+
+#materials-workspace {
+  scroll-margin-top: 20px;
+}
+
 @media (max-width: 767px) {
   .global-header-inner,
   .module-navigation-inner,
@@ -638,6 +775,49 @@ summary {
   .review-content .ant-card-head,
   .review-content .ant-card-body {
     padding-inline: 14px;
+  }
+
+  .contractor-directory-heading {
+    padding: 16px;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .review-content .workspace .contractor-search {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .contractor-list {
+    padding-inline: 16px;
+  }
+
+  .contractor-row {
+    min-height: 128px;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .contractor-logo-placeholder {
+    width: 48px;
+    height: 48px;
+    font-size: 21px;
+  }
+
+  .contractor-row > .ant-btn {
+    width: fit-content;
+    min-width: 0;
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .selected-contractor-context,
+  .selected-contractor-context > div {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
