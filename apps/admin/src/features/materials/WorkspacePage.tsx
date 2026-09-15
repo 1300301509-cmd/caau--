@@ -155,7 +155,11 @@ export function WorkspacePage() {
           <Typography.Title level={1}>赛事与材料任务</Typography.Title>
           <p>创建赛事，明确责任，发布可追溯的材料要求。</p>
         </div>
-        <a href="/">工程连接检查</a>
+        <nav>
+          <a href="/materials">单份材料与共享审核</a>
+          {' · '}
+          <a href="/">工程连接检查</a>
+        </nav>
       </header>
       <Alert
         type="info"

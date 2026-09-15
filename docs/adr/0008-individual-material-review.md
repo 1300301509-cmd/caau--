@@ -1,6 +1,6 @@
 # ADR-0008：单份材料、赛事共享审核与自动同步
 
-状态：A 技术设计已提交 `7a4aa73`；B 后端本地实现与 PostgreSQL/API 验证完成，模型落地说明见第 10 节。C Web、D Taro 待实施；后端通过不代表跨端自动同步或微信验收完成。业务依据为 [CAAU-011 规格](../product/individual-material-review-spec.md) 及 [需求登记](../product/requirements.md) R-014～R-019。
+状态：A 技术设计已提交 `7a4aa73`；B 后端本地实现与 PostgreSQL/API 验证完成，模型落地说明见第 10 节。C Web与真实多会话同步验收已完成，见 [Web手册](../runbooks/individual-material-web.md)；D Taro待实施，Web通过不代表小程序/微信验收完成。业务依据为 [CAAU-011 规格](../product/individual-material-review-spec.md) 及 [需求登记](../product/requirements.md) R-014～R-019。
 
 基线：`40a5c80`，工作区干净，从其创建 `codex/caau-012-individual-materials`，不切回缺成果的 main。只做办赛材料，不扩展报名、支付、俱乐部或外部通知。
 
@@ -106,7 +106,7 @@
 
 ### 6.1 首期选择：短轮询权威快照
 
-Web fetch 与 Taro.request 共用 `@caau/api-client` 无平台状态协调器；首期不新增 WebSocket、SSE 或 Redis 依赖。每个可见页面前台约 **2 秒**一次顺序请求，前一次完成再排下一次，不重叠；写成功后立即触发刷新。轮询是自动近实时拉取，**不是服务端推送或零延迟承诺**。
+Web fetch 与 Taro.request 共用 `@caau/api-client` 无平台状态协调器；首期不新增 WebSocket、SSE 或 Redis 依赖。每个可见页面前台约 **2 秒**一次顺序轮询批次，前一批完成再排下一批，不重叠；写成功后立即触发刷新。轮询是自动近实时拉取，**不是服务端推送或零延迟承诺**。
 
 选择理由：现有 opaque bearer 会话与 Taro JSON 请求直接适配，逐次鉴权、断线恢复及多 API 实例不依赖进程内广播。浏览器 EventSource 的鉴权适配与微信 SSE 解析需额外平台验证；WebSocket 还需握手/重连/代理/跨进程分发和连接撤权。当前规模未给定，先用正确、可验证的拉取实现，不把未验长连接当已支持。
 
@@ -194,7 +194,7 @@ A 阶段当时不执行数据库写入、不构建或运行新业务。各阶段
 - 当前草稿保存在 IndividualMaterial.draft JSON，draftRevision CAS；每次 CREATE/SAVE 的完整内容快照保存在不可变 IndividualAction.detail。等价承担原逻辑 IndividualDraft/IndividualDraftEdit，不另外维护可漂移的草稿表。
 - 当前草稿附件 ID 在受 CAS 保护的 JSON 中，绑定/提交/下载逐份校验真实归属、generation、确认和字节；不可变提交关系为 IndividualAttachment，用 materialId/taskId 复合外键防串材料，不复用旧 FileUpload。
 - IndividualDecision 合并进 IndividualAction：PostgreSQL 部分唯一索引限制每 submissionId 至多一条 APPROVE/RETURN；提交版本、动作、命令、附件关系和经办历史均有 UPDATE/DELETE/TRUNCATE 不可变触发器。延迟约束要求材料当前状态/指针/修订与不可变动作、提交一致，状态不可绕过动作直接推进。
-- 保留旧公开服务边界：materials 创建/配置/发布新任务，authorization 管指派/撤权及其历史，workflow 管任务有效截止/generation/关闭；新模块仅编排同一授权事务。新版经办指派不要求 reviewer，TaskViewDto 明示 reviewerMemberId 可空及 individualChannel，Web 仅做此兼容，不宣称已有新版页面。
+- 保留旧公开服务边界：materials 创建/配置/发布新任务，authorization 管指派/撤权及其历史，workflow 管任务有效截止/generation/关闭；新模块仅编排同一授权事务。新版经办指派不要求 reviewer，TaskViewDto 明示 reviewerMemberId 可空及 individualChannel，B段的Web仅做此兼容；C段另交付新版页面，不回写B段的历史验收结论。
 - EventGrant.active 追加默认 true，审计撤权接口保留 ID。原单人策略和新赛事策略分开，均检查 active；新指派历史引用的 grant 也不能通过旧 DELETE 入口删除。针对同键并发创建的唯一冲突只在该幂等用例内有限重试，不自动换 revision 或扩大其它授权命令重试。
 - snapshot 队列/selected/最新动作在同一短事务读取；历史使用独立分页接口并返回 materialRevision/serverTime，让后续客户端可以丢弃迟到结果。不把全部历史放入每次轮询。审核员默认队列为待审核/审核中，显式 state 可查有权历史状态。
 - DTO 提供实际 actorId、当前姓名与原时间，不返回私有 storageKey。客户端仅增加生成 query 参数编码及已验证契约的 409 详情，不实现轮询/页面状态机。
@@ -202,5 +202,13 @@ A 阶段当时不执行数据库写入、不构建或运行新业务。各阶段
 真实证据：`db:test` 41 项通过、零跳过；包含 005→006 升级后 23 张旧表投影摘要、五 checksum、合成旧 V1 RETURN/V2 PASS 和模板/附件字节保留，重启后新旧 HTTP 读取；新版五态/甲乙接续、并发相反结论/保存/开始及同键创建/提交、截止/延期/交接/关闭、撤权/停用/注销/过期/机构冲突和审计失败回滚。当前锁定 Prisma7 的 Serializable/P2034 有限重试做法已通过 Context7 `/prisma/web` v7 事务文档核对；无依赖升级。
 
 本机 dev 在 test 通过后执行 5→6 deploy/status；23 张旧表、6 个私有对象、旧五 checksum 摘要一致，未启用存量新通道、未 reset/删卷。命令/接口和限制见 [单份材料后端手册](../runbooks/individual-materials.md)，详细检查与失败修复见 roadmap。
+
+## 11. C Web 实现细化
+
+协调器放 `@caau/api-client`，不依赖React/DOM/Taro；Web只适配文件读取/下载、visibility/online与表单。读取批次先显示逐对象已鉴权的snapshot，再并行读取身份/任务目录，历史按revision补读；避免串行目录/历史阻塞状态可见。完整批次核对成功才标为在线。写成功递增epoch，丢弃较早快照；会话、选择、生命周期变化亦隔离迟到读/文件结果。403及角色/草稿权限降级清理缓冲、历史、意见与未确认命令，再重查剩余范围。
+
+审核确认固定revision/submissionId；未知结果保留原幂等键/完整载荷，只有显式重试。CAS冲突保留本地输入并要求人工核对，不随轮询替用户保存。正文、分类、附件和CREATE/SAVE快照及不可变提交历史按原权限显示；新页的旧整包入口没有写控件。
+
+真实独立Chromium/PostgreSQL验收、失败修复、样本口径和截图以 [Web手册](../runbooks/individual-material-web.md) 为准。短样本本地p95并非生产SLA，长期轮询审计容量/规模压测、Taro与微信平台仍未验。
 
 B 尚不证明：前台 2 秒轮询、真实多浏览器可见延迟、断线/乱序恢复/输入保护、微信开发者工具/真机或生产负载。下一阶段须按第 6/9 节实现并实测，不能只凭 snapshot200 或定时器配置宣布完成。

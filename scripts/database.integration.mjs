@@ -21,7 +21,7 @@ import {
 
 test(
   'authorization foundation on isolated PostgreSQL',
-  { timeout: 120000 },
+  { timeout: 240000 }, // Includes separate old and new multi-session browser suites.
   authorizationIntegration,
 );
 

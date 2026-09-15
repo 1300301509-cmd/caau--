@@ -6,6 +6,11 @@ export {
   workflowError,
 } from './material-editor.js';
 export { sha256, uuidFromBytes } from './sha256.js';
+export {
+  IndividualWorkspace,
+  type IndividualWorkspaceState,
+  type IndividualSyncStatus,
+} from './individual-workspace.js';
 import type { operations } from './generated/schema.js';
 export type { paths, components, operations } from './generated/schema.js';
 

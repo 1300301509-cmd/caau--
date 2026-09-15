@@ -18,6 +18,7 @@ import {
 } from './database.mjs';
 
 import { individualIntegration } from './individual.integration.mjs';
+import { individualBrowserTest } from './individual-browser.integration.mjs';
 export async function authorizationIntegration(t) {
   assert.equal(process.env.CAAU_DATABASE_INTEGRATION, 'test');
   assertLocalDatabaseUrls(process.env, 'test');
@@ -780,6 +781,19 @@ export async function authorizationIntegration(t) {
       orgA,
       orgB,
     });
+    await t.test(
+      'CAAU-012 NEW multi-session browser: independent review, synchronization latency, conflict, reconnect and protected cleanup',
+      () =>
+        individualBrowserTest({
+          config,
+          tokens,
+          sql,
+          users,
+          members,
+          orgA,
+          orgB,
+        }),
+    );
   } finally {
     await app?.close();
     await rm(path.join(root, '.local/files', name), {

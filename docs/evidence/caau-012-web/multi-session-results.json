@@ -1,0 +1,89 @@
+{
+  "suite": "CAAU-012 C real multi-context Chromium / PostgreSQL",
+  "samples": [
+    {
+      "action": "单份提交",
+      "observer": "reviewer-a",
+      "ms": 731
+    },
+    {
+      "action": "单份提交",
+      "observer": "reviewer-b",
+      "ms": 763
+    },
+    {
+      "action": "开始审核",
+      "observer": "organizer",
+      "ms": 949
+    },
+    {
+      "action": "开始审核",
+      "observer": "reviewer-b",
+      "ms": 2026
+    },
+    {
+      "action": "退回修改",
+      "observer": "organizer",
+      "ms": 879
+    },
+    {
+      "action": "退回修改",
+      "observer": "reviewer-a",
+      "ms": 2093
+    },
+    {
+      "action": "单份提交",
+      "observer": "reviewer-a",
+      "ms": 1821
+    },
+    {
+      "action": "单份提交",
+      "observer": "reviewer-b",
+      "ms": 1884
+    },
+    {
+      "action": "开始审核",
+      "observer": "organizer",
+      "ms": 113
+    },
+    {
+      "action": "开始审核",
+      "observer": "reviewer-b",
+      "ms": 2006
+    },
+    {
+      "action": "审核通过",
+      "observer": "organizer",
+      "ms": 1849
+    },
+    {
+      "action": "审核通过",
+      "observer": "reviewer-a",
+      "ms": 1881
+    },
+    {
+      "action": "单份提交",
+      "observer": "reviewer-a",
+      "ms": 1202
+    },
+    {
+      "action": "单份提交",
+      "observer": "reviewer-b",
+      "ms": 1538
+    },
+    {
+      "action": "开始审核",
+      "observer": "reviewer-b",
+      "ms": 1979
+    }
+  ],
+  "measurement": "Successful write HTTP response finished to other independent browser DOM, observed on animation frames (~17ms plus CDP overhead); not exact database commit latency",
+  "count": 15,
+  "p50": 1821,
+  "p95": 2093,
+  "max": 2093,
+  "reconnectMs": 108,
+  "browser": "145.0.7632.6",
+  "newBrowserAcceptance": true,
+  "oldRegressionSeparate": true
+}

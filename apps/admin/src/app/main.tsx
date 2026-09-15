@@ -3,6 +3,7 @@ import { ConfigProvider } from 'antd';
 import { createRoot } from 'react-dom/client';
 import { HealthPage } from '../features/health/HealthPage';
 import { WorkspacePage } from '../features/materials/WorkspacePage';
+import { IndividualPage } from '../features/individuals/IndividualPage';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -24,12 +25,16 @@ createRoot(root).render(
         },
       }}
     >
-      {location.pathname === '/workspace' ? (
+      {location.pathname === '/materials' ? (
+        <IndividualPage />
+      ) : location.pathname === '/workspace' ? (
         <WorkspacePage />
       ) : (
         <>
           <nav className="home-nav">
             <a href="/workspace">进入赛事与材料任务工作台</a>
+            {' · '}
+            <a href="/materials">进入单份材料与共享审核</a>
           </nav>
           <HealthPage />
         </>

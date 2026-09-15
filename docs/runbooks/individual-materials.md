@@ -59,7 +59,7 @@ content 为 `{title,category,text,fileIds}`：title 必填，category 可空，t
 
 接口逐次鉴权、no-store，没有事件游标、WebSocket/SSE 或进程内广播依赖。提交/动作与审计同事务提交后才能被下一次快照看到，重启也可读。`@caau/api-client` 已支持生成契约的 query 编码。
 
-**本阶段没有实现 2 秒定时器或前后台生命周期。** C/D 阶段还必须实现 request/session epoch、取消与迟到响应丢弃、编辑缓冲分离、断线退避/连接状态、回前台重查及撤权清理。不得仅用此接口存在或返回200声称已自动同步；p50/p95/max 延迟、断线恢复和未保存输入保护都要真实多会话页面实测。
+**B交付时仅有快照接口；C现已完成Web协调器与真实多会话验收。** request/session epoch、迟到丢弃、独立编辑缓冲、断线退避、前后台/恢复重查、撤权清理和实际延迟见 [Web演示与验收](individual-material-web.md)。不得用接口200代替同步验收；D Taro页面及微信平台仍待验证。
 
 ## 实际验收与未验边界
 
