@@ -2433,6 +2433,86 @@ export const operations = {
     body: null,
     authenticated: true,
   },
+  listLocalTestIdentities: {
+    path: '/api/v1/local-test-identities',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            displayName: { type: 'string' },
+            key: {
+              enum: [
+                'event-manager',
+                'reviewer-a',
+                'reviewer-b',
+                'organizer-a',
+                'organizer-b',
+              ],
+              type: 'string',
+            },
+            organizationName: { type: 'string' },
+            role: {
+              enum: ['EVENT_MANAGER', 'ORGANIZER', 'REVIEWER', 'SYSTEM_ADMIN'],
+              type: 'string',
+            },
+          },
+          required: ['key', 'displayName', 'organizationName', 'role'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: false,
+  },
+  createLocalTestSession: {
+    path: '/api/v1/local-test-identities/sessions',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          expiresAt: { format: 'date-time', type: 'string' },
+          identity: {
+            enum: [
+              'event-manager',
+              'reviewer-a',
+              'reviewer-b',
+              'organizer-a',
+              'organizer-b',
+            ],
+            type: 'string',
+          },
+          token: { type: 'string' },
+        },
+        required: ['identity', 'token', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        identity: {
+          enum: [
+            'event-manager',
+            'reviewer-a',
+            'reviewer-b',
+            'organizer-a',
+            'organizer-b',
+          ],
+          type: 'string',
+        },
+      },
+      required: ['identity'],
+      type: 'object',
+    },
+    authenticated: false,
+  },
   listMaterialTasks: {
     path: '/api/v1/material-tasks',
     method: 'GET',

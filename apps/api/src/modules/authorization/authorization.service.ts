@@ -1,14 +1,21 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   Injectable,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHash, randomUUID } from 'node:crypto';
-import { createAuthorizationDatabase, type Prisma } from '@caau/database';
-import { roles, taskActions } from './authorization.dto.js';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import {
+  createAuthorizationDatabase,
+  localTestIdentities,
+  localTestOrganizations,
+  prepareLocalTestIdentities,
+  type Prisma,
+} from '@caau/database';
+import { localIdentityKeys, roles, taskActions } from './authorization.dto.js';
 import {
   deny,
   eventManager,
@@ -97,6 +104,80 @@ export class AuthorizationService {
     if (!this.config.localIdentity || !this.database)
       throw new ServiceUnavailableException('Local identity unavailable');
     return this.database.client;
+  }
+  localIdentityOptions() {
+    this.db();
+    return localTestIdentities.map((identity) => ({
+      key: identity.key,
+      displayName: identity.displayName,
+      organizationName:
+        localTestOrganizations.find(
+          (organization) => organization.id === identity.organizationId,
+        )?.name ?? '',
+      role: identity.role,
+    }));
+  }
+  async issueLocalTestSession(input: unknown) {
+    const db = this.db();
+    const body = bodyObject(input, ['identity']);
+    if (
+      typeof body.identity !== 'string' ||
+      !localIdentityKeys.includes(
+        body.identity as (typeof localIdentityKeys)[number],
+      )
+    )
+      throw new BadRequestException('Invalid fixed identity');
+    const identity = localTestIdentities.find(
+      (candidate) => candidate.key === body.identity,
+    )!;
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    try {
+      await db.$transaction(
+        async (tx) => {
+          await prepareLocalTestIdentities(tx);
+          const user = await tx.internalUser.findUnique({
+            where: { id: identity.userId },
+            include: { memberships: true },
+          });
+          if (
+            !user?.active ||
+            !user.memberships.some(
+              (member) =>
+                member.active &&
+                member.organizationId === identity.organizationId &&
+                member.role === identity.role,
+            )
+          )
+            throw new ForbiddenException('Fixed local identity is inactive');
+          await tx.session.create({
+            data: {
+              userId: identity.userId,
+              tokenHash: hashToken(token),
+              expiresAt,
+            },
+          });
+          await tx.auditRecord.create({
+            data: {
+              actorId: identity.userId,
+              action: 'session.local.issue',
+              resourceId: identity.userId,
+              outcome: 'ALLOWED',
+              requestId: randomUUID(),
+            },
+          });
+        },
+        { isolationLevel: 'Serializable' },
+      );
+      return {
+        identity: identity.key,
+        token,
+        expiresAt: expiresAt.toISOString(),
+      };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new ServiceUnavailableException('Local identity unavailable');
+    }
   }
   private async actor(tx: Prisma.TransactionClient, token: string) {
     const session = await tx.session.findUnique({

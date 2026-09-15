@@ -44,7 +44,7 @@ const ops: Record<string, string> = {
   returnIndividualMaterial: '退回修改',
 };
 const statuses: Record<IndividualSyncStatus, string> = {
-  idle: '等待导入身份',
+  idle: '等待选择身份',
   syncing: '正在核对权限和状态',
   online: '自动同步已连接',
   offline: '同步中断',
@@ -53,6 +53,7 @@ const statuses: Record<IndividualSyncStatus, string> = {
 };
 const when = (t: string) =>
   new Date(t).toLocaleString('zh-CN', { hour12: false });
+const tabSessionKey = 'caau.local-test-session';
 function Person({
   actorId,
   actorName,
@@ -121,6 +122,56 @@ export function IndividualPage() {
     [model],
   );
   const s = useSyncExternalStore(subscribe, () => model.value);
+  const [identityChoices, setIdentityChoices] = useState<
+    S['LocalIdentityChoiceDto'][]
+  >([]);
+  const [identityKey, setIdentityKey] = useState('');
+  const [entryState, setEntryState] = useState<
+    'loading' | 'enabled' | 'disabled' | 'unavailable'
+  >('loading');
+  const [entryBusy, setEntryBusy] = useState(false);
+  const [entryError, setEntryError] = useState('');
+  const openDeepLink = useCallback(() => {
+    const q = new URLSearchParams(location.search);
+    if (model.value.identity && q.has('material'))
+      model.select(q.get('material')!);
+    if (model.value.identity && q.has('legacy'))
+      model.openLegacy(q.get('legacy')!);
+  }, [model]);
+  useEffect(() => {
+    let active = true;
+    void client
+      .request('listLocalTestIdentities')
+      .then(async (choices) => {
+        if (!active) return;
+        setIdentityChoices(choices);
+        setIdentityKey(choices[0]?.key ?? '');
+        setEntryState('enabled');
+        const token = sessionStorage.getItem(tabSessionKey);
+        if (!token) return;
+        setEntryBusy(true);
+        await model.login(token);
+        if (!active) return;
+        if (model.value.identity) openDeepLink();
+        else sessionStorage.removeItem(tabSessionKey);
+        setEntryBusy(false);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        sessionStorage.removeItem(tabSessionKey);
+        setEntryState(
+          error instanceof Error && 'status' in error && error.status === 503
+            ? 'disabled'
+            : 'unavailable',
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [model, openDeepLink]);
+  useEffect(() => {
+    if (s.status === 'unauthorized') sessionStorage.removeItem(tabSessionKey);
+  }, [s.status]);
   useEffect(() => {
     const visibility = () =>
       model.setForeground(document.visibilityState === 'visible');
@@ -210,64 +261,115 @@ export function IndividualPage() {
     m.draft?.title ?? m.submission?.content.title ?? '材料';
   return (
     <div className="workspace individual-workspace">
-      <Card
-        title={
-          s.identity
-            ? `${s.identity.displayName} · ${organizer ? '承办方' : reviewer ? '总部审核员' : '总部管理'}`
-            : '导入本地测试身份'
-        }
-      >
-        <p className="muted">
-          非微信登录。会话仅保存在本页内存；请在独立浏览器会话分别导入承办方与审核员身份。
-        </p>
-        <div className="actions">
-          <label>
-            本地会话 JSON 文件
-            <input
-              type="file"
-              accept=".json,application/json"
-              disabled={s.busy}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = '';
-                if (!file) return;
+      {entryState === 'loading' && (
+        <Card title="本地测试身份">
+          <p role="status">正在确认本地测试模式…</p>
+        </Card>
+      )}
+      {entryState === 'disabled' && (
+        <Alert
+          type="info"
+          showIcon
+          title="本地测试身份入口未启用"
+          description="仅当后端以本地测试身份模式运行时显示身份选择入口。"
+        />
+      )}
+      {entryState === 'unavailable' && (
+        <Alert
+          type="warning"
+          showIcon
+          title="暂时无法确认本地测试模式"
+          description="请确认本地 API 正在运行后刷新页面重试。"
+        />
+      )}
+      {entryState === 'enabled' && (
+        <Card
+          className="local-identity-card"
+          title={
+            s.identity
+              ? `${s.identity.displayName} · ${organizer ? '承办方' : reviewer ? '总部审核员' : '总部管理'}`
+              : '本地测试身份'
+          }
+          extra={<Tag color="gold">仅限本地测试</Tag>}
+        >
+          <p className="muted">
+            选择后由后端签发并验证测试会话。身份只保存在当前标签页，刷新可恢复；不同标签页互不覆盖。
+          </p>
+          <div className="local-identity-entry">
+            <label>
+              选择测试身份
+              <select
+                value={identityKey}
+                disabled={entryBusy || s.busy}
+                onChange={(event) => setIdentityKey(event.currentTarget.value)}
+              >
+                {identityChoices.map((choice) => (
+                  <option key={choice.key} value={choice.key}>
+                    {choice.displayName} · {choice.organizationName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              type="primary"
+              data-testid="local-identity-enter"
+              loading={entryBusy}
+              disabled={!identityKey || s.busy}
+              onClick={() => {
                 if (
                   (s.dirty || s.pending) &&
-                  !window.confirm('重新导入身份将清除当前输入，是否继续？')
+                  !window.confirm(
+                    '切换身份将清除当前页面数据和未保存输入，是否继续？',
+                  )
                 )
                   return;
-                void (async () => {
-                  try {
-                    if (file.size > 4096) throw new Error('Invalid file');
-                    const data: unknown = JSON.parse(await file.text());
-                    if (
-                      !data ||
-                      typeof data !== 'object' ||
-                      !('token' in data) ||
-                      typeof data.token !== 'string' ||
-                      !/^[A-Za-z0-9_-]{43}$/.test(data.token)
-                    )
-                      throw new Error('Invalid session');
-                    await model.login(data.token);
-                    const q = new URLSearchParams(location.search);
-                    if (model.value.identity && q.has('material'))
-                      model.select(q.get('material')!);
-                    if (model.value.identity && q.has('legacy'))
-                      model.openLegacy(q.get('legacy')!);
-                  } catch {
-                    window.alert('会话文件无效，请选择本地工具生成的 JSON。');
-                  }
-                })();
+                setEntryBusy(true);
+                setEntryError('');
+                sessionStorage.removeItem(tabSessionKey);
+                model.logout();
+                void client
+                  .request('createLocalTestSession', {
+                    body: {
+                      identity:
+                        identityKey as S['LocalSessionRequestDto']['identity'],
+                    },
+                  })
+                  .then(async (session) => {
+                    await model.login(session.token);
+                    if (!model.value.identity)
+                      throw new Error('Session validation failed');
+                    sessionStorage.setItem(tabSessionKey, session.token);
+                    openDeepLink();
+                  })
+                  .catch(() => {
+                    sessionStorage.removeItem(tabSessionKey);
+                    setEntryError(
+                      '无法进入该测试身份。请确认本地 API、数据库和身份状态后重试。',
+                    );
+                  })
+                  .finally(() => setEntryBusy(false));
               }}
-            />
-          </label>
-          {s.identity && (
-            <Button onClick={() => leave(() => model.logout())}>
-              退出并清除内容
+            >
+              进入
             </Button>
+            {s.identity && (
+              <Button
+                onClick={() =>
+                  leave(() => {
+                    sessionStorage.removeItem(tabSessionKey);
+                    model.logout();
+                  })
+                }
+              >
+                退出并清除内容
+              </Button>
+            )}
+          </div>
+          {entryError && (
+            <Alert type="error" showIcon title={entryError} role="alert" />
           )}
-        </div>
-      </Card>
+        </Card>
+      )}
       <div
         className={`sync-status ${s.status === 'offline' ? 'sync-error' : ''}`}
         data-testid="sync-status"

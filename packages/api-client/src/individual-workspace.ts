@@ -148,8 +148,8 @@ export class IndividualWorkspace {
           status: 'unauthorized',
           notice:
             error instanceof ApiError
-              ? '会话无效，请重新导入。'
-              : '导入失败，请检查网络或会话文件。',
+              ? '会话无效或已过期，请重新进入本地测试身份。'
+              : '进入失败，请检查本地 API 和网络。',
           error: true,
         });
     }
@@ -204,7 +204,7 @@ export class IndividualWorkspace {
         ...initial(),
         protectionEpoch: this.value.protectionEpoch + 1,
         status: 'unauthorized',
-        notice: '会话已失效，受保护内容已清除，请重新导入。',
+        notice: '会话已失效或过期，受保护内容已清除，请重新进入本地测试身份。',
         error: true,
       };
       this.patch({});

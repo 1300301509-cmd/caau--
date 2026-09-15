@@ -939,6 +939,71 @@
         "required": ["materialId", "reason", "instruction"],
         "type": "object"
       },
+      "LocalIdentityChoiceDto": {
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "key": {
+            "enum": [
+              "event-manager",
+              "reviewer-a",
+              "reviewer-b",
+              "organizer-a",
+              "organizer-b"
+            ],
+            "type": "string"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "role": {
+            "enum": ["EVENT_MANAGER", "ORGANIZER", "REVIEWER", "SYSTEM_ADMIN"],
+            "type": "string"
+          }
+        },
+        "required": ["key", "displayName", "organizationName", "role"],
+        "type": "object"
+      },
+      "LocalSessionDto": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "identity": {
+            "enum": [
+              "event-manager",
+              "reviewer-a",
+              "reviewer-b",
+              "organizer-a",
+              "organizer-b"
+            ],
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": ["identity", "token", "expiresAt"],
+        "type": "object"
+      },
+      "LocalSessionRequestDto": {
+        "properties": {
+          "identity": {
+            "enum": [
+              "event-manager",
+              "reviewer-a",
+              "reviewer-b",
+              "organizer-a",
+              "organizer-b"
+            ],
+            "type": "string"
+          }
+        },
+        "required": ["identity"],
+        "type": "object"
+      },
       "MaterialRequirementDto": {
         "properties": {
           "acceptanceStandard": {
@@ -3556,6 +3621,77 @@
         ],
         "summary": "",
         "tags": ["Individual"]
+      }
+    },
+    "/api/v1/local-test-identities": {
+      "get": {
+        "operationId": "listLocalTestIdentities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LocalIdentityChoiceDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid fixed identity"
+          },
+          "403": {
+            "description": "Fixed identity is inactive"
+          },
+          "503": {
+            "description": "Local test mode unavailable"
+          }
+        },
+        "summary": "",
+        "tags": ["LocalTestIdentity"]
+      }
+    },
+    "/api/v1/local-test-identities/sessions": {
+      "post": {
+        "operationId": "createLocalTestSession",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalSessionRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalSessionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid fixed identity"
+          },
+          "403": {
+            "description": "Fixed identity is inactive"
+          },
+          "503": {
+            "description": "Local test mode unavailable"
+          }
+        },
+        "summary": "",
+        "tags": ["LocalTestIdentity"]
       }
     },
     "/api/v1/material-tasks": {

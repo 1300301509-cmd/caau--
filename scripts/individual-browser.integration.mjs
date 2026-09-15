@@ -78,11 +78,14 @@ export async function individualBrowserTest({
     return data;
   }
   async function login(page, key) {
-    await page.getByLabel('本地会话 JSON 文件').setInputFiles({
-      name: `synthetic-${key}.json`,
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify({ token: tokens[key] })),
+    await expect(page.getByLabel('选择测试身份')).toBeVisible({
+      timeout: 15000,
     });
+    await page.evaluate(
+      ([storageKey, token]) => sessionStorage.setItem(storageKey, token),
+      ['caau.local-test-session', tokens[key]],
+    );
+    await page.reload();
     await expect(page.getByTestId('sync-status')).toContainText(
       '自动同步已连接',
       { timeout: 15000 },
@@ -234,6 +237,94 @@ export async function individualBrowserTest({
     taskId = await createTask(eventId, 'a', 'CAAU012 单份材料浏览器任务');
     await createTask(otherEvent, 'b', 'CAAU012 其他机构任务');
     browser = await chromium.launch();
+
+    // Fixed local identities use real backend sessions while remaining isolated per tab.
+    const identityContext = await browser.newContext({
+      viewport: { width: 1100, height: 800 },
+      reducedMotion: 'reduce',
+    });
+    const managerTab = await identityContext.newPage();
+    const organizerTab = await identityContext.newPage();
+    for (const page of [managerTab, organizerTab])
+      await page.goto('http://127.0.0.1:4173/materials');
+    await managerTab.getByLabel('选择测试身份').selectOption('reviewer-a');
+    await managerTab.getByTestId('local-identity-enter').click();
+    await organizerTab.getByLabel('选择测试身份').selectOption('organizer-b');
+    await organizerTab.getByTestId('local-identity-enter').click();
+    await expect(
+      managerTab.getByText('总部审核员甲 · 总部审核员', { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
+    await expect(
+      organizerTab.getByText('承办方 B 经办人 · 承办方', { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
+    await managerTab.reload();
+    await expect(
+      managerTab.getByText('总部审核员甲 · 总部审核员', { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
+    await managerTab.getByLabel('选择测试身份').selectOption('event-manager');
+    await managerTab.getByTestId('local-identity-enter').click();
+    await expect(
+      managerTab.getByText('总部赛事管理员 · 总部管理', { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
+    await expect(
+      organizerTab.getByText('承办方 B 经办人 · 承办方', { exact: true }),
+    ).toBeVisible();
+    const expiringToken = await organizerTab.evaluate(() =>
+      sessionStorage.getItem('caau.local-test-session'),
+    );
+    assert.ok(expiringToken);
+    await sql.query(
+      'UPDATE "Session" SET "expiresAt"=now()-interval \'1 second\' WHERE "tokenHash"=$1',
+      [createHash('sha256').update(expiringToken).digest('hex')],
+    );
+    await expect(organizerTab.getByTestId('sync-status')).toContainText(
+      '会话已失效',
+      { timeout: 15000 },
+    );
+    assert.equal(
+      await organizerTab.evaluate(() =>
+        sessionStorage.getItem('caau.local-test-session'),
+      ),
+      null,
+    );
+    await organizerTab.getByTestId('local-identity-enter').click();
+    await expect(
+      organizerTab.getByText('承办方 B 经办人 · 承办方', { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
+    await identityContext.close();
+    assert.equal(
+      (
+        await sql.query(
+          `SELECT count(*)::int n FROM "InternalUser" WHERE id::text LIKE '00000000-0000-4000-8000-00000000020_'`,
+        )
+      ).rows[0].n,
+      5,
+    );
+    assert.equal(
+      (
+        await sql.query(
+          `SELECT count(*)::int n FROM "Organization" WHERE id::text LIKE '00000000-0000-4000-8000-00000000010_'`,
+        )
+      ).rows[0].n,
+      3,
+    );
+    assert.equal(
+      (
+        await sql.query(
+          `SELECT count(*)::int n FROM "OrganizationMember" WHERE "userId"::text LIKE '00000000-0000-4000-8000-00000000020_'`,
+        )
+      ).rows[0].n,
+      5,
+    );
+    assert.equal(
+      (
+        await sql.query(
+          `SELECT count(*)::int n FROM "Event" WHERE "createdBy"::text LIKE '00000000-0000-4000-8000-00000000020_'`,
+        )
+      ).rows[0].n,
+      0,
+    );
+
     org = await newPage('a');
     a = await newPage('reviewer');
     b = await newPage('reviewer2');
@@ -575,7 +666,7 @@ export async function individualBrowserTest({
     await expect(late.getByLabel('材料说明', { exact: true })).toHaveCount(0);
     release();
     await late.waitForTimeout(2300);
-    await expect(late.getByTestId('sync-status')).toContainText('等待导入身份');
+    await expect(late.getByTestId('sync-status')).toContainText('等待选择身份');
     await expect(late.getByTestId('material-state')).toHaveCount(0);
     await late.unroute('**/api/v1/individual-materials/snapshot*');
     await issue('a');

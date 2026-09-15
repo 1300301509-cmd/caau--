@@ -44,7 +44,7 @@ corepack pnpm dev:admin     # http://127.0.0.1:5173
 corepack pnpm dev:miniapp   # watch 编译，产物 apps/miniapp/dist
 ```
 
-Web 当前以 `/materials`（根地址同页）作为唯一可见业务模块，提供单份办理、共享审核及旧整包只读历史，并使用 Tabler 风格的紧凑后台壳层；原 `/workspace` 不进入导航，仅暂留自动化回归兼容。需按操作文档准备数据库，以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 开启本地身份，再导入会话；`corepack pnpm materials:demo` 可追加明确标识的合成演示任务。工程连接辅助页位于 `/system/health`。小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见 [Taro手册](docs/runbooks/individual-material-miniapp.md)；当前仍是 `touristappid` 和回环HTTP，仅本地模拟器主流程部分通过，附件、正式平台和真机验收未完成。API 开发命令先编译再启动，不自动热重载。
+Web 当前以 `/materials`（根地址同页）作为唯一可见业务模块，提供单份办理、共享审核及旧整包只读历史，并使用 Tabler 风格的紧凑后台壳层；原 `/workspace` 不进入导航，仅暂留自动化回归兼容。需按操作文档准备数据库，以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 开启本地身份；页面可直接选择五个固定测试身份，后端签发真实测试会话，当前标签页刷新恢复且标签页间互不覆盖。身份准备不创建赛事或材料；`corepack pnpm materials:demo` 才会追加明确标识的合成演示任务。工程连接辅助页位于 `/system/health`。小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见 [Taro手册](docs/runbooks/individual-material-miniapp.md)；当前仍是 `touristappid` 和回环HTTP，仅本地模拟器主流程部分通过，附件、正式平台和真机验收未完成。API 开发命令先编译再启动，不自动热重载。
 
 ## 检查与构建
 

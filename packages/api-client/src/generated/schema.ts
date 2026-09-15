@@ -530,6 +530,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/local-test-identities': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listLocalTestIdentities'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/local-test-identities/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['createLocalTestSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/material-tasks': {
     parameters: {
       query?: never;
@@ -1254,6 +1286,40 @@ export interface components {
       /** Format: uuid */
       materialId: string;
       reason: string;
+    };
+    LocalIdentityChoiceDto: {
+      displayName: string;
+      /** @enum {string} */
+      key:
+        | 'event-manager'
+        | 'reviewer-a'
+        | 'reviewer-b'
+        | 'organizer-a'
+        | 'organizer-b';
+      organizationName: string;
+      /** @enum {string} */
+      role: 'EVENT_MANAGER' | 'ORGANIZER' | 'REVIEWER' | 'SYSTEM_ADMIN';
+    };
+    LocalSessionDto: {
+      /** Format: date-time */
+      expiresAt: string;
+      /** @enum {string} */
+      identity:
+        | 'event-manager'
+        | 'reviewer-a'
+        | 'reviewer-b'
+        | 'organizer-a'
+        | 'organizer-b';
+      token: string;
+    };
+    LocalSessionRequestDto: {
+      /** @enum {string} */
+      identity:
+        | 'event-manager'
+        | 'reviewer-a'
+        | 'reviewer-b'
+        | 'organizer-a'
+        | 'organizer-b';
     };
     MaterialRequirementDto: {
       acceptanceStandard: string;
@@ -3488,6 +3554,90 @@ export interface operations {
         };
       };
       /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  listLocalTestIdentities: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LocalIdentityChoiceDto'][];
+        };
+      };
+      /** @description Invalid fixed identity */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Fixed identity is inactive */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Local test mode unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  createLocalTestSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LocalSessionRequestDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LocalSessionDto'];
+        };
+      };
+      /** @description Invalid fixed identity */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Fixed identity is inactive */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Local test mode unavailable */
       503: {
         headers: {
           [name: string]: unknown;

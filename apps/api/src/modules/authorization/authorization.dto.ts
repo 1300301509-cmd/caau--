@@ -15,6 +15,30 @@ export const taskActions = [
 export class IdDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
 }
+export const localIdentityKeys = [
+  'event-manager',
+  'reviewer-a',
+  'reviewer-b',
+  'organizer-a',
+  'organizer-b',
+] as const;
+export class LocalIdentityChoiceDto {
+  @ApiProperty({ enum: localIdentityKeys })
+  key!: (typeof localIdentityKeys)[number];
+  @ApiProperty() displayName!: string;
+  @ApiProperty() organizationName!: string;
+  @ApiProperty({ enum: roles }) role!: (typeof roles)[number];
+}
+export class LocalSessionRequestDto {
+  @ApiProperty({ enum: localIdentityKeys })
+  identity!: (typeof localIdentityKeys)[number];
+}
+export class LocalSessionDto {
+  @ApiProperty({ enum: localIdentityKeys })
+  identity!: (typeof localIdentityKeys)[number];
+  @ApiProperty() token!: string;
+  @ApiProperty({ format: 'date-time' }) expiresAt!: string;
+}
 export class UserDto {
   @ApiProperty({ maxLength: 80 }) displayName!: string;
 }

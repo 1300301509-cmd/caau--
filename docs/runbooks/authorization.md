@@ -17,16 +17,21 @@ CAAU_IDENTITY_MODE=local corepack pnpm db:api
 
 `auth:local bootstrap` 是可信开发终端上的离线工具，只连接 dev app 账号。幂等建立固定 UUID 的合成用户/总部组织/系统管理员成员；每次生成独立 8 小时会话（不覆盖文件，不重新激活已停用身份）。会话随机 256 位，数据库只保存 SHA-256，明文仅写 `.local/db/session-<随机ID>.json`，0600，禁止打印、提交或复制到前端构建变量。引导账号没有赛事业务权限。
 
-用该会话在本地调用账号、组织、成员接口后，可运行 `corepack pnpm auth:local <内部用户UUID>` 为已存在、未停用的合成用户生成测试会话。此工具具备本地数据库可信访问能力，不得暴露为 HTTP 接口、部署入口或普通用户登录。调用方在内存加载会话，以 `Authorization: Bearer <令牌>` 发送；不要把令牌写进 shell 历史、浏览器 URL 或日志。`POST /api/v1/authorization/logout` 撤销当前会话。
+`corepack pnpm auth:local prepare` 幂等准备五个固定测试身份及三个组织：总部赛事管理员、总部审核员甲/乙、承办方 A/B 经办人。固定记录只在不存在时创建，已有记录不更新、不重新启用；命令不创建赛事、授权、任务或材料。页面进入时后端也执行同一幂等准备，因此通常无需手工运行。
 
-默认身份模式关闭；开启 local 必须非 production 且 HOST 为回环地址。生产微信/内部身份提供方、TLS、会话发放与回收流程、限流、防暴力攻击及独立安全评审均未完成；不可直接对外开放本地模式。微信 AppID 缺失，不提供微信 code 换身份接口。
+Web 在 **http://127.0.0.1:5173/materials** 选择身份后调用本地专用签发端点，服务端创建真实 8 小时 opaque 会话，再由受保护身份接口验证。token 仅保存在当前标签页 `sessionStorage`：标签页互不覆盖，刷新重新验证并恢复，401/过期时清除并明确要求重新进入。切换身份先清除上一身份页面数据；所有业务接口继续后端逐请求鉴权。详细决策见 [ADR-0009](../adr/0009-local-test-identity-switching.md)。
+
+离线兼容仍可运行 `corepack pnpm auth:local <内部用户UUID>` 为已存在、未停用的合成用户生成会话文件；它不再是当前 Web 的操作入口。不要把令牌写进 shell 历史、浏览器 URL、日志或聊天。`POST /api/v1/authorization/logout` 撤销当前会话。
+
+默认身份模式关闭；开启 local 必须非 production 且 HOST 为回环地址。本地身份选择/签发 HTTP 端点也受此开关限制，不能接受任意 UUID 或角色，禁用时返回 503。生产微信/内部身份提供方、TLS、正式会话发放与回收、限流、防暴力攻击及独立安全评审均未完成；不可直接对外开放本地模式。微信 AppID 缺失，不提供微信 code 换身份接口。
 
 ## API 与矩阵
 
-所有以下路径以 `/api/v1/authorization` 为前缀；成功统一 200。具体 DTO 和 operationId 以生成的 OpenAPI 为准。
+除表中明确写出的本地身份路径外，其余路径以 `/api/v1/authorization` 为前缀；成功统一 200。具体 DTO 和 operationId 以生成的 OpenAPI 为准。
 
 | 接口 | 权限与约束 |
 | --- | --- |
+| `GET /api/v1/local-test-identities` / `POST /api/v1/local-test-identities/sessions` | 仅显式本地测试模式；列固定身份并签发后端 opaque 会话，禁用时 503 |
 | GET me / POST logout | 有效内部会话；用户停用/过期/注销后拒绝 |
 | POST users / organizations / members | 系统管理员；成员只能使用四种角色，用户/组织/角色组合唯一 |
 | PATCH users/:id / members/:id | 系统管理员，仅接受 active 布尔值；每次请求重读当前状态 |

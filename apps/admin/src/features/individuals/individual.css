@@ -21,6 +21,18 @@
   gap: 20px;
   min-width: 0;
 }
+.local-identity-entry {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  gap: 12px;
+  align-items: end;
+}
+.local-identity-entry .ant-btn {
+  min-width: 96px;
+}
+.local-identity-card .ant-alert {
+  margin-top: 16px;
+}
 .individual-list {
   display: grid;
   gap: 12px;
@@ -76,5 +88,12 @@
 @media (max-width: 820px) {
   .individual-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .local-identity-entry {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .local-identity-entry .ant-btn {
+    width: 100%;
   }
 }

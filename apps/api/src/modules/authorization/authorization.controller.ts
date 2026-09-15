@@ -21,19 +21,50 @@ import {
   AuthorizationService,
   type AuthRequest,
 } from './authorization.service.js';
-import { Permission } from './authorization.guard.js';
+import { Permission, Public } from './authorization.guard.js';
 import {
   AccessDto,
   ActiveDto,
   AuditDto,
   GrantDto,
   IdDto,
+  LocalIdentityChoiceDto,
+  LocalSessionDto,
+  LocalSessionRequestDto,
   MemberDto,
   OrganizationDto,
   ReviewerDto,
   TaskDto,
   UserDto,
 } from './authorization.dto.js';
+
+@Controller('local-test-identities')
+@ApiResponse({ status: 400, description: 'Invalid fixed identity' })
+@ApiResponse({ status: 403, description: 'Fixed identity is inactive' })
+@ApiResponse({ status: 503, description: 'Local test mode unavailable' })
+export class LocalTestIdentityController {
+  constructor(private readonly service: AuthorizationService) {}
+
+  @Get()
+  @Public()
+  @ApiOperation({ operationId: 'listLocalTestIdentities' })
+  @ApiOkResponse({ type: LocalIdentityChoiceDto, isArray: true })
+  @Header('Cache-Control', 'no-store')
+  choices() {
+    return this.service.localIdentityOptions();
+  }
+
+  @Post('sessions')
+  @Public()
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'createLocalTestSession' })
+  @ApiBody({ type: LocalSessionRequestDto })
+  @ApiOkResponse({ type: LocalSessionDto })
+  @Header('Cache-Control', 'no-store')
+  session(@Body() body: LocalSessionRequestDto) {
+    return this.service.issueLocalTestSession(body);
+  }
+}
 
 @Controller('authorization')
 @ApiBearerAuth()

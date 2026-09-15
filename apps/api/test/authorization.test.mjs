@@ -45,5 +45,9 @@ test('disabled identity does not accept forged headers; public health remains av
     ).status,
     503,
   );
+  assert.equal(
+    (await fetch(base + '/api/v1/local-test-identities')).status,
+    503,
+  );
   assert.equal((await fetch(base + '/api/v1/health')).status, 200);
 });

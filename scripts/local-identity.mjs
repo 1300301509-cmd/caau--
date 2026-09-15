@@ -1,6 +1,9 @@
 import { randomBytes, createHash, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
-import { createAuthorizationDatabase } from '../database/dist/index.js';
+import {
+  createAuthorizationDatabase,
+  prepareLocalTestIdentities,
+} from '../database/dist/index.js';
 import { databaseEnvironment, requireDocker } from './database.mjs';
 
 // Trusted offline dev tool, never an HTTP login or a production identity provider.
@@ -8,12 +11,22 @@ async function main() {
   if (process.env.NODE_ENV === 'production')
     throw new Error('Local identity only');
   const target = process.argv[2];
-  if (target !== 'bootstrap' && !/^[a-f0-9-]{36}$/i.test(target ?? ''))
-    throw new Error('Use bootstrap or a local internal user UUID');
+  if (
+    !['bootstrap', 'prepare'].includes(target ?? '') &&
+    !/^[a-f0-9-]{36}$/i.test(target ?? '')
+  )
+    throw new Error('Use prepare, bootstrap or a local internal user UUID');
   await requireDocker();
   const { DATABASE_URL } = await databaseEnvironment('dev');
   const db = createAuthorizationDatabase(DATABASE_URL);
   try {
+    if (target === 'prepare') {
+      await db.client.$transaction((tx) => prepareLocalTestIdentities(tx));
+      console.log(
+        'Five fixed local test identities are ready; existing records and business data were not updated.',
+      );
+      return;
+    }
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
     const userId = await db.client.$transaction(async (tx) => {

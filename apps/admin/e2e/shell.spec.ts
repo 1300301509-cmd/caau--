@@ -15,7 +15,8 @@ test('single-module horizontal review shell survives direct access and refresh',
   ).toHaveAttribute('aria-current', 'page');
   await expect(navigation.getByRole('link')).toHaveCount(1);
   await expect(page.getByText('本地测试环境')).toBeVisible();
-  await expect(page.getByText('导入本地测试身份')).toBeVisible();
+  await expect(page.getByText('本地测试身份入口未启用')).toBeVisible();
+  await expect(page.getByLabel('选择测试身份')).toHaveCount(0);
 
   await page.reload();
   await expect(

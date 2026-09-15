@@ -1,10 +1,101 @@
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client.js';
+import type { Prisma } from './generated/prisma/client.js';
 
 // Prisma is constructed only here; callers never import generated internals.
 export type { Prisma } from './generated/prisma/client.js';
 export { Role } from './generated/prisma/client.js';
+
+export const localTestOrganizations = [
+  {
+    id: '00000000-0000-4000-8000-000000000101',
+    name: 'CAAU 总部（本地测试）',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000102',
+    name: '承办方 A（本地测试）',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000103',
+    name: '承办方 B（本地测试）',
+  },
+] as const;
+
+export const localTestIdentities = [
+  {
+    key: 'event-manager',
+    userId: '00000000-0000-4000-8000-000000000201',
+    memberId: '00000000-0000-4000-8000-000000000301',
+    displayName: '总部赛事管理员',
+    organizationId: localTestOrganizations[0].id,
+    role: 'EVENT_MANAGER',
+  },
+  {
+    key: 'reviewer-a',
+    userId: '00000000-0000-4000-8000-000000000202',
+    memberId: '00000000-0000-4000-8000-000000000302',
+    displayName: '总部审核员甲',
+    organizationId: localTestOrganizations[0].id,
+    role: 'REVIEWER',
+  },
+  {
+    key: 'reviewer-b',
+    userId: '00000000-0000-4000-8000-000000000203',
+    memberId: '00000000-0000-4000-8000-000000000303',
+    displayName: '总部审核员乙',
+    organizationId: localTestOrganizations[0].id,
+    role: 'REVIEWER',
+  },
+  {
+    key: 'organizer-a',
+    userId: '00000000-0000-4000-8000-000000000204',
+    memberId: '00000000-0000-4000-8000-000000000304',
+    displayName: '承办方 A 经办人',
+    organizationId: localTestOrganizations[1].id,
+    role: 'ORGANIZER',
+  },
+  {
+    key: 'organizer-b',
+    userId: '00000000-0000-4000-8000-000000000205',
+    memberId: '00000000-0000-4000-8000-000000000305',
+    displayName: '承办方 B 经办人',
+    organizationId: localTestOrganizations[2].id,
+    role: 'ORGANIZER',
+  },
+] as const;
+
+export async function prepareLocalTestIdentities(tx: Prisma.TransactionClient) {
+  for (const organization of localTestOrganizations)
+    await tx.organization.upsert({
+      where: { id: organization.id },
+      create: organization,
+      update: {},
+    });
+  for (const identity of localTestIdentities) {
+    await tx.internalUser.upsert({
+      where: { id: identity.userId },
+      create: { id: identity.userId, displayName: identity.displayName },
+      update: {},
+    });
+    await tx.organizationMember.upsert({
+      where: {
+        userId_organizationId_role: {
+          userId: identity.userId,
+          organizationId: identity.organizationId,
+          role: identity.role,
+        },
+      },
+      create: {
+        id: identity.memberId,
+        userId: identity.userId,
+        organizationId: identity.organizationId,
+        role: identity.role,
+      },
+      update: {},
+    });
+  }
+}
 export function createAuthorizationDatabase(connectionString: string) {
   const pool = new Pool({
     connectionString,
