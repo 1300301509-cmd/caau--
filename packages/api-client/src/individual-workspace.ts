@@ -377,7 +377,9 @@ export class IndividualWorkspace {
     }
   }
   query(
-    p: Partial<Pick<IndividualWorkspaceState, 'taskId' | 'filter' | 'offset'>>,
+    p: Partial<
+      Pick<IndividualWorkspaceState, 'taskId' | 'filter' | 'offset' | 'limit'>
+    >,
   ) {
     this.invalidate();
     this.patch({ ...p, rows: [], status: 'syncing' });
@@ -443,7 +445,10 @@ export class IndividualWorkspace {
       error: false,
     });
   }
-  ask(op: Op | 'createIndividualMaterial') {
+  ask(
+    op: Op | 'createIndividualMaterial',
+    keys?: { key: string; id?: string },
+  ) {
     if (this.value.status !== 'online' || this.value.busy || this.value.pending)
       return;
     if (op === 'createIndividualMaterial') {
@@ -455,9 +460,9 @@ export class IndividualWorkspace {
         confirm: {
           op,
           body: {
-            id: this.uuid(),
+            id: keys?.id ?? this.uuid(),
             taskId: this.value.taskId,
-            key: this.uuid(),
+            key: keys?.key ?? this.uuid(),
             content: copy(this.value.buffer),
           },
         },
@@ -485,7 +490,7 @@ export class IndividualWorkspace {
         op,
         id: m.id,
         body: {
-          key: this.uuid(),
+          key: keys?.key ?? this.uuid(),
           expectedRevision: m.revision,
           generation: m.generation,
           expectedDraftRevision: m.draftRevision,

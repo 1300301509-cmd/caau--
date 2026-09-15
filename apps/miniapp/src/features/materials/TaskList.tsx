@@ -1,76 +1,173 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Text, View } from '@tarojs/components';
-import Taro, { useDidShow } from '@tarojs/taro';
+import Taro, { useDidHide, useDidShow } from '@tarojs/taro';
 import {
+  ApiError,
   executionStatus,
   workflowError,
   type components,
 } from '@caau/api-client';
-import { client, session } from './session';
+import { clearSession, client, session, subscribeSession } from './session';
+import { materialStateLabel } from '../individuals/platform';
+
 type S = components['schemas'];
+type Row = { task: S['TaskViewDto']; execution?: S['ExecutionViewDto'] };
+
 export function TaskList({ eventsMode = false }: { eventsMode?: boolean }) {
-  const [rows, setRows] = useState<
-      { task: S['TaskViewDto']; execution: S['ExecutionViewDto'] }[]
-    >([]),
-    [events, setEvents] = useState<S['EventViewDto'][]>([]),
-    [selected, setSelected] = useState(''),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const lock = useRef(false);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [materials, setMaterials] = useState<S['IndividualViewDto'][]>([]);
+  const [events, setEvents] = useState<S['EventViewDto'][]>([]);
+  const [selected, setSelected] = useState('');
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState<
+    'idle' | 'syncing' | 'online' | 'offline'
+  >('idle');
+  const [lastSync, setLastSync] = useState('');
+  const generation = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const foreground = useRef(false);
+  const running = useRef(false);
+  const failures = useRef(0);
+
+  function stop() {
+    generation.current++;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = undefined;
+  }
   async function load() {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    setRows([]);
+    if (!session.token || !foreground.current || running.current) return;
+    running.current = true;
+    const epoch = generation.current;
+    const token = session.token;
+    setStatus('syncing');
     try {
-      if (!session.token) {
-        setEvents([]);
-        return;
-      }
-      const token = session.token;
-      const [tasks, events] = await Promise.all([
+      const [tasks, eventRows, snapshot] = await Promise.all([
         client.request('listMaterialTasks', { token }),
         client.request('listEvents', { token }),
+        client.request('getIndividualSnapshot', {
+          token,
+          query: { offset: 0, limit: 50 },
+        }),
       ]);
       const data = await Promise.all(
         tasks
-          .filter((t) => t.state === 'PUBLISHED')
+          .filter((task) => task.state === 'PUBLISHED')
           .map(async (task) => ({
             task,
-            execution: await client.request('getTaskExecution', {
-              token,
-              path: { id: task.id },
-            }),
+            ...(task.individualChannel
+              ? {}
+              : {
+                  execution: await client.request('getTaskExecution', {
+                    token,
+                    path: { id: task.id },
+                  }),
+                }),
           })),
       );
-      if (token === session.token) {
-        setRows(data);
-        setEvents(events);
-      }
-    } catch (e) {
-      setError(workflowError(e));
+      if (
+        epoch !== generation.current ||
+        token !== session.token ||
+        !foreground.current
+      )
+        return;
+      failures.current = 0;
+      setRows(data);
+      setEvents(eventRows);
+      setMaterials(snapshot.items);
+      setLastSync(snapshot.serverTime);
+      setError('');
+      setStatus('online');
+    } catch (cause) {
+      if (epoch !== generation.current || token !== session.token) return;
+      failures.current++;
+      setStatus('offline');
+      if (cause instanceof ApiError && cause.status === 401) {
+        stop();
+        setRows([]);
+        setEvents([]);
+        setMaterials([]);
+        clearSession();
+        setError('会话已失效，受保护内容已清除，请到“我的”重新载入。');
+      } else if (cause instanceof ApiError && cause.status === 403) {
+        setRows([]);
+        setEvents([]);
+        setMaterials([]);
+        setError('访问权限已变化，原列表已清除，正在重新核对。');
+      } else setError(`${workflowError(cause)}；恢复网络后自动重试。`);
     } finally {
-      lock.current = false;
-      setBusy(false);
+      running.current = false;
+      if (session.token && foreground.current)
+        timer.current = setTimeout(
+          () => void load(),
+          failures.current
+            ? Math.min(30000, 2000 * 2 ** Math.min(failures.current, 4))
+            : 2000,
+        );
     }
   }
-  useDidShow(() => {
+  function clearProtected() {
+    stop();
+    setRows([]);
+    setEvents([]);
+    setMaterials([]);
+    setError('');
+    setLastSync('');
+    setStatus('idle');
+  }
+  function show() {
+    foreground.current = true;
+    stop();
+    if (!session.token) {
+      clearProtected();
+      return;
+    }
     void load();
+  }
+  useDidShow(show);
+  useDidHide(() => {
+    foreground.current = false;
+    stop();
+    setStatus(session.token ? 'idle' : 'idle');
   });
-  const filtered = rows.filter((r) =>
-    eventsMode
-      ? !selected || r.task.eventId === selected
-      : r.execution.state === 'EDITING',
-  );
+  useEffect(() => {
+    const changed: Taro.onNetworkStatusChange.Callback = (result) => {
+      if (!result.isConnected) {
+        stop();
+        setStatus('offline');
+        setError('网络已断开，保留当前列表；恢复后自动核对。');
+      } else if (foreground.current) show();
+    };
+    const unsubscribe = subscribeSession(() => {
+      clearProtected();
+      if (session.token && foreground.current) void load();
+    });
+    Taro.onNetworkStatusChange(changed);
+    return () => {
+      foreground.current = false;
+      stop();
+      unsubscribe();
+      Taro.offNetworkStatusChange(changed);
+    };
+  }, []);
+
+  const visibleRows = rows.filter(({ task, execution }) => {
+    if (eventsMode) return !selected || task.eventId === selected;
+    return task.individualChannel || execution?.state === 'EDITING';
+  });
+  const visibleMaterials = materials.filter((material) => {
+    const task = rows.find((item) => item.task.id === material.taskId)?.task;
+    if (!task?.individualChannel) return false;
+    if (eventsMode) return !selected || task.eventId === selected;
+    return ['DRAFT', 'RETURNED'].includes(material.state);
+  });
   return (
     <View className="page">
       <Text className="eyebrow">CAAU · 承办工作空间</Text>
       <Text className="title">{eventsMode ? '赛事' : '待办'}</Text>
       <Text className="description">
         {eventsMode
-          ? '查看赛事下的任务、提交与审核记录。'
-          : '先保存，再提交。退回后在新草稿中修改。'}
+          ? '查看赛事、任务、单份材料及审核进度。'
+          : '待提交和退回修改优先显示；进入任务可自由新增材料。'}
       </Text>
       {!session.token ? (
         <View className="card">
@@ -78,50 +175,66 @@ export function TaskList({ eventsMode = false }: { eventsMode?: boolean }) {
           <Button
             onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
           >
-            前往我的
+            前往“我的”
           </Button>
         </View>
       ) : (
         <>
-          <Button disabled={busy} loading={busy} onClick={() => void load()}>
-            刷新任务
+          <View className={`sync-card sync-${status}`}>
+            <Text>
+              {status === 'online'
+                ? '自动同步已连接'
+                : status === 'offline'
+                  ? '同步中断'
+                  : status === 'syncing'
+                    ? '正在核对'
+                    : '返回前台后核对'}
+            </Text>
+            {lastSync && (
+              <Text className="description">
+                最近核对：{new Date(lastSync).toLocaleString()}
+              </Text>
+            )}
+          </View>
+          <Button disabled={status === 'syncing'} onClick={show}>
+            立即核对
           </Button>
           {error && <Text className="error">{error}</Text>}
           {eventsMode && (
-            <View className="card">
-              <Button onClick={() => setSelected('')}>全部赛事</Button>
-              {events.map((e) => (
-                <Button key={e.id} onClick={() => setSelected(e.id)}>
-                  {selected === e.id ? '当前：' : ''}
-                  {e.name}
+            <View className="card event-filter">
+              <Text className="subtitle">赛事筛选</Text>
+              <Button onClick={() => setSelected('')}>
+                {selected ? '查看全部赛事' : '当前：全部赛事'}
+              </Button>
+              {events.map((event) => (
+                <Button key={event.id} onClick={() => setSelected(event.id)}>
+                  {selected === event.id ? '当前：' : ''}
+                  {event.name}
                 </Button>
               ))}
             </View>
           )}
-          {!busy && !filtered.length && (
+          {!visibleRows.length && status === 'online' && (
             <View className="card">
-              <Text>
-                暂无可见{eventsMode ? '任务' : '待办'}
-                ，已提交材料可在赛事中查看。
-              </Text>
+              <Text>当前范围暂无可见任务。</Text>
             </View>
           )}
-          {filtered.map(({ task, execution }) => (
+          {visibleRows.map(({ task, execution }) => (
             <View className="card" key={task.id}>
               <Text className="subtitle">{task.title}</Text>
-              <Text className="status">{executionStatus(execution)}</Text>
               <Text className="description">
-                {events.find((e) => e.id === task.eventId)?.name}
+                {events.find((event) => event.id === task.eventId)?.name}
               </Text>
-              <Text>
-                截止：{new Date(execution.deadlines.task).toLocaleString()}
+              <Text className="status">
+                {task.individualChannel
+                  ? '单份材料通道'
+                  : executionStatus(execution)}
               </Text>
-              {Date.now() >= Date.parse(execution.deadlines.task) &&
-                execution.state === 'EDITING' && (
-                  <Text className="warning">
-                    已逾期 · 可保存，须总部延期后提交
-                  </Text>
-                )}
+              {execution && (
+                <Text>
+                  截止：{new Date(execution.deadlines.task).toLocaleString()}
+                </Text>
+              )}
               <Button
                 type="primary"
                 onClick={() =>
@@ -130,10 +243,44 @@ export function TaskList({ eventsMode = false }: { eventsMode?: boolean }) {
                   })
                 }
               >
-                查看任务
+                {task.individualChannel ? '查看并新增材料' : '查看旧整包任务'}
               </Button>
             </View>
           ))}
+          {!!visibleMaterials.length && <Text className="title">材料进度</Text>}
+          {visibleMaterials.map((material) => {
+            const task = rows.find(
+              (item) => item.task.id === material.taskId,
+            )?.task;
+            const title =
+              material.draft?.title ??
+              material.submission?.content.title ??
+              '未命名材料';
+            return (
+              <View className="card" key={material.id}>
+                <Text className="subtitle">{title}</Text>
+                <Text className={`state state-${material.state.toLowerCase()}`}>
+                  {materialStateLabel(material.state)} · V
+                  {material.submission?.version ?? 0}
+                </Text>
+                <Text className="description">{task?.title}</Text>
+                {material.lastAction?.reason && (
+                  <Text className="warning">
+                    退回原因：{material.lastAction.reason}
+                  </Text>
+                )}
+                <Button
+                  onClick={() =>
+                    void Taro.navigateTo({
+                      url: `/pages/task/index?id=${material.taskId}&material=${material.id}`,
+                    })
+                  }
+                >
+                  查看材料详情
+                </Button>
+              </View>
+            );
+          })}
         </>
       )}
     </View>

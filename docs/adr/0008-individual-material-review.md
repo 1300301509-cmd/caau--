@@ -1,6 +1,6 @@
 # ADR-0008：单份材料、赛事共享审核与自动同步
 
-状态：A 技术设计已提交 `7a4aa73`；B 后端本地实现与 PostgreSQL/API 验证完成，模型落地说明见第 10 节。C Web与真实多会话同步验收已完成，见 [Web手册](../runbooks/individual-material-web.md)；D Taro待实施，Web通过不代表小程序/微信验收完成。业务依据为 [CAAU-011 规格](../product/individual-material-review-spec.md) 及 [需求登记](../product/requirements.md) R-014～R-019。
+状态：A 技术设计已提交 `7a4aa73`；B 后端本地实现与 PostgreSQL/API 验证完成，模型落地说明见第 10 节。C Web与真实多会话同步验收已完成，见 [Web手册](../runbooks/individual-material-web.md)；D Taro承办页面与生命周期适配已完成本地构建/测试，见 [Taro手册](../runbooks/individual-material-miniapp.md)，但开发者工具新版流程和真机受资源阻塞、未通过。业务依据为 [CAAU-011 规格](../product/individual-material-review-spec.md) 及 [需求登记](../product/requirements.md) R-014～R-019。
 
 基线：`40a5c80`，工作区干净，从其创建 `codex/caau-012-individual-materials`，不切回缺成果的 main。只做办赛材料，不扩展报名、支付、俱乐部或外部通知。
 
@@ -209,6 +209,12 @@ A 阶段当时不执行数据库写入、不构建或运行新业务。各阶段
 
 审核确认固定revision/submissionId；未知结果保留原幂等键/完整载荷，只有显式重试。CAS冲突保留本地输入并要求人工核对，不随轮询替用户保存。正文、分类、附件和CREATE/SAVE快照及不可变提交历史按原权限显示；新页的旧整包入口没有写控件。
 
-真实独立Chromium/PostgreSQL验收、失败修复、样本口径和截图以 [Web手册](../runbooks/individual-material-web.md) 为准。短样本本地p95并非生产SLA，长期轮询审计容量/规模压测、Taro与微信平台仍未验。
+真实独立Chromium/PostgreSQL验收、失败修复、样本口径和截图以 [Web手册](../runbooks/individual-material-web.md) 为准。短样本本地p95并非生产SLA，长期轮询审计容量/规模压测仍未验。
+
+## 12. D Taro实现细化与平台边界
+
+底部仍是待办/赛事/我的，总部审核不进入小程序。新版任务详情复用平台无关协调器，Taro适配 `useDidShow/useDidHide`、网络状态、`getRandomValues`、`chooseMessageFile`、文件系统及预览/文档查看；旧整包页面按 `individualChannel` 分流保留。列表也在前台顺序同步，切后台停止，恢复后立即核权。平台提供命令ID/幂等键，协调器不降级到非安全随机数。
+
+本地构建、Taro ArrayBuffer/bearer传输测试及完整数据库/Web回归已通过。官方开发者工具存在，但本轮CLI和自动化SDK均被关闭的IDE服务端口阻挡；跟踪配置仍是游客AppID，且无组织权限、合法HTTPS或真机资源。因此源码交付不改变平台验收状态，详情和下一轮步骤见 [Taro手册](../runbooks/individual-material-miniapp.md)。
 
 B 尚不证明：前台 2 秒轮询、真实多浏览器可见延迟、断线/乱序恢复/输入保护、微信开发者工具/真机或生产负载。下一阶段须按第 6/9 节实现并实测，不能只凭 snapshot200 或定时器配置宣布完成。

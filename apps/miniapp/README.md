@@ -1,6 +1,6 @@
 # @caau/miniapp
 
-Taro 4.2.1 + React 18 微信小程序工程。已实现“待办、赛事、我的”三项底部导航和任务详情：要求、材料填写、私有附件上传/确认、草稿/冲突核对、正式提交/同键重试、退回重交、状态/有效截止及提交审核历史。通过 @caau/api-client 的生成契约、MaterialEditor 客户端命令状态和 Taro.request 适配器访问真实 API；不跨应用引用源码。技术连接页保留在“我的”中。就绪请求与存活请求独立，无数据库配置时就绪应显示 503；不引入 Prisma、Nest 或 Node/fetch 传输运行库。
+Taro 4.2.1 + React 18 微信小程序工程。保留“待办、赛事、我的”三项底部导航。新版单份任务支持自由新增、名称/类别/说明、私有附件上传/确认/绑定、草稿/冲突核对、独立提交/同键重试、退回修改重交、五态/实际操作人时间、不可变版本/动作快照和受控下载；旧任务继续进入原整包详情。通过 @caau/api-client 的生成契约、MaterialEditor 客户端命令状态和 Taro.request 适配器访问真实 API；不跨应用引用源码。技术连接页保留在“我的”中。就绪请求与存活请求独立，无数据库配置时就绪应显示 503；不引入 Prisma、Nest 或 Node/fetch 传输运行库。
 
 ```sh
 # 在仓库根目录；先按任务手册迁移，再在另一终端运行：
@@ -24,4 +24,4 @@ TARO_APP_API_BASE_URL=https://YOUR_TEST_API_HOST corepack pnpm dev:miniapp
 
 “我的”提供明确标注的本地测试身份入口：从本机忽略的 auth:local 会话文件复制合成 token 到密码框，验证承办身份后清空输入，仅内存保存。不通过微信聊天发送会话文件、不保存到 Storage、不截令牌、不冒充正式微信登录。材料使用 chooseMessageFile/readFile，幂等键使用 getRandomValues；这些平台 API 的权限、文件来源、最大文件耗时和离开提醒仍待微信实测。
 
-当前通过的是五页微信编译、构建产物/三项导航检查、共享命令状态/摘要单测及 Node 传输 HTTP 联调。浏览器闭环使用总部 Web 与承办 Web 联调入口，截图不是本小程序的实际运行截图；**未进行微信开发者工具或真机运行验证**。详见 [本地工程文档](../../docs/runbooks/local-tooling.md)。
+CAAU-012 D 当前通过源码静态检查、正式weapp构建、Taro ArrayBuffer传输/文件约束测试及完整PostgreSQL/Web回归。开发者工具实际启动被关闭的IDE服务端口阻挡；同时仍缺组织AppID、HTTPS合法域名和测试微信。新版业务页与真机流程均未通过平台验收，不能把构建当作微信运行。详见 [Taro操作与平台验收](../../docs/runbooks/individual-material-miniapp.md)。

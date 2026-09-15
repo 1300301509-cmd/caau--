@@ -1,5 +1,5 @@
 {
-  "description": "CAAU 工程连接检查；不含业务功能",
+  "description": "CAAU 承办方材料小程序；本地身份和平台验收边界见 README",
   "miniprogramRoot": "dist/",
   "projectname": "caau-miniapp",
   "appid": "touristappid",

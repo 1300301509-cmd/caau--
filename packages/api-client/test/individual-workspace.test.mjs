@@ -238,6 +238,29 @@ test('file read started under old identity never uploads into a new identity or 
     m.dispose();
   }
 });
+test('platform can supply secure command IDs and choose its snapshot page size', async () => {
+  const f = fixture(),
+    m = f.model;
+  try {
+    await ready(f);
+    m.ask('submitIndividualMaterial', { key: 'platform-key' });
+    assert.equal(m.value.confirm.body.key, 'platform-key');
+    m.cancelConfirm();
+    m.beginCreate();
+    m.edit({ title: 'New material' });
+    m.query({ taskId: 't', limit: 10 });
+    await until(() => m.value.status === 'online');
+    m.ask('createIndividualMaterial', {
+      key: 'create-key',
+      id: 'platform-id',
+    });
+    assert.equal(m.value.confirm.body.key, 'create-key');
+    assert.equal(m.value.confirm.body.id, 'platform-id');
+    assert.equal(m.value.limit, 10);
+  } finally {
+    m.dispose();
+  }
+});
 test('role downgrade clears draft-only content and cached history even when submission access remains', async () => {
   const f = fixture(),
     m = f.model;

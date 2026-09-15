@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { Button, Input, Text, View } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useDidShow } from '@tarojs/taro';
 import { workflowError } from '@caau/api-client';
 import {
+  clearSession,
   client,
   importSession,
   session,
@@ -14,6 +15,7 @@ export default function Profile() {
   const [localToken, setLocalToken] = useState('');
   const [failed, setFailed] = useState(false);
   const lock = useRef(false);
+  useDidShow(() => setName(session.identity?.displayName ?? ''));
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -66,7 +68,12 @@ export default function Profile() {
                 ).confirm
               )
                 return;
+              const previousToken = session.token;
               await importSession(localToken);
+              if (previousToken && previousToken !== session.token)
+                void client
+                  .request('logout', { token: previousToken })
+                  .catch(() => {});
               setLocalToken('');
               setName(session.identity!.displayName);
               setNotice('本地身份已载入');
@@ -83,8 +90,7 @@ export default function Profile() {
                 try {
                   await client.request('logout', { token: session.token });
                 } finally {
-                  session.token = '';
-                  session.identity = undefined;
+                  clearSession();
                   setName('');
                 }
                 setNotice('会话已退出');
@@ -101,7 +107,7 @@ export default function Profile() {
       <View className="card">
         <Text className="subtitle">验收边界</Text>
         <Text>
-          模板目前只有版本标识，尚无真实模板下载。请按任务说明填写材料。
+          新版单份材料支持私有附件上传、不可变版本和受控下载。当前仍是本地测试身份；正式微信登录、合法HTTPS域名与真机需要平台资源。
         </Text>
         <Button
           onClick={() => void Taro.navigateTo({ url: '/pages/index/index' })}

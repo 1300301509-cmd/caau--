@@ -18,7 +18,22 @@ export const client = createApiClient(
 export const session: {
   token: string;
   identity?: components['schemas']['WorkspaceIdentityDto'];
-} = { token: '' };
+  epoch: number;
+} = { token: '', epoch: 0 };
+const sessionListeners = new Set<() => void>();
+export function subscribeSession(listener: () => void) {
+  sessionListeners.add(listener);
+  return () => sessionListeners.delete(listener);
+}
+function notifySession() {
+  session.epoch++;
+  for (const listener of sessionListeners) listener();
+}
+export function clearSession() {
+  session.token = '';
+  session.identity = undefined;
+  notifySession();
+}
 export async function newKey() {
   const result = await Taro.getRandomValues({ length: 16 });
   return uuidFromBytes(result.randomValues);
@@ -43,4 +58,5 @@ export async function importSession(value: string) {
     throw new Error('请使用承办方本地测试身份');
   session.token = token;
   session.identity = identity;
+  notifySession();
 }
