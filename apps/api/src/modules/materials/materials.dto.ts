@@ -38,13 +38,26 @@ export class MaterialRequirementDto {
 }
 export class RequirementsDto {
   @ApiProperty({ format: 'date-time' }) deadline!: string;
-  @ApiProperty({ type: [MaterialRequirementDto], minItems: 1, maxItems: 50 })
+  @ApiProperty({
+    type: [MaterialRequirementDto],
+    minItems: 0,
+    maxItems: 50,
+    description: 'Empty allowed only for individual channel tasks',
+  })
   materials!: MaterialRequirementDto[];
 }
 export class ConfigureTaskDto extends RevisionDto {
   @ApiProperty({ type: RequirementsDto }) requirements!: RequirementsDto;
 }
-export class TaskViewDto extends CreateTaskDto {
+export class TaskViewDto {
+  @ApiProperty({ format: 'uuid' }) eventId!: string;
+  @ApiProperty() title!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({ format: 'uuid' }) handlerMemberId!: string;
+  @ApiProperty({ type: String, nullable: true }) reviewerMemberId!:
+    | string
+    | null;
+  @ApiProperty() individualChannel!: boolean;
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ enum: ['DRAFT', 'PUBLISHED'] }) state!: 'DRAFT' | 'PUBLISHED';
   @ApiProperty({ type: 'integer' }) revision!: number;

@@ -1,6 +1,6 @@
 # ADR-0008：单份材料、赛事共享审核与自动同步
 
-状态：CAAU-012 第一阶段技术设计；实现待开始。业务依据为 [CAAU-011 规格](../product/individual-material-review-spec.md) 及 [需求登记](../product/requirements.md) R-014～R-019。本设计不代表代码、迁移或跨端验收已经完成。
+状态：A 技术设计已提交 `7a4aa73`；B 后端本地实现与 PostgreSQL/API 验证完成，模型落地说明见第 10 节。C Web、D Taro 待实施；后端通过不代表跨端自动同步或微信验收完成。业务依据为 [CAAU-011 规格](../product/individual-material-review-spec.md) 及 [需求登记](../product/requirements.md) R-014～R-019。
 
 基线：`40a5c80`，工作区干净，从其创建 `codex/caau-012-individual-materials`，不切回缺成果的 main。只做办赛材料，不扩展报名、支付、俱乐部或外部通知。
 
@@ -16,7 +16,7 @@
 | admin.grant.delete 对历史引用授权返回 409；当前 EventGrant 没有 active 字段 | 增加保留 ID 的赛事级撤权，不通过删除历史或停用全部赛事成员权绕过 |
 | 五份历史 migration 保护提交、审核、模板、指派及审计；已发布配置有触发器 | 只追加 migration，保留所有旧 checksum；新增 SQL 若替换触发器函数必须写在新 migration 并回归旧保护 |
 
-上述路径均位于 `apps/api/src/modules/`；模型见 `database/prisma/schema.prisma`。本轮只读取源码和迁移，不读取数据库凭据、用户文件或数据库副本。
+上述路径均位于 `apps/api/src/modules/`；模型见 `database/prisma/schema.prisma`。以上为 A 设计阶段的源码核查；A 当时只读源码/迁移，B 数据库及文件保留验证另记于第 10 节。
 
 ## 2. 旧整包兼容与切换
 
@@ -64,7 +64,7 @@
 
 ## 4. 单份模型及数据库不变量（拟追加）
 
-名字为实现设计，不是当前已有 schema。
+以下保留 A 阶段的逻辑对象设计；B 阶段实际表名与合并落点见第 10 节，不应把每个逻辑对象都当成一张独立表。
 
 | 对象 | 核心字段与约束 |
 | --- | --- |
@@ -185,4 +185,22 @@ Taro 保留待办/赛事/我的三导航，任务内自由新增材料、按单�
 - 审计 INSERT 失败、事务回滚无可见同步变化；API 重启后新旧版本与文件 hash 保持；不可变表普通 owner DML/runtime 篡改均拒绝。
 - 微信开发者工具验证真实页面/请求/文件选择上传下载/前后台/双会话状态；真机在合法 HTTPS 与有权 AppID 上另测网络切换/返回前台。游客页渲染或 Node 请求替身不能完成此项。
 
-当前 A 阶段不执行数据库写入、不构建或运行新业务。后续所有失败、修复、未运行项及环境阻塞在 roadmap 留证，不能把 CAAU-005 的旧通过记录算作新版验收。
+A 阶段当时不执行数据库写入、不构建或运行新业务。各阶段失败、修复、未运行项及环境阻塞在 roadmap 留证，不能把 CAAU-005 的旧通过记录算作新版验收。
+
+## 10. B 后端实际落地与技术细化
+
+追加 `202609160001_individual_materials`，不修改旧五份 migration。为避免同一份可变内容/审核结果有两份真相，逻辑对象收敛为八张新表：TaskMaterialChannel、IndividualMaterial、IndividualSubmission、IndividualAction、IndividualCommand、IndividualUpload、IndividualAttachment、IndividualAssignmentHistory。
+
+- 当前草稿保存在 IndividualMaterial.draft JSON，draftRevision CAS；每次 CREATE/SAVE 的完整内容快照保存在不可变 IndividualAction.detail。等价承担原逻辑 IndividualDraft/IndividualDraftEdit，不另外维护可漂移的草稿表。
+- 当前草稿附件 ID 在受 CAS 保护的 JSON 中，绑定/提交/下载逐份校验真实归属、generation、确认和字节；不可变提交关系为 IndividualAttachment，用 materialId/taskId 复合外键防串材料，不复用旧 FileUpload。
+- IndividualDecision 合并进 IndividualAction：PostgreSQL 部分唯一索引限制每 submissionId 至多一条 APPROVE/RETURN；提交版本、动作、命令、附件关系和经办历史均有 UPDATE/DELETE/TRUNCATE 不可变触发器。延迟约束要求材料当前状态/指针/修订与不可变动作、提交一致，状态不可绕过动作直接推进。
+- 保留旧公开服务边界：materials 创建/配置/发布新任务，authorization 管指派/撤权及其历史，workflow 管任务有效截止/generation/关闭；新模块仅编排同一授权事务。新版经办指派不要求 reviewer，TaskViewDto 明示 reviewerMemberId 可空及 individualChannel，Web 仅做此兼容，不宣称已有新版页面。
+- EventGrant.active 追加默认 true，审计撤权接口保留 ID。原单人策略和新赛事策略分开，均检查 active；新指派历史引用的 grant 也不能通过旧 DELETE 入口删除。针对同键并发创建的唯一冲突只在该幂等用例内有限重试，不自动换 revision 或扩大其它授权命令重试。
+- snapshot 队列/selected/最新动作在同一短事务读取；历史使用独立分页接口并返回 materialRevision/serverTime，让后续客户端可以丢弃迟到结果。不把全部历史放入每次轮询。审核员默认队列为待审核/审核中，显式 state 可查有权历史状态。
+- DTO 提供实际 actorId、当前姓名与原时间，不返回私有 storageKey。客户端仅增加生成 query 参数编码及已验证契约的 409 详情，不实现轮询/页面状态机。
+
+真实证据：`db:test` 41 项通过、零跳过；包含 005→006 升级后 23 张旧表投影摘要、五 checksum、合成旧 V1 RETURN/V2 PASS 和模板/附件字节保留，重启后新旧 HTTP 读取；新版五态/甲乙接续、并发相反结论/保存/开始及同键创建/提交、截止/延期/交接/关闭、撤权/停用/注销/过期/机构冲突和审计失败回滚。当前锁定 Prisma7 的 Serializable/P2034 有限重试做法已通过 Context7 `/prisma/web` v7 事务文档核对；无依赖升级。
+
+本机 dev 在 test 通过后执行 5→6 deploy/status；23 张旧表、6 个私有对象、旧五 checksum 摘要一致，未启用存量新通道、未 reset/删卷。命令/接口和限制见 [单份材料后端手册](../runbooks/individual-materials.md)，详细检查与失败修复见 roadmap。
+
+B 尚不证明：前台 2 秒轮询、真实多浏览器可见延迟、断线/乱序恢复/输入保护、微信开发者工具/真机或生产负载。下一阶段须按第 6/9 节实现并实测，不能只凭 snapshot200 或定时器配置宣布完成。

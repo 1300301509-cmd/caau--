@@ -18,6 +18,7 @@ export async function eventManager(
   const grant = await tx.eventGrant.findFirst({
     where: {
       eventId,
+      active: true,
       member: { userId: actor.id, active: true, role: 'EVENT_MANAGER' },
     },
   });
@@ -43,8 +44,13 @@ export async function taskPolicy(
     (m) => m.active && m.organizationId === handler.organizationId,
   );
   const self = handler.userId === actor.id;
-  const handles = self && handler.active && handler.role === 'ORGANIZER';
+  const handles =
+    self &&
+    task.handler.active &&
+    handler.active &&
+    handler.role === 'ORGANIZER';
   const reviews =
+    task.reviewer?.active &&
     reviewer?.userId === actor.id &&
     reviewer.active &&
     reviewer.role === 'REVIEWER' &&

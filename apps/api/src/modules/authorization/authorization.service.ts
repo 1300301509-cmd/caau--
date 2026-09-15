@@ -157,7 +157,7 @@ export class AuthorizationService {
       actor: Actor,
       id: string | undefined,
     ) => Promise<T>,
-    options: { retries?: number; timeout?: number } = {},
+    options: { retries?: number; timeout?: number; retryUnique?: boolean } = {},
   ): Promise<T> {
     const db = this.db();
     const requestId = randomUUID();
@@ -203,7 +203,11 @@ export class AuthorizationService {
         databaseError.code === 'P2034' ||
         (databaseError.code === 'P2010' &&
           ['40001', '40P01'].includes(sqlState ?? ''));
-      if (serializationConflict && (options.retries ?? 0) > 0)
+      if (
+        (serializationConflict ||
+          (options.retryUnique && databaseError.code === 'P2002')) &&
+        (options.retries ?? 0) > 0
+      )
         return this.run(token, action, resource, input, work, {
           ...options,
           retries: options.retries! - 1,
@@ -296,6 +300,7 @@ export class AuthorizationService {
       });
     const handlerGrant = await grant(handler.id);
     const reviewerGrant = await grant(reviewer.id);
+    if (!handlerGrant.active || !reviewerGrant.active) deny();
     const data = {
       eventId,
       handlerGrantId: handlerGrant.id,
@@ -428,6 +433,16 @@ export class AuthorizationService {
           select: { id: true },
         });
       }
+      if (action === 'admin.grant.active') {
+        const b = bodyObject(input, ['active']);
+        if (typeof b.active !== 'boolean')
+          throw new BadRequestException('Boolean required');
+        return tx.eventGrant.update({
+          where: { id: id! },
+          data: { active: b.active },
+          select: { id: true },
+        });
+      }
       if (action === 'admin.grant.delete') {
         const referenced = await tx.assignmentHistory.count({
           where: {
@@ -439,7 +454,14 @@ export class AuthorizationService {
             ],
           },
         });
-        if (referenced)
+        const individualReferences = await tx.individualAssignmentHistory.count(
+          {
+            where: {
+              OR: [{ handlerGrantId: id! }, { previousHandlerGrantId: id! }],
+            },
+          },
+        );
+        if (referenced || individualReferences)
           throw new ConflictException(
             'Historical assignment grants must be retained; deactivate membership to revoke access',
           );
@@ -473,6 +495,7 @@ export class AuthorizationService {
       const grants = await tx.eventGrant.count({
         where: {
           eventId: id!,
+          active: true,
           member: {
             userId: actor.id,
             active: true,
@@ -494,6 +517,7 @@ export class AuthorizationService {
       });
       if (
         !handler ||
+        !handler.active ||
         handler.eventId !== eventId ||
         handler.member.role !== 'ORGANIZER' ||
         !handler.member.active ||
@@ -529,6 +553,7 @@ export class AuthorizationService {
         });
         if (
           !grant ||
+          !grant.active ||
           grant.eventId !== task.eventId ||
           grant.member.role !== 'REVIEWER' ||
           !grant.member.active ||

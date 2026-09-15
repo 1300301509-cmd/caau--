@@ -18,7 +18,7 @@
 | docs/adr | 有理由和影响的架构决策 | 日常任务流水 |
 | docs/runbooks | 可验证的运行维护步骤 | 未验证的成功声明 |
 
-使用 pnpm workspace 单仓库；应用为 `@caau/miniapp`、`@caau/admin`、`@caau/api`；`@caau/api-client` 提供真实契约、请求门面与平台适配；`@caau/database` 提供仅服务端使用的 Prisma/pg 入口。后两个包已随 CAAU-003 实际实现而加入，不是占位空包；正式 Prisma schema 包含身份/授权、Event、MaterialTask、发布要求快照及指派历史；不包含文件、承办方材料草稿、提交版本或审核模型。
+使用 pnpm workspace 单仓库；应用为 `@caau/miniapp`、`@caau/admin`、`@caau/api`；`@caau/api-client` 提供真实契约、请求门面与平台适配；`@caau/database` 提供仅服务端使用的 Prisma/pg 入口。后两个包已随 CAAU-003 实际实现而加入，不是占位空包；正式 Prisma schema 当前包含身份/授权、赛事/任务、要求/模板快照、私有文件、旧整包草稿/提交/审核，以及 CAAU-012 单份材料执行模型；新旧模型分开，旧提交不拆成假逐份结果。
 
 ## 依赖方向
 
@@ -42,6 +42,8 @@ admin ───┘
 当前 `authorization` 统一承担身份/组织/权限锚点管理、策略与授权事务审计；控制器/DTO、全局 Guard、service 及 policy 分离，Prisma 构造入口仍仅在 database。后续新增业务域复用策略并保持授权、业务写入、审计同事务。
 
 CAAU-005 `materials` 负责赛事/任务业务用例与发布事务，通过授权模块公开的 `run`、锚点创建/指派及策略服务参与同事务；不另建会话或绕过审计。业务对象与权限锚点共享 UUID。Web `features/materials` 仅消费生成客户端，按身份提供登记/赛事/任务操作；第一段时无小程序业务页，第三段实现范围见下述说明。第二段 `workflow` 模块负责私有文件、执行状态/草稿/提交/审核、延期与交接，复用同一个 authorization.run 事务/审计；materials 发布通过公开 initializeExecution helper 同事务初始化执行状态。Prisma 仍仅从 @caau/database 引入，私有磁盘仅在 API 侧访问；第三段增加 Web 审核/管理和承办联调组件、Taro 任务列表/详情/本地身份页；共用 api-client 内无 React/平台依赖的材料命令状态与字节摘要助手，UI 与 Taro 文件选择仍各自归属应用。小程序运行时单独验收。
+
+CAAU-012 新增 `individual-materials` 模块：独立五态、草稿/动作历史、版本/文件、幂等/CAS及分页快照。通过 authorization 的 `individualPolicy`/授权事务/经办历史 helper、materials 的公开任务创建与配置发布服务、workflow 的任务控制 helper 协作；不复制赛事、机构或有效截止。EventGrant.active 的撤权由 authorization 管理，旧策略同步检查，不将新共享审核权限用于读取旧整包。实现细化见 [ADR-0008](../adr/0008-individual-material-review.md)，操作见 [单份材料后端](../runbooks/individual-materials.md)。客户端只增加生成 query 传输和已验证409详情，前台轮询协调器/新Web与Taro页仍未实现。
 
 基础域规划：auth 管理身份与会话；organizations 管理组织和成员关系；permissions 管理操作及数据范围；events 管理赛事；tasks 管理交付与审核；files 管理附件授权。报名、财务、AI 等在对应需求确认后加入。
 

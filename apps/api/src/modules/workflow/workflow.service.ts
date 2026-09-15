@@ -4,6 +4,10 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import {
+  assignIndividualHandler,
+  appendIndividualAssignment,
+} from '../authorization/individual-policy.js';
 import type { IncomingMessage } from 'node:http';
 import type { Prisma } from '@caau/database';
 import {
@@ -143,6 +147,7 @@ export class WorkflowService {
           where: { id: taskId },
           include: {
             requirements: true,
+            individualChannel: true,
             scope: {
               include: {
                 handler: { include: { member: true } },
@@ -158,7 +163,33 @@ export class WorkflowService {
         const draft = await tx.materialDraft.findUniqueOrThrow({
           where: { taskId },
         });
-        const config = requirements(task.requirements[0]!.configuration);
+        if (
+          task.individualChannel &&
+          [
+            'draft.save',
+            'upload.create',
+            'file.content',
+            'file.confirm',
+            'submission.create',
+            'review.create',
+          ].includes(action)
+        ) {
+          await taskPolicy(
+            tx,
+            actor,
+            taskId,
+            action === 'review.create' ? 'review' : 'content.write',
+          );
+          throw new ConflictException({
+            code: 'LEGACY_READ_ONLY',
+            message:
+              'Use individual material channel; legacy package is read only',
+          });
+        }
+        const config = requirements(
+          task.requirements[0]!.configuration,
+          !!task.individualChannel,
+        );
         const deadlines = execution.deadlines as unknown as DeadlinesDto;
         const now = (
           await tx.$queryRaw<
@@ -619,7 +650,10 @@ export class WorkflowService {
             'reason',
           ]);
           versionCheck(b.expectedRevision);
-          const probe = requirements({ ...config, deadline: b.newDeadline });
+          const probe = requirements(
+            { ...config, deadline: b.newDeadline },
+            !!task.individualChannel,
+          );
           const nextDeadline = probe.deadline;
           if (
             [
@@ -673,26 +707,45 @@ export class WorkflowService {
             );
           if (member.id === task.scope.handler.memberId)
             throw new ConflictException('Handler is unchanged');
-          const scope = await this.auth.assignTaskAnchor(
-            tx,
-            actor,
-            task.eventId,
-            member.organizationId,
-            member.id,
-            task.scope.reviewer!.memberId,
-            taskId,
-          );
-          await tx.assignmentHistory.create({
-            data: {
+          const scope = task.individualChannel
+            ? await assignIndividualHandler(
+                tx,
+                actor,
+                task.eventId,
+                member.organizationId,
+                member.id,
+                taskId,
+              )
+            : await this.auth.assignTaskAnchor(
+                tx,
+                actor,
+                task.eventId,
+                member.organizationId,
+                member.id,
+                task.scope.reviewer!.memberId,
+                taskId,
+              );
+          if (task.individualChannel)
+            await appendIndividualAssignment(tx, {
               taskId,
               previousHandlerGrantId: task.scope.handlerGrantId,
-              previousReviewerGrantId: task.scope.reviewerGrantId,
               handlerGrantId: scope.handlerGrantId,
-              reviewerGrantId: scope.reviewerGrantId!,
+              generation: execution.generation + 1,
               actorId: actor.id,
-              createdAt: now,
-            },
-          });
+              occurredAt: now,
+            });
+          else
+            await tx.assignmentHistory.create({
+              data: {
+                taskId,
+                previousHandlerGrantId: task.scope.handlerGrantId,
+                previousReviewerGrantId: task.scope.reviewerGrantId,
+                handlerGrantId: scope.handlerGrantId,
+                reviewerGrantId: scope.reviewerGrantId!,
+                actorId: actor.id,
+                createdAt: now,
+              },
+            });
           const next = await tx.materialDraft.update({
             where: { taskId },
             data: { revision: { increment: 1 } },

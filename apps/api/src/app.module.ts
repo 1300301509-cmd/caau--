@@ -9,7 +9,8 @@ import type { AuthorizationConfig } from './modules/authorization/authorization.
 import { WorkflowModule } from './modules/workflow/workflow.module.js';
 import { MaterialsModule } from './modules/materials/materials.module.js';
 
-@Module({ imports: [HealthModule, MaterialsModule] })
+import { IndividualModule } from './modules/individual-materials/individual.module.js';
+@Module({ imports: [HealthModule, MaterialsModule, IndividualModule] })
 export class AppModule {
   static register(
     probe: DatabaseProbe,

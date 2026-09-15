@@ -49,6 +49,7 @@ model EventScope {
 }
 
 model EventGrant {
+  active Boolean @default(true)
   id         String @id @default(uuid()) @db.Uuid
   eventId    String @db.Uuid
   memberId   String @db.Uuid
@@ -123,6 +124,7 @@ model MaterialTask {
   templateUploads TemplateUpload[]
   assignments AssignmentHistory[]
   execution   TaskExecution?
+  individualChannel TaskMaterialChannel?
   @@index([eventId, state])
   @@unique([id, eventId])
 }
@@ -301,6 +303,130 @@ model ReviewRecord {
   decision String @db.VarChar(8)
   issues Json
   reviewedAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+enum IndividualState {
+  DRAFT
+  PENDING_REVIEW
+  IN_REVIEW
+  RETURNED
+  APPROVED
+}
+
+model TaskMaterialChannel {
+  taskId String @id @db.Uuid
+  task MaterialTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  actorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  source String @db.VarChar(16)
+  reason String @default("") @db.VarChar(2000)
+  materials IndividualMaterial[]
+}
+
+model IndividualMaterial {
+  id String @id @db.Uuid
+  taskId String @db.Uuid
+  channel TaskMaterialChannel @relation(fields: [taskId], references: [taskId], onDelete: Restrict)
+  organizationId String @db.Uuid
+  requirementItemId String? @db.Uuid
+  state IndividualState @default(DRAFT)
+  revision Int @default(1)
+  draftRevision Int @default(1)
+  currentSubmissionId String? @db.Uuid
+  nextVersion Int @default(1)
+  draft Json
+  actorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  submissions IndividualSubmission[]
+  actions IndividualAction[]
+  commands IndividualCommand[]
+  uploads IndividualUpload[]
+  @@unique([id, taskId])
+  @@index([taskId, state, id])
+}
+
+model IndividualSubmission {
+  id String @id @db.Uuid
+  materialId String @db.Uuid
+  taskId String @db.Uuid
+  material IndividualMaterial @relation(fields: [materialId, taskId], references: [id, taskId], onDelete: Restrict)
+  version Int
+  content Json
+  generation Int
+  deadline DateTime @db.Timestamptz(3)
+  actorId String @db.Uuid
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+  attachments IndividualAttachment[]
+  @@unique([materialId, version])
+  @@unique([id, materialId, taskId])
+}
+
+model IndividualAction {
+  id String @id @default(uuid()) @db.Uuid
+  materialId String @db.Uuid
+  material IndividualMaterial @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  submissionId String? @db.Uuid
+  revision Int
+  action String @db.VarChar(16)
+  fromState IndividualState
+  toState IndividualState
+  actorId String @db.Uuid
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+  detail Json
+  @@unique([materialId, revision])
+}
+
+model IndividualCommand {
+  id String @id @default(uuid()) @db.Uuid
+  materialId String @db.Uuid
+  material IndividualMaterial @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  actorId String @db.Uuid
+  key String @db.Uuid
+  requestHash String @db.Char(64)
+  result Json
+  @@unique([materialId, actorId, key])
+}
+
+model IndividualUpload {
+  id String @id @default(uuid()) @db.Uuid
+  materialId String @db.Uuid
+  taskId String @db.Uuid
+  material IndividualMaterial @relation(fields: [materialId, taskId], references: [id, taskId], onDelete: Restrict)
+  organizationId String @db.Uuid
+  generation Int
+  actorId String @db.Uuid
+  storageKey String @unique @db.Uuid
+  originalName String @db.VarChar(180)
+  extension String @db.VarChar(12)
+  expectedBytes Int
+  sha256 String @db.Char(64)
+  state UploadState @default(PENDING)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  confirmedAt DateTime? @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  boundAt DateTime? @db.Timestamptz(3)
+  attachments IndividualAttachment[]
+  @@unique([id, materialId, taskId])
+}
+
+model IndividualAttachment {
+  submissionId String @db.Uuid
+  fileId String @db.Uuid
+  materialId String @db.Uuid
+  taskId String @db.Uuid
+  submission IndividualSubmission @relation(fields: [submissionId, materialId, taskId], references: [id, materialId, taskId], onDelete: Restrict)
+  file IndividualUpload @relation(fields: [fileId, materialId, taskId], references: [id, materialId, taskId], onDelete: Restrict)
+  @@id([submissionId, fileId])
+}
+
+model IndividualAssignmentHistory {
+  id String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  previousHandlerGrantId String? @db.Uuid
+  handlerGrantId String @db.Uuid
+  generation Int
+  actorId String @db.Uuid
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
 }
 
 model DeadlineHistory {

@@ -51,12 +51,16 @@ type Input<K extends keyof typeof wire> = (operations[K] extends {
     : { body?: never }) &
   (operations[K]['parameters'] extends { path: infer P }
     ? { path: P }
-    : { path?: never }) & { token?: string };
+    : { path?: never }) &
+  (operations[K]['parameters'] extends { query?: infer Q }
+    ? { query?: Q }
+    : { query?: never }) & { token?: string };
 
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code?: NotReady['code'],
+    public readonly detail?: unknown,
   ) {
     super(`接口返回 HTTP ${status}`);
     this.name = 'ApiError';
@@ -108,8 +112,16 @@ export function createApiClient(baseUrl: string, transport: Transport) {
         return encodeURIComponent(value);
       },
     );
+    const query = Object.entries(
+      (input?.query ?? {}) as Record<string, unknown>,
+    )
+      .filter(([, v]) => v !== undefined)
+      .map(
+        ([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+      )
+      .join('&');
     const response = await transport({
-      url: baseUrl.replace(/\/$/, '') + path,
+      url: baseUrl.replace(/\/$/, '') + path + (query ? `?${query}` : ''),
       method: operation.method,
       timeout:
         operation.requestMediaType === 'application/octet-stream'
@@ -138,6 +150,11 @@ export function createApiClient(baseUrl: string, transport: Transport) {
       throw new ApiError(
         response.status,
         unavailable ? 'DATABASE_UNAVAILABLE' : undefined,
+        response.status === 409 &&
+        '409' in operation.responses &&
+        matches(operation.responses['409'] as WireSchema, response.data)
+          ? response.data
+          : undefined,
       );
     }
     if (operation.responseMediaType === 'application/octet-stream') {

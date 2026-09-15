@@ -615,7 +615,9 @@ export function WorkspacePage() {
                 )?.name
               }{' '}
               · 经办人：{person(selected.handlerMemberId)} · 审核员：
-              {person(selected.reviewerMemberId)}
+              {selected.reviewerMemberId
+                ? person(selected.reviewerMemberId)
+                : '赛事共享审核'}
             </p>
           )}
           {selected.state === 'DRAFT' &&

@@ -1,5 +1,14 @@
 import type { Prisma } from '@caau/database';
 import type { RequirementsDto } from '../materials/materials.dto.js';
+export async function advanceExecutionContext(
+  tx: Prisma.TransactionClient,
+  taskId: string,
+) {
+  return tx.taskExecution.update({
+    where: { taskId },
+    data: { revision: { increment: 1 } },
+  });
+}
 export async function initializeExecution(
   tx: Prisma.TransactionClient,
   taskId: string,

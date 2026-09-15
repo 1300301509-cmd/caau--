@@ -18,6 +18,12 @@ import {
   taskPolicy,
   type Actor,
 } from '../authorization/policy.js';
+import {
+  assignIndividualHandler,
+  appendIndividualAssignment,
+  individualPolicy,
+  individualTasks,
+} from '../authorization/individual-policy.js';
 import { initializeExecution } from '../workflow/execution.js';
 import {
   FILE_EXTENSIONS,
@@ -43,6 +49,7 @@ function uploadCompatible(config: ReturnType<typeof requirements>) {
 }
 
 const includeTask = {
+  individualChannel: true,
   scope: {
     include: {
       handler: { include: { member: true } },
@@ -58,11 +65,15 @@ type LoadedTask = Prisma.MaterialTaskGetPayload<{
   include: typeof includeTask;
 }>;
 function visibleTasks(actor: Actor): Prisma.MaterialTaskWhereInput {
+  return { OR: [legacyVisibleTasks(actor), individualTasks(actor)] };
+}
+function legacyVisibleTasks(actor: Actor): Prisma.MaterialTaskWhereInput {
   if (hasRole(actor, 'ORGANIZER'))
     return {
       state: 'PUBLISHED',
       scope: {
         handler: {
+          active: true,
           member: { userId: actor.id, active: true, role: 'ORGANIZER' },
         },
       },
@@ -72,6 +83,7 @@ function visibleTasks(actor: Actor): Prisma.MaterialTaskWhereInput {
       state: 'PUBLISHED',
       scope: {
         reviewer: {
+          active: true,
           member: { userId: actor.id, active: true, role: 'REVIEWER' },
         },
         handler: {
@@ -91,6 +103,7 @@ function visibleTasks(actor: Actor): Prisma.MaterialTaskWhereInput {
       scope: {
         grants: {
           some: {
+            active: true,
             member: { userId: actor.id, role: 'EVENT_MANAGER', active: true },
           },
         },
@@ -104,6 +117,7 @@ function visibleEvents(actor: Actor): Prisma.EventWhereInput {
       scope: {
         grants: {
           some: {
+            active: true,
             member: { userId: actor.id, active: true, role: 'EVENT_MANAGER' },
           },
         },
@@ -144,7 +158,8 @@ function view(t: LoadedTask) {
     revision: t.revision,
     organizationId: t.scope.handler.member.organizationId,
     handlerMemberId: t.scope.handler.memberId,
-    reviewerMemberId: t.scope.reviewer!.memberId,
+    reviewerMemberId: t.scope.reviewer?.memberId ?? null,
+    individualChannel: !!t.individualChannel,
     requirements:
       t.state === 'PUBLISHED'
         ? t.requirements[0]!.configuration
@@ -162,6 +177,44 @@ export class MaterialsService {
     private readonly auth: AuthorizationService,
     private readonly store: PrivateStore,
   ) {}
+  async createIndividualTask(
+    tx: Prisma.TransactionClient,
+    actor: Actor,
+    input: unknown,
+  ) {
+    const b = bodyObject(input, [
+      'eventId',
+      'organizationId',
+      'handlerMemberId',
+      'title',
+    ]);
+    const eventId = uuid(b.eventId),
+      taskId = randomUUID();
+    await this.auth.requireEventManager(tx, actor, eventId);
+    const scope = await assignIndividualHandler(
+      tx,
+      actor,
+      eventId,
+      uuid(b.organizationId),
+      uuid(b.handlerMemberId),
+      taskId,
+    );
+    await tx.materialTask.create({
+      data: {
+        id: taskId,
+        eventId,
+        title: text(b.title, 160),
+        configuration: {},
+      },
+    });
+    await appendIndividualAssignment(tx, {
+      taskId,
+      handlerGrantId: scope.handlerGrantId,
+      generation: 1,
+      actorId: actor.id,
+    });
+    return { id: taskId };
+  }
   execute(
     token: string,
     action: string,
@@ -242,8 +295,11 @@ export class MaterialsService {
             this.auth.requireEventManager(tx, actor, task.eventId);
           const config =
             task.state === 'DRAFT'
-              ? requirements(task.configuration)
-              : requirements(task.requirements[0]!.configuration);
+              ? requirements(task.configuration, !!task.individualChannel)
+              : requirements(
+                  task.requirements[0]!.configuration,
+                  !!task.individualChannel,
+                );
           if (action === 'template.create') {
             await manager();
             if (task.state !== 'DRAFT')
@@ -446,6 +502,8 @@ export class MaterialsService {
         if (action === 'materials.read') {
           if (task.state === 'DRAFT')
             await this.auth.requireEventManager(tx, actor, task.eventId);
+          else if (task.individualChannel)
+            await individualPolicy(tx, actor, task.id, 'read');
           else await taskPolicy(tx, actor, task.id, 'task.read');
           return view(task);
         }
@@ -474,7 +532,9 @@ export class MaterialsService {
         if (revision(b.expectedRevision) !== task.revision)
           throw new ConflictException('Task changed; refresh before saving');
         if (action === 'materials.configure') {
-          const configuration = uploadCompatible(requirements(b.requirements));
+          const configuration = uploadCompatible(
+            requirements(b.requirements, !!task.individualChannel),
+          );
           return view(
             await tx.materialTask.update({
               where: { id: task.id, revision: task.revision },
@@ -484,6 +544,10 @@ export class MaterialsService {
           );
         }
         if (action === 'materials.assign') {
+          if (task.individualChannel)
+            throw new ConflictException(
+              'Use individual task handover after publication',
+            );
           if (
             uuid(b.organizationId) !== task.scope.handler.member.organizationId
           )
@@ -519,18 +583,28 @@ export class MaterialsService {
         }
         if (action === 'materials.publish') {
           const configuration = uploadCompatible(
-            requirements(task.configuration),
+            requirements(task.configuration, !!task.individualChannel),
           );
           // Revalidate current users/members and conflicts at publication, not only on creation.
-          await this.auth.assignTaskAnchor(
-            tx,
-            actor,
-            task.eventId,
-            task.scope.handler.member.organizationId,
-            task.scope.handler.memberId,
-            task.scope.reviewer!.memberId,
-            task.id,
-          );
+          if (task.individualChannel)
+            await assignIndividualHandler(
+              tx,
+              actor,
+              task.eventId,
+              task.scope.handler.member.organizationId,
+              task.scope.handler.memberId,
+              task.id,
+            );
+          else
+            await this.auth.assignTaskAnchor(
+              tx,
+              actor,
+              task.eventId,
+              task.scope.handler.member.organizationId,
+              task.scope.handler.memberId,
+              task.scope.reviewer!.memberId,
+              task.id,
+            );
           const templates = await tx.templateUpload.findMany({
             where: { taskId: task.id },
           });

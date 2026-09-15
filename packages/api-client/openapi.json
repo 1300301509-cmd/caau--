@@ -11,6 +11,18 @@
         "required": ["action"],
         "type": "object"
       },
+      "ActivateIndividualDto": {
+        "properties": {
+          "expectedRevision": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["expectedRevision", "reason"],
+        "type": "object"
+      },
       "ActiveDto": {
         "properties": {
           "active": {
@@ -90,6 +102,52 @@
           }
         },
         "required": ["expectedRevision", "requirements"],
+        "type": "object"
+      },
+      "CreateIndividualDto": {
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/IndividualContentDto"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requirementItemId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "taskId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["id", "taskId", "key", "content"],
+        "type": "object"
+      },
+      "CreateIndividualTaskDto": {
+        "properties": {
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "handlerMemberId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": ["eventId", "organizationId", "handlerMemberId", "title"],
         "type": "object"
       },
       "CreateTaskDto": {
@@ -458,6 +516,411 @@
         "required": ["id"],
         "type": "object"
       },
+      "IndividualActionDto": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "content": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IndividualContentDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "fromState": {
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "IN_REVIEW",
+              "RETURNED",
+              "APPROVED"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "modification": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "submissionId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "toState": {
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "IN_REVIEW",
+              "RETURNED",
+              "APPROVED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "action",
+          "fromState",
+          "toState",
+          "submissionId",
+          "actorId",
+          "actorName",
+          "occurredAt",
+          "reason",
+          "modification",
+          "content"
+        ],
+        "type": "object"
+      },
+      "IndividualCommandDto": {
+        "properties": {
+          "expectedDraftRevision": {
+            "type": "number"
+          },
+          "expectedRevision": {
+            "type": "number"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "key": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "modification": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "submissionId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["key", "expectedRevision", "generation"],
+        "type": "object"
+      },
+      "IndividualConflictDto": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "current": {
+            "$ref": "#/components/schemas/IndividualViewDto"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["code", "message", "current"],
+        "type": "object"
+      },
+      "IndividualContentDto": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "fileIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "text": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": ["title", "category", "text", "fileIds"],
+        "type": "object"
+      },
+      "IndividualGrantDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": ["active"],
+        "type": "object"
+      },
+      "IndividualHistoryDto": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/IndividualActionDto"
+            },
+            "type": "array"
+          },
+          "materialRevision": {
+            "type": "number"
+          },
+          "serverTime": {
+            "type": "string"
+          },
+          "submissions": {
+            "items": {
+              "$ref": "#/components/schemas/IndividualSubmissionDto"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "materialRevision",
+          "serverTime",
+          "total",
+          "actions",
+          "submissions"
+        ],
+        "type": "object"
+      },
+      "IndividualResultDto": {
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/IndividualViewDto"
+          },
+          "resultRevision": {
+            "type": "number"
+          },
+          "resultSubmissionId": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": ["resultRevision", "resultSubmissionId", "current"],
+        "type": "object"
+      },
+      "IndividualSnapshotDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IndividualViewDto"
+            },
+            "type": "array"
+          },
+          "selected": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IndividualViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "serverTime": {
+            "type": "string"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": ["serverTime", "total", "items", "selected"],
+        "type": "object"
+      },
+      "IndividualSubmissionDto": {
+        "properties": {
+          "actorId": {
+            "type": "string"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "content": {
+            "$ref": "#/components/schemas/IndividualContentDto"
+          },
+          "deadline": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "actorId",
+          "actorName",
+          "occurredAt",
+          "generation",
+          "deadline",
+          "content"
+        ],
+        "type": "object"
+      },
+      "IndividualUploadDto": {
+        "properties": {
+          "expectedBytes": {
+            "type": "number"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "state": {
+            "enum": ["PENDING", "CONFIRMED"],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "originalName",
+          "extension",
+          "expectedBytes",
+          "state"
+        ],
+        "type": "object"
+      },
+      "IndividualUploadInputDto": {
+        "properties": {
+          "expectedBytes": {
+            "type": "number"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "originalName",
+          "extension",
+          "expectedBytes",
+          "sha256",
+          "generation"
+        ],
+        "type": "object"
+      },
+      "IndividualViewDto": {
+        "properties": {
+          "closed": {
+            "type": "boolean"
+          },
+          "contextRevision": {
+            "type": "number"
+          },
+          "currentSubmissionId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "deadline": {
+            "type": "string"
+          },
+          "draft": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IndividualContentDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "draftRevision": {
+            "type": "number"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastAction": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IndividualActionDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "state": {
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "IN_REVIEW",
+              "RETURNED",
+              "APPROVED"
+            ],
+            "type": "string"
+          },
+          "submission": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IndividualSubmissionDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "taskId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "state",
+          "revision",
+          "draftRevision",
+          "generation",
+          "contextRevision",
+          "closed",
+          "deadline",
+          "currentSubmissionId",
+          "draft",
+          "submission",
+          "lastAction"
+        ],
+        "type": "object"
+      },
       "IssueDto": {
         "properties": {
           "instruction": {
@@ -646,11 +1109,12 @@
             "type": "string"
           },
           "materials": {
+            "description": "Empty allowed only for individual channel tasks",
             "items": {
               "$ref": "#/components/schemas/MaterialRequirementDto"
             },
             "maxItems": 50,
-            "minItems": 1,
+            "minItems": 0,
             "type": "array"
           }
         },
@@ -760,6 +1224,21 @@
         "required": ["expectedRevision", "entries"],
         "type": "object"
       },
+      "SaveIndividualDto": {
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/IndividualContentDto"
+          },
+          "expectedDraftRevision": {
+            "type": "number"
+          },
+          "generation": {
+            "type": "number"
+          }
+        },
+        "required": ["expectedDraftRevision", "generation", "content"],
+        "type": "object"
+      },
       "SubmissionViewDto": {
         "properties": {
           "actorId": {
@@ -867,6 +1346,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "individualChannel": {
+            "type": "boolean"
+          },
           "organizationId": {
             "format": "uuid",
             "type": "string"
@@ -890,7 +1372,7 @@
             "type": "object"
           },
           "reviewerMemberId": {
-            "format": "uuid",
+            "nullable": true,
             "type": "string"
           },
           "revision": {
@@ -907,16 +1389,16 @@
             "type": "array"
           },
           "title": {
-            "maxLength": 160,
             "type": "string"
           }
         },
         "required": [
+          "eventId",
+          "title",
           "organizationId",
           "handlerMemberId",
           "reviewerMemberId",
-          "eventId",
-          "title",
+          "individualChannel",
           "id",
           "state",
           "revision",
@@ -1941,6 +2423,72 @@
         "tags": ["Authorization"]
       }
     },
+    "/api/v1/event-grants/{id}/active": {
+      "patch": {
+        "operationId": "setEventGrantActive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndividualGrantDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
     "/api/v1/events": {
       "get": {
         "operationId": "listEvents",
@@ -2099,6 +2647,910 @@
         },
         "summary": "API process liveness; independent of database",
         "tags": ["system"]
+      }
+    },
+    "/api/v1/individual-material-tasks": {
+      "post": {
+        "operationId": "createIndividualMaterialTask",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIndividualTaskDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials": {
+      "post": {
+        "operationId": "createIndividualMaterial",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIndividualDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualResultDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials/snapshot": {
+      "get": {
+        "operationId": "getIndividualSnapshot",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "selectedId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "taskId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualSnapshotDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials/{id}/approve": {
+      "post": {
+        "operationId": "approveIndividualMaterial",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndividualCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualResultDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials/{id}/draft": {
+      "patch": {
+        "operationId": "saveIndividualDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveIndividualDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualResultDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials/{id}/history": {
+      "get": {
+        "operationId": "getIndividualHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualHistoryDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials/{id}/return": {
+      "post": {
+        "operationId": "returnIndividualMaterial",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndividualCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualResultDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials/{id}/start-review": {
+      "post": {
+        "operationId": "startIndividualReview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndividualCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualResultDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials/{id}/submit": {
+      "post": {
+        "operationId": "submitIndividualMaterial",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndividualCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualResultDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-materials/{id}/uploads": {
+      "post": {
+        "operationId": "createIndividualUpload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndividualUploadInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualUploadDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-uploads/{id}/confirm": {
+      "post": {
+        "operationId": "confirmIndividualUpload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualUploadDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-uploads/{id}/content": {
+      "get": {
+        "operationId": "downloadIndividualContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      },
+      "post": {
+        "operationId": "uploadIndividualContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
+      }
+    },
+    "/api/v1/individual-uploads/{id}/info": {
+      "get": {
+        "operationId": "getIndividualFileInfo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualUploadDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
       }
     },
     "/api/v1/material-tasks": {
@@ -2732,6 +4184,72 @@
         ],
         "summary": "",
         "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/material-tasks/{id}/individual-channel": {
+      "post": {
+        "operationId": "activateIndividualChannel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateIndividualDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Session expired or revoked"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndividualConflictDto"
+                }
+              }
+            },
+            "description": "State, revision, deadline or command conflict; current only when authorized"
+          },
+          "503": {
+            "description": "Database, audit or storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Individual"]
       }
     },
     "/api/v1/material-tasks/{id}/publish": {

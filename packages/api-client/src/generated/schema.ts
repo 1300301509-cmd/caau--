@@ -257,6 +257,22 @@ export interface paths {
     patch: operations['setUserActive'];
     trace?: never;
   };
+  '/api/v1/event-grants/{id}/active': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['setEventGrantActive'];
+    trace?: never;
+  };
   '/api/v1/events': {
     parameters: {
       query?: never;
@@ -298,6 +314,214 @@ export interface paths {
     };
     /** API process liveness; independent of database */
     get: operations['getHealth'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-material-tasks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['createIndividualMaterialTask'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-materials': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['createIndividualMaterial'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-materials/snapshot': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getIndividualSnapshot'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-materials/{id}/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['approveIndividualMaterial'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-materials/{id}/draft': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['saveIndividualDraft'];
+    trace?: never;
+  };
+  '/api/v1/individual-materials/{id}/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getIndividualHistory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-materials/{id}/return': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['returnIndividualMaterial'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-materials/{id}/start-review': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['startIndividualReview'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-materials/{id}/submit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['submitIndividualMaterial'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-materials/{id}/uploads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['createIndividualUpload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-uploads/{id}/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['confirmIndividualUpload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-uploads/{id}/content': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['downloadIndividualContent'];
+    put?: never;
+    post: operations['uploadIndividualContent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/individual-uploads/{id}/info': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getIndividualFileInfo'];
     put?: never;
     post?: never;
     delete?: never;
@@ -444,6 +668,22 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations['handoverTaskHandler'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/material-tasks/{id}/individual-channel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['activateIndividualChannel'];
     delete?: never;
     options?: never;
     head?: never;
@@ -731,6 +971,10 @@ export interface components {
       /** @enum {string} */
       action: 'task.read' | 'content.write' | 'review' | 'file.download';
     };
+    ActivateIndividualDto: {
+      expectedRevision: number;
+      reason: string;
+    };
     ActiveDto: {
       active: boolean;
     };
@@ -756,6 +1000,25 @@ export interface components {
     ConfigureTaskDto: {
       expectedRevision: number;
       requirements: components['schemas']['RequirementsDto'];
+    };
+    CreateIndividualDto: {
+      content: components['schemas']['IndividualContentDto'];
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      key: string;
+      requirementItemId?: string | null;
+      /** Format: uuid */
+      taskId: string;
+    };
+    CreateIndividualTaskDto: {
+      /** Format: uuid */
+      eventId: string;
+      /** Format: uuid */
+      handlerMemberId: string;
+      /** Format: uuid */
+      organizationId: string;
+      title: string;
     };
     CreateTaskDto: {
       /** Format: uuid */
@@ -876,6 +1139,116 @@ export interface components {
       /** Format: uuid */
       id: string;
     };
+    IndividualActionDto: {
+      action: string;
+      actorId: string;
+      actorName: string;
+      content: components['schemas']['IndividualContentDto'] | null;
+      /** @enum {string} */
+      fromState:
+        | 'DRAFT'
+        | 'PENDING_REVIEW'
+        | 'IN_REVIEW'
+        | 'RETURNED'
+        | 'APPROVED';
+      id: string;
+      modification: string;
+      occurredAt: string;
+      reason: string;
+      revision: number;
+      submissionId: string | null;
+      /** @enum {string} */
+      toState:
+        | 'DRAFT'
+        | 'PENDING_REVIEW'
+        | 'IN_REVIEW'
+        | 'RETURNED'
+        | 'APPROVED';
+    };
+    IndividualCommandDto: {
+      expectedDraftRevision?: number;
+      expectedRevision: number;
+      generation: number;
+      /** Format: uuid */
+      key: string;
+      modification?: string;
+      reason?: string;
+      /** Format: uuid */
+      submissionId?: string;
+    };
+    IndividualConflictDto: {
+      code: string;
+      current: components['schemas']['IndividualViewDto'];
+      message: string;
+    };
+    IndividualContentDto: {
+      category: string;
+      fileIds: string[];
+      text: string;
+      title: string;
+    };
+    IndividualGrantDto: {
+      active: boolean;
+    };
+    IndividualHistoryDto: {
+      actions: components['schemas']['IndividualActionDto'][];
+      materialRevision: number;
+      serverTime: string;
+      submissions: components['schemas']['IndividualSubmissionDto'][];
+      total: number;
+    };
+    IndividualResultDto: {
+      current: components['schemas']['IndividualViewDto'];
+      resultRevision: number;
+      resultSubmissionId: string | null;
+    };
+    IndividualSnapshotDto: {
+      items: components['schemas']['IndividualViewDto'][];
+      selected: components['schemas']['IndividualViewDto'] | null;
+      serverTime: string;
+      total: number;
+    };
+    IndividualSubmissionDto: {
+      actorId: string;
+      actorName: string;
+      content: components['schemas']['IndividualContentDto'];
+      deadline: string;
+      generation: number;
+      id: string;
+      occurredAt: string;
+      version: number;
+    };
+    IndividualUploadDto: {
+      expectedBytes: number;
+      extension: string;
+      id: string;
+      originalName: string;
+      /** @enum {string} */
+      state: 'PENDING' | 'CONFIRMED';
+    };
+    IndividualUploadInputDto: {
+      expectedBytes: number;
+      extension: string;
+      generation: number;
+      originalName: string;
+      sha256: string;
+    };
+    IndividualViewDto: {
+      closed: boolean;
+      contextRevision: number;
+      currentSubmissionId: string | null;
+      deadline: string;
+      draft: components['schemas']['IndividualContentDto'] | null;
+      draftRevision: number;
+      generation: number;
+      id: string;
+      lastAction: components['schemas']['IndividualActionDto'] | null;
+      revision: number;
+      /** @enum {string} */
+      state: 'DRAFT' | 'PENDING_REVIEW' | 'IN_REVIEW' | 'RETURNED' | 'APPROVED';
+      submission: components['schemas']['IndividualSubmissionDto'] | null;
+      taskId: string;
+    };
     IssueDto: {
       instruction: string;
       /** Format: uuid */
@@ -943,6 +1316,7 @@ export interface components {
     RequirementsDto: {
       /** Format: date-time */
       deadline: string;
+      /** @description Empty allowed only for individual channel tasks */
       materials: components['schemas']['MaterialRequirementDto'][];
     };
     ReviewDto: {
@@ -976,6 +1350,11 @@ export interface components {
     SaveDraftDto: {
       entries: components['schemas']['EntryDto'][];
       expectedRevision: number;
+    };
+    SaveIndividualDto: {
+      content: components['schemas']['IndividualContentDto'];
+      expectedDraftRevision: number;
+      generation: number;
     };
     SubmissionViewDto: {
       /** Format: uuid */
@@ -1013,14 +1392,14 @@ export interface components {
       handlerMemberId: string;
       /** Format: uuid */
       id: string;
+      individualChannel: boolean;
       /** Format: uuid */
       organizationId: string;
       /** Format: date-time */
       publishedAt: string | null;
       requirementVersion: number | null;
       requirements: components['schemas']['RequirementsDto'] | null;
-      /** Format: uuid */
-      reviewerMemberId: string;
+      reviewerMemberId: string | null;
       revision: number;
       /** @enum {string} */
       state: 'DRAFT' | 'PUBLISHED';
@@ -2016,6 +2395,68 @@ export interface operations {
       };
     };
   };
+  setEventGrantActive: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IndividualGrantDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   listEvents: {
     parameters: {
       query?: never;
@@ -2200,6 +2641,857 @@ export interface operations {
         content: {
           'application/json': components['schemas']['HealthDto'];
         };
+      };
+    };
+  };
+  createIndividualMaterialTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateIndividualTaskDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  createIndividualMaterial: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateIndividualDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualResultDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getIndividualSnapshot: {
+    parameters: {
+      query?: {
+        limit?: number;
+        offset?: number;
+        state?: string;
+        selectedId?: string;
+        taskId?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualSnapshotDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  approveIndividualMaterial: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IndividualCommandDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualResultDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  saveIndividualDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveIndividualDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualResultDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getIndividualHistory: {
+    parameters: {
+      query?: {
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualHistoryDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  returnIndividualMaterial: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IndividualCommandDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualResultDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  startIndividualReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IndividualCommandDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualResultDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  submitIndividualMaterial: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IndividualCommandDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualResultDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  createIndividualUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IndividualUploadInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualUploadDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  confirmIndividualUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualUploadDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  downloadIndividualContent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  uploadIndividualContent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/octet-stream': string;
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getIndividualFileInfo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualUploadDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };
@@ -2887,6 +4179,68 @@ export interface operations {
         content?: never;
       };
       /** @description Database, private storage or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  activateIndividualChannel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ActivateIndividualDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Session expired or revoked */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description State, revision, deadline or command conflict; current only when authorized */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IndividualConflictDto'];
+        };
+      };
+      /** @description Database, audit or storage unavailable */
       503: {
         headers: {
           [name: string]: unknown;

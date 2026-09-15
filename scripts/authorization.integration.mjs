@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { rm } from 'node:fs/promises';
+import { rm, readFile } from 'node:fs/promises';
 import { workflowIntegration } from './workflow.integration.mjs';
 import { deployAuthorizationBaseline } from './authorization-upgrade.mjs';
 import { materialsIntegration } from './materials.integration.mjs';
@@ -17,6 +17,7 @@ import {
   run,
 } from './database.mjs';
 
+import { individualIntegration } from './individual.integration.mjs';
 export async function authorizationIntegration(t) {
   assert.equal(process.env.CAAU_DATABASE_INTEGRATION, 'test');
   assertLocalDatabaseUrls(process.env, 'test');
@@ -62,6 +63,46 @@ export async function authorizationIntegration(t) {
     );
     sql = new pg.Client({ connectionString: url.href });
     await sql.connect();
+    await t.test(
+      '006 additive migration preserves all 23 old tables, five checksums, V1/V2 and private template/file bytes',
+      async () => {
+        for (const [table, hash] of Object.entries(baseline.preserved)) {
+          const expr =
+            table === 'EventGrant' ? "to_jsonb(t)-'active'" : 'to_jsonb(t)';
+          const rows = (
+            await sql.query(
+              `SELECT ${expr} data FROM "${table}" t ORDER BY (${expr})::text`,
+            )
+          ).rows;
+          assert.equal(
+            createHash('sha256').update(JSON.stringify(rows)).digest('hex'),
+            hash,
+            table,
+          );
+        }
+        assert.deepEqual(
+          (
+            await sql.query(
+              'SELECT migration_name,checksum FROM _prisma_migrations WHERE migration_name<>$1 ORDER BY migration_name',
+              ['202609160001_individual_materials'],
+            )
+          ).rows,
+          baseline.checksums,
+        );
+        for (const object of baseline.objects)
+          assert.equal(
+            createHash('sha256')
+              .update(await readFile(path.join(baseline.fileRoot, object)))
+              .digest('hex'),
+            baseline.fileHash,
+          );
+        assert.equal(
+          (await sql.query('SELECT count(*)::int n FROM "TaskMaterialChannel"'))
+            .rows[0].n,
+          0,
+        );
+      },
+    );
     await t.test(
       'phase-2 migration preserves identity/audit and published snapshots, backfilling execution only',
       async () => {
@@ -496,7 +537,7 @@ export async function authorizationIntegration(t) {
         assert.equal(
           (await sql.query('SELECT count(*)::int n FROM "TaskScope"')).rows[0]
             .n,
-          3,
+          4, // two retained upgrade tasks plus the two authorization anchors
         );
       },
     );
@@ -650,7 +691,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          5,
+          6,
         );
       },
     );
@@ -665,6 +706,68 @@ export async function authorizationIntegration(t) {
       orgA,
       orgB,
       session,
+    });
+    await session('preservedOrganizer', baseline.userId);
+    await session('preservedReviewer', baseline.reviewerUser);
+    await t.test(
+      'retained old V1/V2 and private attachments/templates remain readable after upgrade and restart',
+      async () => {
+        const restarted = await createApplication(config);
+        try {
+          await restarted.listen(0, '127.0.0.1');
+          const sdk = createApiClient(
+            await restarted.getUrl(),
+            createFetchTransport(),
+          );
+          const versions = await sdk.request('listSubmissionVersions', {
+            token: tokens.preservedOrganizer,
+            path: { id: baseline.oldTask },
+          });
+          assert.equal(versions.length, 2);
+          assert.deepEqual(
+            versions.map((s) => s.version),
+            [1, 2],
+          );
+          const reviewerVersions = await sdk.request('listSubmissionVersions', {
+            token: tokens.preservedReviewer,
+            path: { id: baseline.oldTask },
+          });
+          assert.equal(reviewerVersions.length, 2);
+          for (const [operation, id] of [
+            ['downloadPrivateContent', baseline.oldFile],
+            ['downloadTemplateContent', baseline.templateId],
+          ]) {
+            const data = await sdk.request(operation, {
+              token: tokens.preservedOrganizer,
+              path: { id },
+            });
+            assert.equal(
+              createHash('sha256').update(Buffer.from(data)).digest('hex'),
+              baseline.fileHash,
+            );
+          }
+          await assert.rejects(
+            sdk.request('downloadTemplateContent', {
+              token: tokens.preservedReviewer,
+              path: { id: baseline.templateId },
+            }),
+            (e) => e.status === 403,
+          );
+        } finally {
+          await restarted.close();
+        }
+      },
+    );
+    await individualIntegration(t, {
+      base,
+      config,
+      sql,
+      runtime,
+      tokens,
+      users,
+      members,
+      orgA,
+      orgB,
     });
     await workflowIntegration(t, {
       base,

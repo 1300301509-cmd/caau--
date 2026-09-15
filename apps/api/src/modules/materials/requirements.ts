@@ -27,14 +27,14 @@ function instant(value: unknown): string {
     );
   return new Date(value).toISOString();
 }
-export function requirements(input: unknown) {
+export function requirements(input: unknown, allowEmpty = false) {
   const b = bodyObject(input, ['deadline', 'materials']);
   if (
     !Array.isArray(b.materials) ||
-    b.materials.length < 1 ||
+    b.materials.length < (allowEmpty ? 0 : 1) ||
     b.materials.length > 50
   )
-    throw new BadRequestException('1 to 50 materials required');
+    throw new BadRequestException('Invalid material requirement count');
   const ids = new Set<string>();
   return {
     deadline: instant(b.deadline),
