@@ -2,9 +2,9 @@
 
 本仓库用于建设 CAAU 微信小程序、Web 管理后台和后端 API。
 
-当前优先阶段：CAAU-012 A/B/C 已完成本地验收：单份材料五态、赛事共享审核、不可变历史，以及 Web `/materials` 和真实多会话自动同步。42项数据库全套通过；15条浏览器同步样本 p50 1821ms、p95/max 2093ms。旧数据/附件/模板保留。可操作演示与截图见 [Web手册](docs/runbooks/individual-material-web.md)，接口见 [后端手册](docs/runbooks/individual-materials.md)。D Taro承办页面与自动同步已完成本地构建/测试，但微信开发者工具新版业务流程和真机均受平台资源阻塞、未通过；Web或构建结果不替代平台验收。操作与下一轮手机步骤见 [Taro手册](docs/runbooks/individual-material-miniapp.md)。
+当前优先阶段：CAAU-012 A/B/C/D 已完成本地交付：单份材料五态、赛事共享审核、不可变历史，以及 Web `/materials`、Taro承办页面和自动同步。42项数据库全套通过；15条浏览器同步样本 p50 1821ms、p95/max 2093ms。旧数据/附件/模板保留。官方游客模拟器加本地测试身份已完成一条新增/V1退回/V2通过主流程；真实文件选择返回后平台回调悬挂，附件闭环、正式微信身份/AppID/合法域名及真机仍未通过。可操作演示及分层边界见 [Web手册](docs/runbooks/individual-material-web.md)、[后端手册](docs/runbooks/individual-materials.md) 和 [Taro手册](docs/runbooks/individual-material-miniapp.md)。
 
-既有成果：CAAU-005 第一段已完成本地验收：真实赛事/材料任务创建、承办机构/经办/审核指派、要求配置、不可变 V1 发布及范围查询，提供总部 Web 工作台。沿用 CAAU-004 身份/权限/审计；真实 PostgreSQL 与浏览器闭环通过。第二段已加入本地私有文件、草稿 CAS、不可变幂等提交、整包审核/退回重交、延期和同机构交接后端；第三段已实现总部审核/历史/管理操作、承办 Web 联调页面及 Taro“待办/赛事/我的”业务页面。真实浏览器闭环通过，小程序运行时仍待微信工具/真机验证，无部署或真实微信登录。小程序编译与请求逻辑测试通过不等于微信开发者工具或真机验收通过。原始架构建议见 [agent.md](agent.md)，其中的示例模型、业务规则和实施顺序不等于已确认需求。
+既有成果：CAAU-005 第一段已完成本地验收：真实赛事/材料任务创建、承办机构/经办/审核指派、要求配置、不可变 V1 发布及范围查询，提供总部 Web 工作台。沿用 CAAU-004 身份/权限/审计；真实 PostgreSQL 与浏览器闭环通过。第二段已加入本地私有文件、草稿 CAS、不可变幂等提交、整包审核/退回重交、延期和同机构交接后端；第三段已实现总部审核/历史/管理操作、承办 Web 联调页面及 Taro“待办/赛事/我的”业务页面。真实浏览器闭环通过，小程序游客模拟器已有部分运行证据，平台文件闭环和真机仍待验证，无部署或真实微信登录。小程序编译与请求逻辑测试通过不等于微信开发者工具或真机验收通过。原始架构建议见 [agent.md](agent.md)，其中的示例模型、业务规则和实施顺序不等于已确认需求。
 
 ## 从这里开始
 
@@ -44,7 +44,7 @@ corepack pnpm dev:admin     # http://127.0.0.1:5173
 corepack pnpm dev:miniapp   # watch 编译，产物 apps/miniapp/dist
 ```
 
-Web `/workspace` 提供赛事与材料任务工作台；`/materials` 为新版单份办理/共享审核及旧整包只读历史。需按操作文档准备数据库，以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 开启本地身份，再导入会话；`corepack pnpm materials:demo` 可追加合成演示任务。原首页点击“检查后端连接”；新增“检查数据库就绪”是独立检查，无数据库配置时正确显示 503。小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见 [Taro手册](docs/runbooks/individual-material-miniapp.md)；当前仍是 `touristappid` 和回环HTTP，未完成新版开发者工具或真机验收。API 开发命令先编译再启动，不自动热重载。
+Web `/workspace` 提供赛事与材料任务工作台；`/materials` 为新版单份办理/共享审核及旧整包只读历史。需按操作文档准备数据库，以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 开启本地身份，再导入会话；`corepack pnpm materials:demo` 可追加合成演示任务。原首页点击“检查后端连接”；新增“检查数据库就绪”是独立检查，无数据库配置时正确显示 503。小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见 [Taro手册](docs/runbooks/individual-material-miniapp.md)；当前仍是 `touristappid` 和回环HTTP，仅本地模拟器主流程部分通过，附件、正式平台和真机验收未完成。API 开发命令先编译再启动，不自动热重载。
 
 ## 检查与构建
 
