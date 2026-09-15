@@ -20,6 +20,8 @@
 - [本地身份与权限操作](docs/runbooks/authorization.md)：角色矩阵、合成会话、审计、验证边界和 CAAU-005 条件。
 - [本地测试赛事与授权](docs/runbooks/local-test-events.md)：固定 A/B 赛事、五身份范围、幂等准备及无任务展示限制。
 - [本地单份材料体验任务](docs/runbooks/local-test-tasks.md)：A/B 空清单任务、演示截止、访问范围和亲自体验步骤。
+- [总部赛事管理 Web](docs/runbooks/event-management-web.md)：赛事列表、当前字段创建、详情及权限边界。
+- [赛事级承办关系最小设计](docs/product/event-organizer-relationship-design.md)：机构、人员、访问授权和任务指派的区分及待确认问题，不代表已实施模型。
 - [数据库与契约操作](docs/runbooks/database-contract.md)：Docker 官方安装、隔离开发/测试、迁移规则与待执行验证。
 
 ## 目录
@@ -46,7 +48,7 @@ corepack pnpm dev:admin     # http://127.0.0.1:5173
 corepack pnpm dev:miniapp   # watch 编译，产物 apps/miniapp/dist
 ```
 
-Web 当前以 `/materials`（根地址同页）作为唯一可见业务模块，提供单份办理、共享审核及旧整包只读历史，并使用 Tabler 风格的紧凑后台壳层；原 `/workspace` 不进入导航，仅暂留自动化回归兼容。需按操作文档准备数据库，以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 开启本地身份；页面可直接选择五个固定测试身份，后端签发真实测试会话，当前标签页刷新恢复且标签页间互不覆盖。`corepack pnpm events:local` 幂等准备两个本地测试赛事及范围授权；`corepack pnpm tasks:local` 进一步准备两个空材料清单、可自由新增的体验任务，不代替用户新增、提交或审核。`corepack pnpm materials:demo` 才会追加带预置业务过程的合成演示任务。工程连接辅助页位于 `/system/health`。小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见 [Taro手册](docs/runbooks/individual-material-miniapp.md)；当前仍是 `touristappid` 和回环HTTP，仅本地模拟器主流程部分通过，附件、正式平台和真机验收未完成。API 开发命令先编译再启动，不自动热重载。
+Web 当前提供 `/materials` 资料审核和 `/events` 赛事管理两个业务入口，使用同一套紧凑后台壳层；赛事管理仅支持有权赛事列表、名称/说明创建和详情，不包含赛事级承办指派。原 `/workspace` 不进入导航，仅暂留自动化回归兼容。需按操作文档准备数据库，以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 开启本地身份；页面可直接选择五个固定测试身份，后端签发真实测试会话，当前标签页刷新恢复且标签页间互不覆盖。`corepack pnpm events:local` 幂等准备两个本地测试赛事及范围授权；`corepack pnpm tasks:local` 进一步准备两个空材料清单、可自由新增的体验任务，不代替用户新增、提交或审核。`corepack pnpm materials:demo` 才会追加带预置业务过程的合成演示任务。工程连接辅助页位于 `/system/health`。小程序需在微信开发者工具中导入 `apps/miniapp`，测试身份、域名及真机步骤见 [Taro手册](docs/runbooks/individual-material-miniapp.md)；当前仍是 `touristappid` 和回环HTTP，仅本地模拟器主流程部分通过，附件、正式平台和真机验收未完成。API 开发命令先编译再启动，不自动热重载。
 
 ## 检查与构建
 

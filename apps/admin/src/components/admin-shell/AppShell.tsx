@@ -2,11 +2,18 @@ import type { ReactNode } from 'react';
 import { Tag } from 'antd';
 import { NavIcon } from './NavIcon';
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  active = 'materials',
+}: {
+  children: ReactNode;
+  active?: 'materials' | 'events';
+}) {
+  const events = active === 'events';
   return (
     <div className="review-shell">
       <a className="skip-link" href="#review-content">
-        跳到资料审核内容
+        跳到{events ? '赛事管理' : '资料审核'}内容
       </a>
 
       <header className="global-header">
@@ -40,12 +47,20 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="module-navigation-inner">
           <nav aria-label="主要导航">
             <a
-              className="module-navigation-item active"
+              className={`module-navigation-item ${events ? '' : 'active'}`}
               href="/materials"
-              aria-current="page"
+              aria-current={events ? undefined : 'page'}
             >
               <NavIcon name="review" />
               <span>资料审核</span>
+            </a>
+            <a
+              className={`module-navigation-item ${events ? 'active' : ''}`}
+              href="/events"
+              aria-current={events ? 'page' : undefined}
+            >
+              <NavIcon name="calendar" />
+              <span>赛事管理</span>
             </a>
           </nav>
         </div>
@@ -55,11 +70,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="review-page-heading">
           <div>
             <span className="review-page-kicker">业务工作台</span>
-            <h1>资料审核</h1>
-            <p>单份提交、共享审核与完整版本记录</p>
+            <h1>{events ? '赛事管理' : '资料审核'}</h1>
+            <p>
+              {events
+                ? '创建赛事并查看当前有权管理的赛事详情'
+                : '单份提交、共享审核与完整版本记录'}
+            </p>
           </div>
           <div className="review-page-actions">
-            <Tag color="blue">约 2 秒自动同步</Tag>
+            <Tag color="blue">
+              {events ? '总部赛事管理员' : '约 2 秒自动同步'}
+            </Tag>
           </div>
         </header>
         {children}

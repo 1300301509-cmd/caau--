@@ -1,6 +1,6 @@
 # 赛事创建、承办指定与信息变更：现状和待确认问题
 
-状态：CAAU-013 产品梳理，2026-09-15；不编码。本文件核对当前正式实现与已确认方向，列出缺口和待确认问题。问题中的选项只用于澄清，不是建议或已确认规则。
+状态：CAAU-013 产品梳理，2026-09-15；CAAU-018 于2026-09-16只追加当前入口事实。本文件核对当前正式实现与已确认方向，列出缺口和待确认问题。问题中的选项只用于澄清，不是建议或已确认规则。赛事级机构/人员的独立候选结构和兼容边界另见[最小设计](event-organizer-relationship-design.md)，仍未实施。
 
 已确认的高层方向来自 [requirements.md](requirements.md) R-024～R-026：总部指定承办方并填写赛事基础信息；承办方申请赛事信息变更，由总部确认；报名后相关俱乐部需要获知变更，但通知不由CAAU发送。上述方向尚不足以直接设计字段、状态机或权限。
 
@@ -10,7 +10,7 @@
 
 | 项目 | 当前事实 | 证据 |
 | --- | --- | --- |
-| 创建入口 | 总部Web `/workspace` 向 `POST /api/v1/events` 提交赛事名称和说明 | `apps/admin/src/features/materials/WorkspacePage.tsx`、`apps/api/src/modules/materials/materials.controller.ts` |
+| 创建入口 | 总部Web `/events` 向 `POST /api/v1/events` 提交赛事名称和说明；`/workspace`只留隐藏兼容入口 | `apps/admin/src/features/events/EventPage.tsx`、`apps/api/src/modules/materials/materials.controller.ts` |
 | 数据字段 | `Event`只有id、name、description、createdBy、createdAt；与独立`EventScope`共享id | `database/prisma/schema.prisma` |
 | 权限 | 需要 `events.create`；创建事务同时建立授权锚点，创建人取得赛事管理员范围 | `MaterialsService`、`AuthorizationService.createEventAnchor` |
 | 查询 | 总部赛事管理员只看有active EVENT_MANAGER grant的赛事；承办方/审核员只通过可见任务间接看到赛事 | `MaterialsService.visibleEvents` |

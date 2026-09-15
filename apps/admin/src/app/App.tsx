@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Button, Result } from 'antd';
 import { AppShell } from '../components/admin-shell/AppShell';
+import { EventPage } from '../features/events/EventPage';
 import { HealthPage } from '../features/health/HealthPage';
 import { IndividualPage } from '../features/individuals/IndividualPage';
 import { WorkspacePage } from '../features/materials/WorkspacePage';
@@ -13,19 +14,29 @@ function normalizePath(path: string) {
 export function App() {
   const path = normalizePath(location.pathname);
   const reviewPage = path === '/materials';
+  const eventPage = path === '/events';
 
   useEffect(() => {
     document.title = reviewPage
       ? '资料审核 · CAAU'
-      : path === '/system/health'
-        ? '工程连接检查 · CAAU'
-        : '页面未找到 · CAAU';
-  }, [path, reviewPage]);
+      : eventPage
+        ? '赛事管理 · CAAU'
+        : path === '/system/health'
+          ? '工程连接检查 · CAAU'
+          : '页面未找到 · CAAU';
+  }, [eventPage, path, reviewPage]);
 
   if (reviewPage) {
     return (
       <AppShell>
         <IndividualPage />
+      </AppShell>
+    );
+  }
+  if (eventPage) {
+    return (
+      <AppShell active="events">
+        <EventPage />
       </AppShell>
     );
   }

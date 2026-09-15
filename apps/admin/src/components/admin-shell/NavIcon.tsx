@@ -1,4 +1,4 @@
-export function NavIcon({ name }: { name: 'review' }) {
+export function NavIcon({ name }: { name: 'review' | 'calendar' }) {
   return (
     <svg
       className="shell-icon"
@@ -11,8 +11,17 @@ export function NavIcon({ name }: { name: 'review' }) {
       aria-hidden="true"
       data-icon={name}
     >
-      <path d="M6 3h9l3 3v15H6z" />
-      <path d="M15 3v4h4M9 12l2 2 4-4M9 18h6" />
+      {name === 'calendar' ? (
+        <>
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
+        </>
+      ) : (
+        <>
+          <path d="M6 3h9l3 3v15H6z" />
+          <path d="M15 3v4h4M9 12l2 2 4-4M9 18h6" />
+        </>
+      )}
     </svg>
   );
 }

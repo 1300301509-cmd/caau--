@@ -238,6 +238,59 @@ export async function individualBrowserTest({
     await createTask(otherEvent, 'b', 'CAAU012 其他机构任务');
     browser = await chromium.launch();
 
+    // The new event page uses the current API and keeps backend role enforcement.
+    const eventContext = await browser.newContext({
+      viewport: { width: 1100, height: 800 },
+      reducedMotion: 'reduce',
+    });
+    const eventPage = await eventContext.newPage();
+    pageErrors.length = 0;
+    await eventPage.goto('http://127.0.0.1:4173/events');
+    await expect(eventPage.getByLabel('测试身份')).toBeVisible({
+      timeout: 15000,
+    });
+    await eventPage.evaluate(
+      ([storageKey, session]) => sessionStorage.setItem(storageKey, session),
+      ['caau.local-test-session', tokens.manager],
+    );
+    await eventPage.reload();
+    await expect(
+      eventPage.getByRole('heading', { level: 1, name: '赛事管理' }),
+    ).toBeVisible();
+    await eventPage.getByRole('button', { name: '创建赛事' }).click();
+    await eventPage.getByLabel('赛事名称').fill('CAAU018 页面创建赛事');
+    await eventPage
+      .getByLabel('赛事说明')
+      .fill('隔离数据库中的赛事管理页面验收');
+    const createResponse = eventPage.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/v1/events') &&
+        response.request().method() === 'POST',
+    );
+    await eventPage.getByRole('button', { name: '确认创建' }).click();
+    assert.equal((await createResponse).status(), 200);
+    await expect(
+      eventPage.getByRole('heading', { name: 'CAAU018 页面创建赛事' }),
+    ).toBeVisible({ timeout: 15000 });
+    await expect(eventPage.getByText('承办方指派暂缓')).toBeVisible();
+    await expect(eventPage.getByText('已指定承办方')).toHaveCount(0);
+    assert.equal(pageErrors.length, 0, pageErrors.join('\n'));
+    await api(
+      'reviewer',
+      'POST',
+      'events',
+      { name: '审核员不得创建', description: '权限反例' },
+      403,
+    );
+    await api(
+      'a',
+      'POST',
+      'events',
+      { name: '承办方不得创建', description: '权限反例' },
+      403,
+    );
+    await eventContext.close();
+
     // Fixed local identities use real backend sessions while remaining isolated per tab.
     const identityContext = await browser.newContext({
       viewport: { width: 1100, height: 800 },
