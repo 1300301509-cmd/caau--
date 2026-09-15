@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('Web shows database unavailability separately from healthy API process', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/system/health');
   const response = page.waitForResponse('http://127.0.0.1:3000/api/v1/ready');
   await page.getByRole('button', { name: '检查数据库就绪' }).click();
   expect((await response).status()).toBe(503);

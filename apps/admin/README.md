@@ -1,8 +1,8 @@
 # @caau/admin
 
-React 19 + Vite 8 + Ant Design 6 管理后台工程。当前仅有健康/数据库就绪接口连接页，没有业务菜单、登录或演示数据。两种请求均消费 @caau/api-client 的生成契约及独立 fetch 适配器，不依赖服务端或 ORM。
+React 19 + Vite 8 + Ant Design 6 管理后台工程。当前产品导航只呈现“资料审核”，采用紧凑的 Tabler 风格壳层；`/` 与 `/materials` 进入同一套单份材料办理、共享审核和历史页面。身份仍使用明确标识的本地测试会话，业务数据和权限只通过 `@caau/api-client` 访问后端，不依赖服务端源码或 ORM。
 
-从仓库根目录运行 `corepack pnpm dev:admin`，打开 `http://127.0.0.1:5173`，并在另一终端运行 `corepack pnpm dev:api`。点击“检查后端连接”验证真实 HTTP 请求。页面不会将未请求或请求失败显示为成功。“检查数据库就绪”是独立动作，无数据库配置时应显示 HTTP 503，不影响健康连接检查。
+从仓库根目录运行 `corepack pnpm dev:admin`，打开 `http://127.0.0.1:5173/materials`，并在另一终端以本地身份模式运行 API。工程连接辅助页保留在 `/system/health`，不属于产品导航；无数据库配置时就绪检查应显示 HTTP 503，不影响健康连接检查。`/workspace` 仅为既有自动化回归暂留隐藏兼容入口，不作为当前产品模块。
 
 API 默认来源为 `http://127.0.0.1:3000`。可复制本目录 `.env.example` 为 `.env.local` 修改 `VITE_API_BASE_URL`；修改后重启开发服务/重新构建。`VITE_*` 是公开编译变量，不能放凭据。
 

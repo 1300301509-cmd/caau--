@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('built Web page reaches the live API over browser CORS', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/system/health');
   await expect(
     page.getByRole('heading', { name: 'CAAU 工程连接检查' }),
   ).toBeVisible();
@@ -19,7 +19,7 @@ test('failed request is visible and the same button can retry', async ({
   await page.route('**/api/v1/health', (route) =>
     route.fulfill({ status: 503, body: '{}' }),
   );
-  await page.goto('/');
+  await page.goto('/system/health');
   await page.getByRole('button', { name: '检查后端连接' }).click();
   await expect(page.getByText('接口返回 HTTP 503')).toBeVisible();
   await page.unroute('**/api/v1/health');

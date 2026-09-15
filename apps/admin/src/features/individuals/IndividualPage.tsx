@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
-import { Alert, Button, Card, Modal, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Modal, Tag } from 'antd';
 import {
   IndividualWorkspace,
   type IndividualSyncStatus,
@@ -161,15 +161,7 @@ export function IndividualPage() {
   const title = (m: S['IndividualViewDto']) =>
     m.draft?.title ?? m.submission?.content.title ?? '材料';
   return (
-    <main className="workspace individual-workspace">
-      <header className="workspace-header">
-        <div>
-          <Typography.Text>CAAU · 办赛材料</Typography.Text>
-          <Typography.Title level={1}>单份材料与共享审核</Typography.Title>
-          <p>独立提交，协作审核。每一步都有人员、时间和版本记录。</p>
-        </div>
-        <a href="/workspace">赛事管理 / 原工作台</a>
-      </header>
+    <div className="workspace individual-workspace">
       <Card
         title={
           s.identity
@@ -941,6 +933,6 @@ export function IndividualPage() {
           </Modal>
         </div>
       )}
-    </main>
+    </div>
   );
 }
