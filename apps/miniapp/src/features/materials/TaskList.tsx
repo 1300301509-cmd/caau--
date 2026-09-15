@@ -13,7 +13,7 @@ import { materialStateLabel } from '../individuals/platform';
 type S = components['schemas'];
 type Row = { task: S['TaskViewDto']; execution?: S['ExecutionViewDto'] };
 
-export function TaskList({ eventsMode = false }: { eventsMode?: boolean }) {
+export function TaskList() {
   const [rows, setRows] = useState<Row[]>([]);
   const [materials, setMaterials] = useState<S['IndividualViewDto'][]>([]);
   const [events, setEvents] = useState<S['EventViewDto'][]>([]);
@@ -87,7 +87,7 @@ export function TaskList({ eventsMode = false }: { eventsMode?: boolean }) {
         setEvents([]);
         setMaterials([]);
         clearSession();
-        setError('会话已失效，受保护内容已清除，请到“我的”重新载入。');
+        setError('会话已失效，受保护内容已清除，请重新载入测试身份。');
       } else if (cause instanceof ApiError && cause.status === 403) {
         setRows([]);
         setEvents([]);
@@ -150,32 +150,39 @@ export function TaskList({ eventsMode = false }: { eventsMode?: boolean }) {
     };
   }, []);
 
-  const visibleRows = rows.filter(({ task, execution }) => {
-    if (eventsMode) return !selected || task.eventId === selected;
-    return task.individualChannel || execution?.state === 'EDITING';
-  });
+  const visibleRows = rows.filter(
+    ({ task }) => !selected || task.eventId === selected,
+  );
   const visibleMaterials = materials.filter((material) => {
     const task = rows.find((item) => item.task.id === material.taskId)?.task;
-    if (!task?.individualChannel) return false;
-    if (eventsMode) return !selected || task.eventId === selected;
-    return ['DRAFT', 'RETURNED'].includes(material.state);
+    return (
+      !!task?.individualChannel && (!selected || task.eventId === selected)
+    );
   });
   return (
     <View className="page">
-      <Text className="eyebrow">CAAU · 承办工作空间</Text>
-      <Text className="title">{eventsMode ? '赛事' : '待办'}</Text>
+      <View className="page-top-actions">
+        <Text className="eyebrow">CAAU · 承办方</Text>
+        <Button
+          className="text-button compact-button"
+          onClick={() => void Taro.reLaunch({ url: '/pages/home/index' })}
+        >
+          返回首页
+        </Button>
+      </View>
+      <Text className="title">材料提交</Text>
       <Text className="description">
-        {eventsMode
-          ? '查看赛事、任务、单份材料及审核进度。'
-          : '待提交和退回修改优先显示；进入任务可自由新增材料。'}
+        先选择赛事，再进入有权办理的任务；可查看草稿、提交状态和审核进度。
       </Text>
       {!session.token ? (
         <View className="card">
           <Text>尚未载入本地测试身份（非微信登录）</Text>
           <Button
-            onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
+            onClick={() =>
+              void Taro.navigateTo({ url: '/pages/profile/index' })
+            }
           >
-            前往“我的”
+            载入本地测试身份
           </Button>
         </View>
       ) : (
@@ -200,18 +207,24 @@ export function TaskList({ eventsMode = false }: { eventsMode?: boolean }) {
             立即核对
           </Button>
           {error && <Text className="error">{error}</Text>}
-          {eventsMode && (
-            <View className="card event-filter">
-              <Text className="subtitle">赛事筛选</Text>
-              <Button onClick={() => setSelected('')}>
-                {selected ? '查看全部赛事' : '当前：全部赛事'}
+          <View className="card event-filter">
+            <Text className="subtitle">选择赛事</Text>
+            <Button onClick={() => setSelected('')}>
+              {selected ? '查看全部赛事' : '当前：全部赛事'}
+            </Button>
+            {events.map((event) => (
+              <Button key={event.id} onClick={() => setSelected(event.id)}>
+                {selected === event.id ? '当前：' : ''}
+                {event.name}
               </Button>
-              {events.map((event) => (
-                <Button key={event.id} onClick={() => setSelected(event.id)}>
-                  {selected === event.id ? '当前：' : ''}
-                  {event.name}
-                </Button>
-              ))}
+            ))}
+            {!events.length && status === 'online' && (
+              <Text className="description">当前没有可选择的赛事。</Text>
+            )}
+          </View>
+          {status === 'syncing' && !rows.length && (
+            <View className="card">
+              <Text>正在加载赛事和材料任务…</Text>
             </View>
           )}
           {!visibleRows.length && status === 'online' && (

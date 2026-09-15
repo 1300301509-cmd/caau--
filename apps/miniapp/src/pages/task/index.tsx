@@ -14,22 +14,27 @@ export default function TaskPage() {
   const id = useRouter().params.id ?? '';
   const [individual, setIndividual] = useState<boolean>();
   const [error, setError] = useState('');
-  useDidShow(() => {
+  async function load() {
     if (!session.token || !id) {
       setIndividual(undefined);
       return;
     }
     const token = session.token;
-    void client
-      .request('getMaterialTask', { token, path: { id } })
-      .then((task) => {
-        if (token === session.token) setIndividual(task.individualChannel);
-      })
-      .catch((cause) => {
-        if (cause instanceof ApiError && cause.status === 401) clearSession();
-        setError(workflowError(cause));
+    setError('');
+    setIndividual(undefined);
+    try {
+      const task = await client.request('getMaterialTask', {
+        token,
+        path: { id },
       });
-  });
+      if (token === session.token) setIndividual(task.individualChannel);
+    } catch (cause) {
+      if (token !== session.token) return;
+      if (cause instanceof ApiError && cause.status === 401) clearSession();
+      setError(workflowError(cause));
+    }
+  }
+  useDidShow(() => void load());
   if (individual === true) return <IndividualTaskPage />;
   if (individual === false) return <LegacyTaskPage />;
   return (
@@ -42,11 +47,21 @@ export default function TaskPage() {
         </Text>
         {!session.token && (
           <Button
-            onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
+            onClick={() =>
+              void Taro.navigateTo({ url: '/pages/profile/index' })
+            }
           >
-            前往“我的”载入身份
+            载入本地测试身份
           </Button>
         )}
+        {session.token && error && (
+          <Button onClick={() => void load()}>重新加载任务</Button>
+        )}
+        <Button
+          onClick={() => void Taro.reLaunch({ url: '/pages/home/index' })}
+        >
+          返回首页
+        </Button>
       </View>
     </View>
   );

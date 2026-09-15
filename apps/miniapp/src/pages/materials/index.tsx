@@ -1,4 +1,5 @@
 import { TaskList } from '../../features/materials/TaskList';
-export default function Todo() {
+
+export default function Materials() {
   return <TaskList />;
 }

@@ -25,6 +25,64 @@ page {
   padding: 32px 32px calc(48px + env(safe-area-inset-bottom));
   overflow-wrap: anywhere;
 }
+.home-page {
+  min-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.home-heading {
+  margin-bottom: 24px;
+}
+.home-primary-card {
+  padding: 40px 32px;
+  border: 2px solid #bfdbfe;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(30, 64, 175, 0.08);
+}
+.home-primary-title {
+  display: block;
+  font-size: 38px;
+  font-weight: 700;
+}
+.home-primary-card button {
+  width: 100%;
+}
+.home-secondary {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 2px solid #e2e8f0;
+  text-align: center;
+}
+.page-top-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.page-top-actions .eyebrow {
+  flex: 1;
+}
+.text-button {
+  color: var(--primary);
+  background: transparent;
+  border: 0;
+}
+.text-button::after {
+  border: 0;
+}
+.compact-button {
+  min-height: 72px;
+  margin: 0;
+  padding: 0 16px;
+  font-size: 28px;
+}
+.identity-choices,
+.manual-session {
+  margin: 20px 0;
+}
 .title {
   display: block;
   font-size: 44px;
@@ -204,5 +262,9 @@ button[disabled] {
   .page {
     max-width: 1120px;
     margin: 0 auto;
+  }
+  .home-page {
+    min-height: auto;
+    justify-content: flex-start;
   }
 }

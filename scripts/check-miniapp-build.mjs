@@ -4,16 +4,13 @@ import { readFile, stat } from 'node:fs/promises';
 const root = new URL('../apps/miniapp/dist/', import.meta.url);
 const app = JSON.parse(await readFile(new URL('app.json', root), 'utf8'));
 assert.deepEqual(app.pages, [
-  'pages/todo/index',
-  'pages/events/index',
+  'pages/home/index',
+  'pages/materials/index',
   'pages/profile/index',
   'pages/task/index',
   'pages/index/index',
 ]);
-assert.deepEqual(
-  app.tabBar.list.map((x) => x.text),
-  ['待办', '赛事', '我的'],
-);
+assert.equal('tabBar' in app, false);
 for (const file of [
   'app.js',
   'app.wxss',

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createApiClient, type RequestOptions } from '@caau/api-client';
 import { createTaroTransport } from '@caau/api-client/taro';
+import appConfig from '../src/app.config';
 import {
   individualMaxBytes,
   isAllowedIndividualFile,
@@ -10,6 +11,16 @@ import {
   materialStateLabel,
   safeLocalName,
 } from '../src/features/individuals/platform';
+
+test('miniapp uses one material-submission home without an empty tab bar', () => {
+  assert.equal(appConfig.pages[0], 'pages/home/index');
+  assert.ok(appConfig.pages.includes('pages/materials/index'));
+  assert.equal('tabBar' in appConfig, false);
+  assert.ok(
+    !appConfig.pages.some((page) => /pages\/(todo|events)\//.test(page)),
+  );
+  assert.equal(appConfig.window.navigationBarTitleText, 'CAAU 材料提交');
+});
 
 test('miniapp individual labels and private file constraints are explicit', () => {
   assert.equal(materialStateLabel('RETURNED'), '退回修改');

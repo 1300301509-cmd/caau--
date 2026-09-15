@@ -74,6 +74,16 @@ export function LegacyTaskPage() {
       lock.current = false;
     }
   }
+  async function returnHome() {
+    if (editor.dirty || editor.pending) {
+      const result = await Taro.showModal({
+        title: '确认返回首页',
+        content: '有未保存输入或未确认提交，返回将清除这些内容。是否继续？',
+      });
+      if (!result.confirm) return;
+    }
+    await Taro.reLaunch({ url: '/pages/home/index' });
+  }
   async function choose(id: string) {
     if (lock.current) return;
     lock.current = true;
@@ -104,7 +114,15 @@ export function LegacyTaskPage() {
   }
   return (
     <View className="page">
-      <Text className="eyebrow">CAAU · 材料任务</Text>
+      <View className="page-top-actions">
+        <Text className="eyebrow">CAAU · 材料任务</Text>
+        <Button
+          className="text-button compact-button"
+          onClick={() => void returnHome()}
+        >
+          返回首页
+        </Button>
+      </View>
       <Text className="title">{editor.task?.title ?? '任务详情'}</Text>
       <View className="card">
         <Text className="status">{executionStatus(editor.execution)}</Text>

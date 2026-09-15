@@ -215,9 +215,16 @@ export function IndividualTaskPage() {
         <View className="card">
           <Text>会话不存在或已失效，受保护内容未显示。</Text>
           <Button
-            onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
+            onClick={() =>
+              void Taro.navigateTo({ url: '/pages/profile/index' })
+            }
           >
-            前往“我的”重新载入
+            重新载入测试身份
+          </Button>
+          <Button
+            onClick={() => void Taro.reLaunch({ url: '/pages/home/index' })}
+          >
+            返回首页
           </Button>
         </View>
       </View>
@@ -225,7 +232,17 @@ export function IndividualTaskPage() {
 
   return (
     <View className="page individual-page" key={view.protectionEpoch}>
-      <Text className="eyebrow">CAAU · 单份材料</Text>
+      <View className="page-top-actions">
+        <Text className="eyebrow">CAAU · 单份材料</Text>
+        <Button
+          className="text-button compact-button"
+          onClick={() =>
+            void changeTarget(() => Taro.reLaunch({ url: '/pages/home/index' }))
+          }
+        >
+          返回首页
+        </Button>
+      </View>
       <Text className="title">{task?.title ?? '材料任务'}</Text>
       <View className={`sync-card sync-${view.status}`}>
         <Text className="subtitle">{syncLabels[view.status]}</Text>
