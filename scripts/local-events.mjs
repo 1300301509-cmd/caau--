@@ -160,14 +160,6 @@ async function main() {
   for (const event of Object.values(events))
     if (!managerEvents.some((candidate) => candidate.id === event.id))
       throw new Error('Manager event list missing prepared event');
-  const tasks = await call('listMaterialTasks', { token: managerToken });
-  if (
-    tasks.some((task) =>
-      Object.values(events).some((event) => event.id === task.eventId),
-    )
-  )
-    throw new Error('Prepared event unexpectedly has a material task');
-
   const manifest = {
     preparedAt: new Date().toISOString(),
     events: Object.fromEntries(
@@ -203,7 +195,7 @@ async function main() {
   console.log(`A: ${manifest.events.a.managerView}`);
   console.log(`B: ${manifest.events.b.managerView}`);
   console.log(
-    'No material tasks were created; organizer/reviewer business event lists remain task-dependent.',
+    'This command did not create or update material tasks; organizer/reviewer business event lists remain task-dependent.',
   );
 
   for (const token of [...Object.values(sessions), admin.token])

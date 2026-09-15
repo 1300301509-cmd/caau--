@@ -144,6 +144,8 @@ export function IndividualPage() {
   }, []);
   const openDeepLink = useCallback(() => {
     const q = new URLSearchParams(location.search);
+    if (model.value.identity && q.has('task'))
+      model.query({ taskId: q.get('task')!, offset: 0 });
     if (model.value.identity && q.has('material'))
       model.select(q.get('material')!);
     if (model.value.identity && q.has('legacy'))
