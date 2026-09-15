@@ -33,6 +33,31 @@
 .local-identity-card .ant-alert {
   margin-top: 16px;
 }
+.local-event-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.local-event-links a {
+  display: grid;
+  min-height: 108px;
+  padding: 14px;
+  gap: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.local-event-links a:hover,
+.local-event-links a.selected {
+  border-color: var(--focus);
+  background: #eff6ff;
+}
+.local-event-links span,
+.local-event-links small {
+  color: #475569;
+}
 .individual-list {
   display: grid;
   gap: 12px;
@@ -89,7 +114,8 @@
   .individual-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-  .local-identity-entry {
+  .local-identity-entry,
+  .local-event-links {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
   }

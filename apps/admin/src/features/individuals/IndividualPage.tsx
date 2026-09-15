@@ -131,6 +131,17 @@ export function IndividualPage() {
   >('loading');
   const [entryBusy, setEntryBusy] = useState(false);
   const [entryError, setEntryError] = useState('');
+  const [events, setEvents] = useState<S['EventViewDto'][]>([]);
+  const [eventError, setEventError] = useState('');
+  const loadEvents = useCallback(async (token: string) => {
+    try {
+      setEvents(await client.request('listEvents', { token }));
+      setEventError('');
+    } catch {
+      setEvents([]);
+      setEventError('赛事范围读取失败，请重新进入测试身份。');
+    }
+  }, []);
   const openDeepLink = useCallback(() => {
     const q = new URLSearchParams(location.search);
     if (model.value.identity && q.has('material'))
@@ -152,8 +163,10 @@ export function IndividualPage() {
         setEntryBusy(true);
         await model.login(token);
         if (!active) return;
-        if (model.value.identity) openDeepLink();
-        else sessionStorage.removeItem(tabSessionKey);
+        if (model.value.identity) {
+          await loadEvents(token);
+          openDeepLink();
+        } else sessionStorage.removeItem(tabSessionKey);
         setEntryBusy(false);
       })
       .catch((error: unknown) => {
@@ -168,9 +181,12 @@ export function IndividualPage() {
     return () => {
       active = false;
     };
-  }, [model, openDeepLink]);
+  }, [loadEvents, model, openDeepLink]);
   useEffect(() => {
-    if (s.status === 'unauthorized') sessionStorage.removeItem(tabSessionKey);
+    if (s.status === 'unauthorized') {
+      sessionStorage.removeItem(tabSessionKey);
+      setEvents([]);
+    }
   }, [s.status]);
   useEffect(() => {
     const visibility = () =>
@@ -326,6 +342,7 @@ export function IndividualPage() {
                 setEntryBusy(true);
                 setEntryError('');
                 sessionStorage.removeItem(tabSessionKey);
+                setEvents([]);
                 model.logout();
                 void client
                   .request('createLocalTestSession', {
@@ -339,6 +356,7 @@ export function IndividualPage() {
                     if (!model.value.identity)
                       throw new Error('Session validation failed');
                     sessionStorage.setItem(tabSessionKey, session.token);
+                    await loadEvents(session.token);
                     openDeepLink();
                   })
                   .catch(() => {
@@ -357,6 +375,7 @@ export function IndividualPage() {
                 onClick={() =>
                   leave(() => {
                     sessionStorage.removeItem(tabSessionKey);
+                    setEvents([]);
                     model.logout();
                   })
                 }
@@ -388,6 +407,33 @@ export function IndividualPage() {
           showIcon
           title={s.notice}
         />
+      )}
+      {eventError && <Alert type="warning" showIcon title={eventError} />}
+      {s.identity?.roles.includes('EVENT_MANAGER') && (
+        <Card title="赛事列表" className="local-event-list">
+          <p className="muted">
+            当前身份通过赛事授权可管理的赛事。无资料任务时，下方承办方列表仍为空。
+          </p>
+          <div className="local-event-links">
+            {events.map((event) => {
+              const selectedEvent =
+                new URLSearchParams(location.search).get('event') === event.id;
+              return (
+                <a
+                  key={event.id}
+                  className={selectedEvent ? 'selected' : ''}
+                  href={`/materials?event=${event.id}`}
+                  aria-current={selectedEvent ? 'true' : undefined}
+                >
+                  <strong>{event.name}</strong>
+                  <span>{event.description}</span>
+                  <small>赛事 ID：{event.id}</small>
+                </a>
+              );
+            })}
+            {!events.length && <p>当前身份暂无可管理赛事。</p>}
+          </div>
+        </Card>
       )}
       {s.identity && (
         <div key={s.protectionEpoch}>

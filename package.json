@@ -19,6 +19,7 @@
     "db:status": "node scripts/database.mjs status",
     "db:api": "node scripts/database.mjs api",
     "auth:local": "corepack pnpm --filter @caau/database build && node scripts/local-identity.mjs",
+    "events:local": "corepack pnpm build:packages && node scripts/local-events.mjs",
     "materials:demo": "corepack pnpm build:packages && node scripts/individual-demo.mjs",
     "db:migrate:dev": "node scripts/database.mjs migrate-dev",
     "db:migrate:deploy": "node scripts/database.mjs migrate-deploy",
