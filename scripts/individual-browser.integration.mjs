@@ -85,11 +85,14 @@ export async function individualBrowserTest({
       ([storageKey, token]) => sessionStorage.setItem(storageKey, token),
       ['caau.local-test-session', tokens[key]],
     );
-    await page.reload();
-    await expect(page.getByTestId('sync-status')).toContainText(
-      '自动同步已连接',
-      { timeout: 15000 },
+    const snapshot = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/v1/individual-materials/snapshot') &&
+        response.status() === 200,
     );
+    await page.reload();
+    await snapshot;
+    await expect(page.getByTestId('sync-status')).toHaveCount(0);
   }
   async function newPage(key, url = '/materials') {
     const context = await browser.newContext({
@@ -201,10 +204,8 @@ export async function individualBrowserTest({
         });
       }),
     );
-    await expect(page.getByTestId('sync-status')).toContainText(
-      '自动同步已连接',
-      { timeout: 15000 },
-    );
+    await expect(page.getByTestId('sync-status')).toHaveCount(0);
+    await expect(page.getByTestId('sync-problem')).toHaveCount(0);
   }
   let taskId, org, a, b;
   try {
@@ -330,7 +331,7 @@ export async function individualBrowserTest({
       'UPDATE "Session" SET "expiresAt"=now()-interval \'1 second\' WHERE "tokenHash"=$1',
       [createHash('sha256').update(expiringToken).digest('hex')],
     );
-    await expect(organizerTab.getByTestId('sync-status')).toContainText(
+    await expect(organizerTab.getByTestId('session-problem')).toContainText(
       '会话已失效',
       { timeout: 15000 },
     );
@@ -383,9 +384,7 @@ export async function individualBrowserTest({
     b = await newPage('reviewer2');
     for (const p of [org, a, b])
       await p.getByLabel('办理任务', { exact: true }).selectOption(taskId);
-    await expect(org.getByTestId('sync-status')).toContainText(
-      '自动同步已连接',
-    );
+    await expect(org.getByTestId('sync-status')).toHaveCount(0);
     const first = await createOnPage(org, '独立材料甲');
     const bytes = Buffer.from('CAAU012 synthetic private attachment');
     await org.getByLabel('上传私有附件').setInputFiles({
@@ -596,9 +595,10 @@ export async function individualBrowserTest({
       '翻页与自动更新均不得丢失',
     );
     await org.context().setOffline(true);
-    await expect(org.getByTestId('sync-status')).toContainText('同步中断', {
-      timeout: 12000,
-    });
+    await expect(org.getByTestId('sync-problem')).toContainText(
+      '暂时无法更新',
+      { timeout: 12000 },
+    );
     await expect(
       org.getByRole('button', { name: '保存草稿', exact: true }),
     ).toBeDisabled();
@@ -614,10 +614,9 @@ export async function individualBrowserTest({
     ).toBeVisible();
     const reconnectStart = performance.now();
     await org.context().setOffline(false);
-    await expect(org.getByTestId('sync-status')).toContainText(
-      '自动同步已连接',
-      { timeout: 15000 },
-    );
+    await expect(org.getByTestId('sync-problem')).toHaveCount(0, {
+      timeout: 15000,
+    });
     await expect(
       org.getByText('草稿或经办权限版本已变化，本地输入保留。', {
         exact: true,
@@ -674,9 +673,10 @@ export async function individualBrowserTest({
 
     // Independently invalidate a live session; polling must clear unsaved content.
     await api('a', 'POST', 'authorization/logout');
-    await expect(org.getByTestId('sync-status')).toContainText('会话已失效', {
-      timeout: 15000,
-    });
+    await expect(org.getByTestId('session-problem')).toContainText(
+      '会话已失效',
+      { timeout: 15000 },
+    );
     await expect(org.getByLabel('材料说明', { exact: true })).toHaveCount(0);
     await expect(org.locator('body')).not.toContainText(
       '翻页与自动更新均不得丢失',
@@ -719,7 +719,7 @@ export async function individualBrowserTest({
     await expect(late.getByLabel('材料说明', { exact: true })).toHaveCount(0);
     release();
     await late.waitForTimeout(2300);
-    await expect(late.getByTestId('sync-status')).toContainText('等待选择身份');
+    await expect(late.getByTestId('sync-status')).toHaveCount(0);
     await expect(late.getByTestId('material-state')).toHaveCount(0);
     await late.unroute('**/api/v1/individual-materials/snapshot*');
     await issue('a');

@@ -80,16 +80,6 @@
 .individual-row p {
   margin: 8px 0;
 }
-.sync-status {
-  padding: 14px 18px;
-  border: 1px solid #64748b;
-  border-radius: 8px;
-  background: #fff;
-}
-.sync-error {
-  border-color: #b91c1c;
-  background: #fff7f7;
-}
 .individual-workspace .muted {
   color: #475569;
   overflow-wrap: anywhere;

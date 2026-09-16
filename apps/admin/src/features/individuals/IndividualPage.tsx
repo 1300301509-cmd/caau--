@@ -6,11 +6,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { Alert, Button, Card, Modal, Tag } from 'antd';
-import {
-  IndividualWorkspace,
-  type IndividualSyncStatus,
-  type components,
-} from '@caau/api-client';
+import { IndividualWorkspace, type components } from '@caau/api-client';
 import { client } from '../materials/client';
 import './individual.css';
 type S = components['schemas'];
@@ -42,14 +38,6 @@ const ops: Record<string, string> = {
   startIndividualReview: '开始审核',
   approveIndividualMaterial: '审核通过',
   returnIndividualMaterial: '退回修改',
-};
-const statuses: Record<IndividualSyncStatus, string> = {
-  idle: '等待选择身份',
-  syncing: '正在核对权限和状态',
-  online: '自动同步已连接',
-  offline: '同步中断',
-  paused: '页面已暂停同步',
-  unauthorized: '会话已失效',
 };
 const when = (t: string) =>
   new Date(t).toLocaleString('zh-CN', { hour12: false });
@@ -133,6 +121,7 @@ export function IndividualPage() {
   const [entryError, setEntryError] = useState('');
   const [events, setEvents] = useState<S['EventViewDto'][]>([]);
   const [eventError, setEventError] = useState('');
+  const [syncFailureVisible, setSyncFailureVisible] = useState(false);
   const loadEvents = useCallback(async (token: string) => {
     try {
       setEvents(await client.request('listEvents', { token }));
@@ -189,6 +178,14 @@ export function IndividualPage() {
       sessionStorage.removeItem(tabSessionKey);
       setEvents([]);
     }
+  }, [s.status]);
+  useEffect(() => {
+    if (s.status !== 'offline') {
+      setSyncFailureVisible(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSyncFailureVisible(true), 6000);
+    return () => window.clearTimeout(timer);
   }, [s.status]);
   useEffect(() => {
     const visibility = () =>
@@ -391,25 +388,61 @@ export function IndividualPage() {
           )}
         </Card>
       )}
-      <div
-        className={`sync-status ${s.status === 'offline' ? 'sync-error' : ''}`}
-        data-testid="sync-status"
-      >
-        <span role="status" aria-live="polite">
-          {statuses[s.status]}
-        </span>
-        <span className="muted">
-          {s.lastSync ? ` · 最近核对 ${when(s.lastSync)}` : ''} · 前台约 2
-          秒自动核对
-        </span>
-      </div>
-      {s.notice && (
+      {syncFailureVisible && s.status === 'offline' && (
         <Alert
-          type={s.error ? 'warning' : 'success'}
+          type="warning"
           showIcon
-          title={s.notice}
+          title="暂时无法更新"
+          description="当前页面内容已保留，将继续自动重试。请检查网络后重试。"
+          action={<Button onClick={() => model.wake()}>立即重试</Button>}
+          role="alert"
+          data-testid="sync-problem"
         />
       )}
+      {s.status === 'unauthorized' && s.notice && (
+        <Alert
+          type="error"
+          showIcon
+          title={s.notice}
+          action={
+            <Button
+              onClick={() =>
+                document
+                  .querySelector<HTMLButtonElement>(
+                    '[data-testid="local-identity-enter"]',
+                  )
+                  ?.click()
+              }
+            >
+              重新进入
+            </Button>
+          }
+          role="alert"
+          data-testid="session-problem"
+        />
+      )}
+      {s.notice.startsWith('访问权限已变化') && (
+        <Alert
+          type="warning"
+          showIcon
+          title={s.notice}
+          description="请重新核对当前身份可访问的赛事和任务。"
+          action={<Button onClick={() => model.wake()}>重新核对</Button>}
+          role="alert"
+          data-testid="permission-problem"
+        />
+      )}
+      {s.notice &&
+        !s.notice.startsWith('同步中断') &&
+        !s.notice.startsWith('连接已恢复') &&
+        !s.notice.startsWith('访问权限已变化') &&
+        s.status !== 'unauthorized' && (
+          <Alert
+            type={s.error ? 'warning' : 'success'}
+            showIcon
+            title={s.notice}
+          />
+        )}
       {eventError && <Alert type="warning" showIcon title={eventError} />}
       {s.identity?.roles.includes('EVENT_MANAGER') && (
         <Card title="赛事列表" className="local-event-list">

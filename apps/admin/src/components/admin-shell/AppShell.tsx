@@ -77,11 +77,11 @@ export function AppShell({
                 : '单份提交、共享审核与完整版本记录'}
             </p>
           </div>
-          <div className="review-page-actions">
-            <Tag color="blue">
-              {events ? '总部赛事管理员' : '约 2 秒自动同步'}
-            </Tag>
-          </div>
+          {events && (
+            <div className="review-page-actions">
+              <Tag color="blue">总部赛事管理员</Tag>
+            </div>
+          )}
         </header>
         {children}
       </main>
