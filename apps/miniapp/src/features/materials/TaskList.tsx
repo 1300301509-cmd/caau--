@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Text, View } from '@tarojs/components';
-import Taro, { useDidHide, useDidShow } from '@tarojs/taro';
+import Taro, { useDidHide, useDidShow, useRouter } from '@tarojs/taro';
 import {
   ApiError,
   executionStatus,
@@ -8,6 +8,7 @@ import {
   type components,
 } from '@caau/api-client';
 import { clearSession, client, session, subscribeSession } from './session';
+import { resolveEventId } from './event-context';
 import { materialStateLabel } from '../individuals/platform';
 
 type S = components['schemas'];
@@ -18,10 +19,13 @@ export function TaskList({
 }: {
   mode?: 'submit' | 'progress';
 }) {
+  const router = useRouter();
+  const initialEventId = router.params.event ?? session.eventId;
+  const [eventScoped] = useState(Boolean(initialEventId));
   const [rows, setRows] = useState<Row[]>([]);
   const [materials, setMaterials] = useState<S['IndividualViewDto'][]>([]);
   const [events, setEvents] = useState<S['EventViewDto'][]>([]);
-  const [selected, setSelected] = useState('');
+  const [selected, setSelected] = useState(initialEventId);
   const [error, setError] = useState('');
   const [status, setStatus] = useState<
     'idle' | 'syncing' | 'online' | 'offline'
@@ -77,6 +81,10 @@ export function TaskList({
       failures.current = 0;
       setRows(data);
       setEvents(eventRows);
+      if (eventScoped) {
+        session.eventId = resolveEventId(eventRows, selected);
+        setSelected(session.eventId);
+      }
       setMaterials(snapshot.items);
       setLastSync(snapshot.serverTime);
       setError('');
@@ -179,8 +187,10 @@ export function TaskList({
       </Text>
       <Text className="description">
         {mode === 'progress'
-          ? '查看当前承办范围内的材料状态、退回原因和版本历史；不包含总部审批操作。'
-          : '先选择赛事，再进入有权办理的任务，新增或继续提交材料。'}
+          ? '查看当前赛事的材料状态、退回原因和版本历史；不包含总部审批操作。'
+          : eventScoped
+            ? '查看当前赛事中有权办理的任务，新增或继续提交材料。'
+            : '先选择赛事，再进入有权办理的任务，新增或继续提交材料。'}
       </Text>
       {!session.token ? (
         <View className="card">
@@ -215,21 +225,32 @@ export function TaskList({
             立即核对
           </Button>
           {error && <Text className="error">{error}</Text>}
-          <View className="card event-filter">
-            <Text className="subtitle">选择赛事</Text>
-            <Button onClick={() => setSelected('')}>
-              {selected ? '查看全部赛事' : '当前：全部赛事'}
-            </Button>
-            {events.map((event) => (
-              <Button key={event.id} onClick={() => setSelected(event.id)}>
-                {selected === event.id ? '当前：' : ''}
-                {event.name}
+          {eventScoped ? (
+            <View className="card active-event-card">
+              <Text className="event-context-label">当前赛事</Text>
+              <Text className="subtitle">
+                {events.find((event) => event.id === selected)?.name ??
+                  (status === 'online' ? '暂无可办理赛事' : '正在读取…')}
+              </Text>
+              <Text className="description">需要切换赛事时请返回首页。</Text>
+            </View>
+          ) : (
+            <View className="card event-filter">
+              <Text className="subtitle">选择赛事</Text>
+              <Button onClick={() => setSelected('')}>
+                {selected ? '查看全部赛事' : '当前：全部赛事'}
               </Button>
-            ))}
-            {!events.length && status === 'online' && (
-              <Text className="description">当前没有可选择的赛事。</Text>
-            )}
-          </View>
+              {events.map((event) => (
+                <Button key={event.id} onClick={() => setSelected(event.id)}>
+                  {selected === event.id ? '当前：' : ''}
+                  {event.name}
+                </Button>
+              ))}
+              {!events.length && status === 'online' && (
+                <Text className="description">当前没有可选择的赛事。</Text>
+              )}
+            </View>
+          )}
           {status === 'syncing' && !rows.length && (
             <View className="card">
               <Text>正在加载赛事和材料任务…</Text>

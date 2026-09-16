@@ -11,6 +11,10 @@ import {
   materialStateLabel,
   safeLocalName,
 } from '../src/features/individuals/platform';
+import {
+  eventScopedPageUrl,
+  resolveEventId,
+} from '../src/features/materials/event-context';
 
 test('miniapp uses the business dashboard and two material submodules without a tab bar', () => {
   assert.equal(appConfig.pages[0], 'pages/home/index');
@@ -21,6 +25,21 @@ test('miniapp uses the business dashboard and two material submodules without a 
     !appConfig.pages.some((page) => /pages\/(todo|events)\//.test(page)),
   );
   assert.equal(appConfig.window.navigationBarTitleText, 'CAAU 承办工作台');
+});
+
+test('event context resolves only authorized rows and scopes submodule URLs', () => {
+  const events = [{ id: 'event-a' }, { id: 'event-b' }];
+  assert.equal(resolveEventId(events, 'event-b'), 'event-b');
+  assert.equal(resolveEventId(events, 'event-outside-scope'), 'event-a');
+  assert.equal(resolveEventId([], 'event-outside-scope'), '');
+  assert.equal(
+    eventScopedPageUrl('materials', 'event/a'),
+    '/pages/materials/index?event=event%2Fa',
+  );
+  assert.equal(
+    eventScopedPageUrl('progress', 'event-b'),
+    '/pages/progress/index?event=event-b',
+  );
 });
 
 test('miniapp individual labels and private file constraints are explicit', () => {

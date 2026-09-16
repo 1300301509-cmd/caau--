@@ -18,8 +18,9 @@ export const client = createApiClient(
 export const session: {
   token: string;
   identity?: components['schemas']['WorkspaceIdentityDto'];
+  eventId: string;
   epoch: number;
-} = { token: '', epoch: 0 };
+} = { token: '', eventId: '', epoch: 0 };
 const sessionListeners = new Set<() => void>();
 export function subscribeSession(listener: () => void) {
   sessionListeners.add(listener);
@@ -32,6 +33,7 @@ function notifySession() {
 export function clearSession() {
   session.token = '';
   session.identity = undefined;
+  session.eventId = '';
   notifySession();
 }
 export async function newKey() {
@@ -58,5 +60,6 @@ export async function importSession(value: string) {
     throw new Error('请使用承办方本地测试身份');
   session.token = token;
   session.identity = identity;
+  session.eventId = '';
   notifySession();
 }
