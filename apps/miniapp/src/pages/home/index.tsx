@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Image, Text, View } from '@tarojs/components';
+import { Button, Image, ScrollView, Text, View } from '@tarojs/components';
 import Taro, { useDidShow } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
 import {
@@ -108,8 +108,40 @@ export default function Home() {
               className={`event-context-chevron ${eventExpanded ? 'expanded' : ''}`}
             />
           </Button>
-          {eventExpanded && (
-            <View className="event-context-options">
+        </View>
+        <View className="home-logo-slot">
+          <Image
+            className="home-logo"
+            src={logo}
+            mode="aspectFit"
+            ariaLabel="CAAU 标志"
+          />
+        </View>
+      </View>
+      {eventExpanded && (
+        <View
+          className="event-modal-backdrop"
+          onClick={() => setEventExpanded(false)}
+          onTouchMove={(event) => event.stopPropagation()}
+        >
+          <View
+            className="event-modal"
+            ariaRole="dialog"
+            ariaLabel="选择赛事"
+            onClick={(event) => event.stopPropagation()}
+            onTouchMove={(event) => event.stopPropagation()}
+          >
+            <View className="event-modal-heading">
+              <Text className="event-modal-title">选择赛事</Text>
+              <Button
+                className="event-modal-close"
+                ariaLabel="关闭赛事选择"
+                onClick={() => setEventExpanded(false)}
+              >
+                关闭
+              </Button>
+            </View>
+            <ScrollView className="event-modal-list" scrollY>
               {events.map((event) => {
                 const isCurrent = event.id === currentEvent?.id;
                 return (
@@ -130,18 +162,10 @@ export default function Home() {
                   </Button>
                 );
               })}
-            </View>
-          )}
+            </ScrollView>
+          </View>
         </View>
-        <View className="home-logo-slot">
-          <Image
-            className="home-logo"
-            src={logo}
-            mode="aspectFit"
-            ariaLabel="CAAU 标志"
-          />
-        </View>
-      </View>
+      )}
       <Image
         className="home-banner"
         src={banner}
