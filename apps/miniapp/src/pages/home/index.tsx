@@ -12,6 +12,7 @@ import {
   session,
 } from '../../features/materials/session';
 import banner from '../../assets/event-banner-placeholder.png';
+import logo from '../../assets/caau-logo.jpg';
 import approvalIcon from '../../assets/material-approval.png';
 
 type S = components['schemas'];
@@ -21,7 +22,6 @@ export default function Home() {
   const [identity, setIdentity] = useState(session.identity?.displayName ?? '');
   const [selected, setSelected] = useState(materialApproval);
   const [events, setEvents] = useState<S['EventViewDto'][]>([]);
-  const [tasks, setTasks] = useState<S['TaskViewDto'][]>([]);
   const [selectedEventId, setSelectedEventId] = useState(session.eventId);
   const [eventExpanded, setEventExpanded] = useState(false);
   const [eventStatus, setEventStatus] = useState<'loading' | 'ready' | 'error'>(
@@ -30,9 +30,6 @@ export default function Home() {
   const [eventError, setEventError] = useState('');
   const currentEvent =
     events.find((event) => event.id === selectedEventId) ?? events[0];
-  const currentTaskCount = tasks.filter(
-    (task) => task.state === 'PUBLISHED' && task.eventId === currentEvent?.id,
-  ).length;
 
   async function loadEventContext() {
     const token = session.token;
@@ -41,15 +38,11 @@ export default function Home() {
     setEventError('');
     setEventExpanded(false);
     try {
-      const [eventRows, taskRows] = await Promise.all([
-        client.request('listEvents', { token }),
-        client.request('listMaterialTasks', { token }),
-      ]);
+      const eventRows = await client.request('listEvents', { token });
       if (token !== session.token) return;
       session.eventId = resolveEventId(eventRows, session.eventId);
       setSelectedEventId(session.eventId);
       setEvents(eventRows);
-      setTasks(taskRows);
       setEventStatus('ready');
     } catch (cause) {
       if (token !== session.token) return;
@@ -59,7 +52,6 @@ export default function Home() {
         return;
       }
       setEvents([]);
-      setTasks([]);
       setEventStatus('error');
       setEventError('赛事读取失败，请检查网络后重试');
     }
@@ -86,75 +78,69 @@ export default function Home() {
 
   return (
     <View className="page home-page">
-      <View className="event-switcher">
-        <Button
-          className={`event-context-bar ${eventExpanded ? 'expanded' : ''}`}
-          ariaLabel={
-            eventStatus === 'error'
-              ? '赛事读取失败，点击重试'
-              : `${currentEvent?.name ?? '暂无可办理赛事'}，点击${eventExpanded ? '收起' : '展开'}赛事列表`
-          }
-          onClick={() => {
-            if (eventStatus === 'error') {
-              void loadEventContext();
-              return;
+      <View className="home-context-row">
+        <View className="event-switcher">
+          <Button
+            className={`event-context-bar ${eventExpanded ? 'expanded' : ''}`}
+            ariaLabel={
+              eventStatus === 'error'
+                ? '赛事读取失败，点击重试'
+                : `${currentEvent?.name ?? '暂无可办理赛事'}，点击${eventExpanded ? '收起' : '展开'}赛事列表`
             }
-            if (events.length) setEventExpanded((value) => !value);
-          }}
-        >
-          <View className="event-context-copy">
-            <Text className="event-context-label">当前赛事</Text>
-            <Text className="event-context-name">
+            onClick={() => {
+              if (eventStatus === 'error') {
+                void loadEventContext();
+                return;
+              }
+              if (events.length) setEventExpanded((value) => !value);
+            }}
+          >
+            <Text
+              className={`event-context-name ${eventStatus === 'error' ? 'error-text' : ''}`}
+            >
               {eventStatus === 'loading'
                 ? '正在读取…'
-                : (currentEvent?.name ?? '暂无可办理赛事')}
+                : eventStatus === 'error'
+                  ? eventError
+                  : (currentEvent?.name ?? '暂无可办理赛事')}
             </Text>
-            {currentEvent && (
-              <Text className="event-context-meta">
-                {currentTaskCount} 个材料任务
-              </Text>
-            )}
-            {eventStatus === 'error' && (
-              <Text className="event-context-error">{eventError}</Text>
-            )}
-          </View>
-          <View
-            className={`event-context-chevron ${eventExpanded ? 'expanded' : ''}`}
-          />
-        </Button>
-        {eventExpanded && (
-          <View className="event-context-options">
-            {events.map((event) => {
-              const taskCount = tasks.filter(
-                (task) =>
-                  task.state === 'PUBLISHED' && task.eventId === event.id,
-              ).length;
-              const isCurrent = event.id === currentEvent?.id;
-              return (
-                <Button
-                  key={event.id}
-                  className={`event-context-option ${isCurrent ? 'selected' : ''}`}
-                  ariaLabel={`${event.name}，${taskCount}个材料任务${isCurrent ? '，当前赛事' : ''}`}
-                  onClick={() => {
-                    session.eventId = event.id;
-                    setSelectedEventId(event.id);
-                    setEventExpanded(false);
-                  }}
-                >
-                  <View className="event-option-copy">
+            <View
+              className={`event-context-chevron ${eventExpanded ? 'expanded' : ''}`}
+            />
+          </Button>
+          {eventExpanded && (
+            <View className="event-context-options">
+              {events.map((event) => {
+                const isCurrent = event.id === currentEvent?.id;
+                return (
+                  <Button
+                    key={event.id}
+                    className={`event-context-option ${isCurrent ? 'selected' : ''}`}
+                    ariaLabel={`${event.name}${isCurrent ? '，当前赛事' : ''}`}
+                    onClick={() => {
+                      session.eventId = event.id;
+                      setSelectedEventId(event.id);
+                      setEventExpanded(false);
+                    }}
+                  >
                     <Text className="event-option-name">{event.name}</Text>
-                    <Text className="event-option-meta">
-                      {taskCount} 个材料任务
-                    </Text>
-                  </View>
-                  {isCurrent && (
-                    <Text className="event-option-current">当前</Text>
-                  )}
-                </Button>
-              );
-            })}
-          </View>
-        )}
+                    {isCurrent && (
+                      <Text className="event-option-current">当前</Text>
+                    )}
+                  </Button>
+                );
+              })}
+            </View>
+          )}
+        </View>
+        <View className="home-logo-slot">
+          <Image
+            className="home-logo"
+            src={logo}
+            mode="aspectFit"
+            ariaLabel="CAAU 标志"
+          />
+        </View>
       </View>
       <Image
         className="home-banner"
