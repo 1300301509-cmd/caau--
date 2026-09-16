@@ -20,7 +20,7 @@
 - [本地身份与权限操作](docs/runbooks/authorization.md)：角色矩阵、合成会话、审计、验证边界和 CAAU-005 条件。
 - [本地测试赛事与授权](docs/runbooks/local-test-events.md)：固定 A/B 赛事、五身份范围、幂等准备及无任务展示限制。
 - [本地单份材料体验任务](docs/runbooks/local-test-tasks.md)：A/B 空清单任务、演示截止、访问范围和亲自体验步骤。
-- [承办方小程序首页与导航](docs/product/miniapp-home-navigation.md)：单一“材料提交”入口、流程内赛事/任务选择及状态保护。
+- [承办方小程序首页与导航](docs/product/miniapp-home-navigation.md)：身份优先、板块式主页、材料审批子模块及状态保护。
 - [总部赛事管理 Web](docs/runbooks/event-management-web.md)：赛事列表、当前字段创建、详情及权限边界。
 - [赛事级承办关系最小设计](docs/product/event-organizer-relationship-design.md)：机构、人员、访问授权和任务指派的区分及待确认问题，不代表已实施模型。
 - [数据库与契约操作](docs/runbooks/database-contract.md)：Docker 官方安装、隔离开发/测试、迁移规则与待执行验证。

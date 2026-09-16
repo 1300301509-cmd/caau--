@@ -12,14 +12,15 @@ import {
   safeLocalName,
 } from '../src/features/individuals/platform';
 
-test('miniapp uses one material-submission home without an empty tab bar', () => {
+test('miniapp uses the business dashboard and two material submodules without a tab bar', () => {
   assert.equal(appConfig.pages[0], 'pages/home/index');
   assert.ok(appConfig.pages.includes('pages/materials/index'));
+  assert.ok(appConfig.pages.includes('pages/progress/index'));
   assert.equal('tabBar' in appConfig, false);
   assert.ok(
     !appConfig.pages.some((page) => /pages\/(todo|events)\//.test(page)),
   );
-  assert.equal(appConfig.window.navigationBarTitleText, 'CAAU 材料提交');
+  assert.equal(appConfig.window.navigationBarTitleText, 'CAAU 承办工作台');
 });
 
 test('miniapp individual labels and private file constraints are explicit', () => {

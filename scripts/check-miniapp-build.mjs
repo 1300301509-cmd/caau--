@@ -6,6 +6,7 @@ const app = JSON.parse(await readFile(new URL('app.json', root), 'utf8'));
 assert.deepEqual(app.pages, [
   'pages/home/index',
   'pages/materials/index',
+  'pages/progress/index',
   'pages/profile/index',
   'pages/task/index',
   'pages/index/index',

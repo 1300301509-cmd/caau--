@@ -73,18 +73,21 @@ export default function Profile() {
     setLocalToken('');
     setName(session.identity!.displayName);
     setNotice('本地测试身份已载入');
+    await Taro.reLaunch({ url: '/pages/home/index' });
   }
 
   return (
     <View className="page identity-page">
       <View className="page-top-actions">
         <Text className="eyebrow">CAAU · 本地体验</Text>
-        <Button
-          className="text-button compact-button"
-          onClick={() => void Taro.reLaunch({ url: '/pages/home/index' })}
-        >
-          返回首页
-        </Button>
+        {name && (
+          <Button
+            className="text-button compact-button"
+            onClick={() => void Taro.reLaunch({ url: '/pages/home/index' })}
+          >
+            返回首页
+          </Button>
+        )}
       </View>
       <Text className="title">本地测试身份</Text>
       <Text className="description">
@@ -151,33 +154,22 @@ export default function Profile() {
           </View>
         )}
         {name && (
-          <>
-            <Button
-              type="primary"
-              disabled={busy}
-              onClick={() =>
-                void Taro.reLaunch({ url: '/pages/materials/index' })
-              }
-            >
-              进入材料提交
-            </Button>
-            <Button
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  try {
-                    await client.request('logout', { token: session.token });
-                  } finally {
-                    clearSession();
-                    setName('');
-                  }
-                  setNotice('会话已退出');
-                })
-              }
-            >
-              退出测试身份
-            </Button>
-          </>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                try {
+                  await client.request('logout', { token: session.token });
+                } finally {
+                  clearSession();
+                  setName('');
+                }
+                setNotice('会话已退出');
+              })
+            }
+          >
+            退出测试身份
+          </Button>
         )}
         {notice && (
           <Text className={failed ? 'error' : 'result'}>{notice}</Text>

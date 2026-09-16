@@ -13,7 +13,11 @@ import { materialStateLabel } from '../individuals/platform';
 type S = components['schemas'];
 type Row = { task: S['TaskViewDto']; execution?: S['ExecutionViewDto'] };
 
-export function TaskList() {
+export function TaskList({
+  mode = 'submit',
+}: {
+  mode?: 'submit' | 'progress';
+}) {
   const [rows, setRows] = useState<Row[]>([]);
   const [materials, setMaterials] = useState<S['IndividualViewDto'][]>([]);
   const [events, setEvents] = useState<S['EventViewDto'][]>([]);
@@ -170,9 +174,13 @@ export function TaskList() {
           返回首页
         </Button>
       </View>
-      <Text className="title">材料提交</Text>
+      <Text className="title">
+        {mode === 'progress' ? '审核进度' : '材料提交'}
+      </Text>
       <Text className="description">
-        先选择赛事，再进入有权办理的任务；可查看草稿、提交状态和审核进度。
+        {mode === 'progress'
+          ? '查看当前承办范围内的材料状态、退回原因和版本历史；不包含总部审批操作。'
+          : '先选择赛事，再进入有权办理的任务，新增或继续提交材料。'}
       </Text>
       {!session.token ? (
         <View className="card">
@@ -227,73 +235,94 @@ export function TaskList() {
               <Text>正在加载赛事和材料任务…</Text>
             </View>
           )}
-          {!visibleRows.length && status === 'online' && (
+          {mode === 'submit' && !visibleRows.length && status === 'online' && (
             <View className="card">
               <Text>当前范围暂无可见任务。</Text>
             </View>
           )}
-          {visibleRows.map(({ task, execution }) => (
-            <View className="card" key={task.id}>
-              <Text className="subtitle">{task.title}</Text>
-              <Text className="description">
-                {events.find((event) => event.id === task.eventId)?.name}
-              </Text>
-              <Text className="status">
-                {task.individualChannel
-                  ? '单份材料通道'
-                  : executionStatus(execution)}
-              </Text>
-              {execution && (
-                <Text>
-                  截止：{new Date(execution.deadlines.task).toLocaleString()}
+          {mode === 'submit' &&
+            visibleRows.map(({ task, execution }) => (
+              <View className="card" key={task.id}>
+                <Text className="subtitle">{task.title}</Text>
+                <Text className="description">
+                  {events.find((event) => event.id === task.eventId)?.name}
                 </Text>
-              )}
-              <Button
-                type="primary"
-                onClick={() =>
-                  void Taro.navigateTo({
-                    url: `/pages/task/index?id=${task.id}`,
-                  })
-                }
-              >
-                {task.individualChannel ? '查看并新增材料' : '查看旧整包任务'}
-              </Button>
-            </View>
-          ))}
-          {!!visibleMaterials.length && <Text className="title">材料进度</Text>}
-          {visibleMaterials.map((material) => {
-            const task = rows.find(
-              (item) => item.task.id === material.taskId,
-            )?.task;
-            const title =
-              material.draft?.title ??
-              material.submission?.content.title ??
-              '未命名材料';
-            return (
-              <View className="card" key={material.id}>
-                <Text className="subtitle">{title}</Text>
-                <Text className={`state state-${material.state.toLowerCase()}`}>
-                  {materialStateLabel(material.state)} · V
-                  {material.submission?.version ?? 0}
+                <Text className="status">
+                  {task.individualChannel
+                    ? '单份材料通道'
+                    : executionStatus(execution)}
                 </Text>
-                <Text className="description">{task?.title}</Text>
-                {material.lastAction?.reason && (
-                  <Text className="warning">
-                    退回原因：{material.lastAction.reason}
+                {execution && (
+                  <Text>
+                    截止：{new Date(execution.deadlines.task).toLocaleString()}
                   </Text>
                 )}
                 <Button
+                  type="primary"
                   onClick={() =>
                     void Taro.navigateTo({
-                      url: `/pages/task/index?id=${material.taskId}&material=${material.id}`,
+                      url: `/pages/task/index?id=${task.id}`,
                     })
                   }
                 >
-                  查看材料详情
+                  {task.individualChannel ? '查看并新增材料' : '查看旧整包任务'}
                 </Button>
               </View>
-            );
-          })}
+            ))}
+          {mode === 'progress' &&
+            !visibleMaterials.length &&
+            status === 'online' && (
+              <View className="card">
+                <Text>当前范围暂无材料进度记录。</Text>
+              </View>
+            )}
+          {mode === 'progress' && !!visibleMaterials.length && (
+            <Text className="title">材料记录</Text>
+          )}
+          {mode === 'progress' &&
+            visibleMaterials.map((material) => {
+              const task = rows.find(
+                (item) => item.task.id === material.taskId,
+              )?.task;
+              const title =
+                material.draft?.title ??
+                material.submission?.content.title ??
+                '未命名材料';
+              return (
+                <View className="card" key={material.id}>
+                  <Text className="subtitle">{title}</Text>
+                  <Text
+                    className={`state state-${material.state.toLowerCase()}`}
+                  >
+                    {materialStateLabel(material.state)} · V
+                    {material.submission?.version ?? 0}
+                  </Text>
+                  <Text className="description">{task?.title}</Text>
+                  {material.lastAction && (
+                    <Text className="description">
+                      最近更新：{material.lastAction.actorName} ·{' '}
+                      {new Date(
+                        material.lastAction.occurredAt,
+                      ).toLocaleString()}
+                    </Text>
+                  )}
+                  {material.lastAction?.reason && (
+                    <Text className="warning">
+                      退回原因：{material.lastAction.reason}
+                    </Text>
+                  )}
+                  <Button
+                    onClick={() =>
+                      void Taro.navigateTo({
+                        url: `/pages/task/index?id=${material.taskId}&material=${material.id}`,
+                      })
+                    }
+                  >
+                    查看进度与版本历史
+                  </Button>
+                </View>
+              );
+            })}
         </>
       )}
     </View>

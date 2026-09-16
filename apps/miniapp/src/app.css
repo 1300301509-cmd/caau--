@@ -27,34 +27,104 @@ page {
 }
 .home-page {
   min-height: calc(100vh - 80px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
   box-sizing: border-box;
 }
-.home-heading {
-  margin-bottom: 24px;
-}
-.home-primary-card {
-  padding: 40px 32px;
-  border: 2px solid #bfdbfe;
-  border-radius: 24px;
-  background: var(--surface);
-  box-shadow: 0 12px 32px rgba(30, 64, 175, 0.08);
-}
-.home-primary-title {
+.home-banner {
   display: block;
-  font-size: 38px;
+  width: 100%;
+  height: 240px;
+  border-radius: 20px;
+  background: #e8f0ff;
+}
+.home-section {
+  margin-top: 32px;
+}
+.home-section-title {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 34px;
   font-weight: 700;
 }
-.home-primary-card button {
-  width: 100%;
+.business-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
-.home-secondary {
-  margin-top: 32px;
+.business-tile {
+  min-height: 156px;
+  margin: 0;
+  padding: 16px 8px;
+  border: 2px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-size: 26px;
+  line-height: 1.35;
+}
+.business-tile::after {
+  border: 0;
+}
+.business-tile.selected {
+  border-color: #93b4f5;
+  background: #eff6ff;
+  color: #173f9f;
+}
+.business-icon {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 8px;
+}
+.home-submodules {
   padding-top: 24px;
   border-top: 2px solid #e2e8f0;
-  text-align: center;
+}
+.submodule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.submodule-card {
+  min-height: 180px;
+  margin: 0;
+  padding: 24px;
+  border: 2px solid #cbd5e1;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  line-height: 1.5;
+}
+.submodule-card::after {
+  border: 0;
+}
+.submodule-card:active,
+.business-tile:active {
+  opacity: 0.72;
+}
+.submodule-title,
+.submodule-description {
+  display: block;
+}
+.submodule-title {
+  font-size: 30px;
+  font-weight: 700;
+}
+.submodule-description {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 24px;
+}
+.home-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 2px solid #e2e8f0;
+}
+.home-account-name {
+  color: var(--muted);
+  font-size: 26px;
 }
 .page-top-actions {
   display: flex;
@@ -265,6 +335,5 @@ button[disabled] {
   }
   .home-page {
     min-height: auto;
-    justify-content: flex-start;
   }
 }
