@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Image, Picker, Text, View } from '@tarojs/components';
+import { Button, Image, Text, View } from '@tarojs/components';
 import Taro, { useDidShow } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
 import {
@@ -23,16 +23,13 @@ export default function Home() {
   const [events, setEvents] = useState<S['EventViewDto'][]>([]);
   const [tasks, setTasks] = useState<S['TaskViewDto'][]>([]);
   const [selectedEventId, setSelectedEventId] = useState(session.eventId);
+  const [eventExpanded, setEventExpanded] = useState(false);
   const [eventStatus, setEventStatus] = useState<'loading' | 'ready' | 'error'>(
     'loading',
   );
   const [eventError, setEventError] = useState('');
   const currentEvent =
     events.find((event) => event.id === selectedEventId) ?? events[0];
-  const currentIndex = Math.max(
-    0,
-    events.findIndex((event) => event.id === currentEvent?.id),
-  );
   const currentTaskCount = tasks.filter(
     (task) => task.state === 'PUBLISHED' && task.eventId === currentEvent?.id,
   ).length;
@@ -42,6 +39,7 @@ export default function Home() {
     if (!token) return;
     setEventStatus('loading');
     setEventError('');
+    setEventExpanded(false);
     try {
       const [eventRows, taskRows] = await Promise.all([
         client.request('listEvents', { token }),
@@ -73,6 +71,7 @@ export default function Home() {
       return;
     }
     setIdentity(session.identity?.displayName ?? '');
+    setEventExpanded(false);
     void loadEventContext();
   });
   if (!session.token) return <View className="page" />;
@@ -87,14 +86,22 @@ export default function Home() {
 
   return (
     <View className="page home-page">
-      <View className="home-hero">
-        <Image
-          className="home-banner"
-          src={banner}
-          mode="aspectFill"
-          ariaLabel="可替换的赛事主题占位横幅"
-        />
-        <View className="event-context-bar">
+      <View className="event-switcher">
+        <Button
+          className={`event-context-bar ${eventExpanded ? 'expanded' : ''}`}
+          ariaLabel={
+            eventStatus === 'error'
+              ? '赛事读取失败，点击重试'
+              : `${currentEvent?.name ?? '暂无可办理赛事'}，点击${eventExpanded ? '收起' : '展开'}赛事列表`
+          }
+          onClick={() => {
+            if (eventStatus === 'error') {
+              void loadEventContext();
+              return;
+            }
+            if (events.length) setEventExpanded((value) => !value);
+          }}
+        >
           <View className="event-context-copy">
             <Text className="event-context-label">当前赛事</Text>
             <Text className="event-context-name">
@@ -111,36 +118,50 @@ export default function Home() {
               <Text className="event-context-error">{eventError}</Text>
             )}
           </View>
-          {events.length > 0 ? (
-            <Picker
-              mode="selector"
-              range={events.map((event) => event.name)}
-              value={currentIndex}
-              onChange={(event) => {
-                const next = events[Number(event.detail.value)];
-                if (!next) return;
-                session.eventId = next.id;
-                setSelectedEventId(next.id);
-              }}
-            >
-              <View
-                className="event-context-switch"
-                ariaRole="button"
-                ariaLabel={`切换赛事，当前为${currentEvent?.name ?? ''}`}
-              >
-                切换
-              </View>
-            </Picker>
-          ) : eventStatus === 'error' ? (
-            <Button
-              className="event-context-switch event-context-retry"
-              onClick={() => void loadEventContext()}
-            >
-              重试
-            </Button>
-          ) : null}
-        </View>
+          <View
+            className={`event-context-chevron ${eventExpanded ? 'expanded' : ''}`}
+          />
+        </Button>
+        {eventExpanded && (
+          <View className="event-context-options">
+            {events.map((event) => {
+              const taskCount = tasks.filter(
+                (task) =>
+                  task.state === 'PUBLISHED' && task.eventId === event.id,
+              ).length;
+              const isCurrent = event.id === currentEvent?.id;
+              return (
+                <Button
+                  key={event.id}
+                  className={`event-context-option ${isCurrent ? 'selected' : ''}`}
+                  ariaLabel={`${event.name}，${taskCount}个材料任务${isCurrent ? '，当前赛事' : ''}`}
+                  onClick={() => {
+                    session.eventId = event.id;
+                    setSelectedEventId(event.id);
+                    setEventExpanded(false);
+                  }}
+                >
+                  <View className="event-option-copy">
+                    <Text className="event-option-name">{event.name}</Text>
+                    <Text className="event-option-meta">
+                      {taskCount} 个材料任务
+                    </Text>
+                  </View>
+                  {isCurrent && (
+                    <Text className="event-option-current">当前</Text>
+                  )}
+                </Button>
+              );
+            })}
+          </View>
+        )}
       </View>
+      <Image
+        className="home-banner"
+        src={banner}
+        mode="aspectFill"
+        ariaLabel="可替换的赛事主题占位横幅"
+      />
 
       <View className="home-section">
         <Text className="home-section-title">业务板块</Text>
