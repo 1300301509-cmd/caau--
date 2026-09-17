@@ -473,9 +473,6 @@ body:has(.hq-shell) {
     margin-left: 0;
     padding-left: 4px;
   }
-  .hq-account-actions a {
-    display: none;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .hq-shell :is(a, button) {
