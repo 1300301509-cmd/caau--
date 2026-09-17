@@ -5,6 +5,7 @@ export const roles = [
   'ORGANIZER',
   'REVIEWER',
   'SYSTEM_ADMIN',
+  'HEADQUARTERS_SUPER_ADMIN',
 ] as const;
 export const taskActions = [
   'task.read',

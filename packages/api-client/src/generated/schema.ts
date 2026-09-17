@@ -1,5 +1,70 @@
 /** Generated from the Nest OpenAPI contract. DO NOT EDIT. */
 export interface paths {
+  '/api/v1/admin/hosting-application-handler-grants': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Grant application handling permission */
+    post: operations['HostingController_handlerGrant'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/hosting-application-handler-grants/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['HostingController_handlerGrantActive'];
+    trace?: never;
+  };
+  '/api/v1/admin/hosting-application-review-grants': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_reviewGrant'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/hosting-application-review-grants/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['HostingController_reviewGrantActive'];
+    trace?: never;
+  };
   '/api/v1/authorization/audit': {
     parameters: {
       query?: never;
@@ -316,6 +381,198 @@ export interface paths {
     get: operations['getHealth'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['HostingController_list'];
+    put?: never;
+    post: operations['HostingController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['HostingController_detail'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications/{id}/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_approve'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications/{id}/draft': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['HostingController_save'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications/{id}/reject': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_reject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications/{id}/request-supplement': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_supplement'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications/{id}/start-review': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_startReview'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications/{id}/submit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_submit'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-applications/{id}/uploads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_uploadIntent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-uploads/{id}/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_confirmUpload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-uploads/{id}/content': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['HostingController_download'];
+    put: operations['HostingController_uploadContent'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-uploads/{id}/remove': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_removeUpload'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1033,6 +1290,12 @@ export interface components {
       expectedRevision: number;
       requirements: components['schemas']['RequirementsDto'];
     };
+    CreateHostingApplicationDto: {
+      /** Format: uuid */
+      applicantOrganizationId: string;
+      /** Format: uuid */
+      key: string;
+    };
     CreateIndividualDto: {
       content: components['schemas']['IndividualContentDto'];
       /** Format: uuid */
@@ -1124,7 +1387,10 @@ export interface components {
       description: string;
       /** Format: uuid */
       id: string;
+      /** @enum {string|null} */
+      lifecycleState?: 'PREPARING_INTERNAL' | null;
       name: string;
+      profile: Record<string, never> | null;
     };
     ExecutionViewDto: {
       currentSubmissionId: string | null;
@@ -1166,6 +1432,194 @@ export interface components {
       service: 'caau-api';
       /** @enum {string} */
       status: 'ok';
+    };
+    HostingActionViewDto: {
+      action: string;
+      /** Format: uuid */
+      actorId: string;
+      detail: {
+        [key: string]: unknown;
+      };
+      /** @enum {string} */
+      fromState:
+        | 'DRAFT'
+        | 'PENDING_REVIEW'
+        | 'IN_REVIEW'
+        | 'NEEDS_SUPPLEMENT'
+        | 'REJECTED'
+        | 'APPROVED';
+      /** Format: uuid */
+      id: string;
+      /** Format: date-time */
+      occurredAt: string;
+      /** @enum {string} */
+      toState:
+        | 'DRAFT'
+        | 'PENDING_REVIEW'
+        | 'IN_REVIEW'
+        | 'NEEDS_SUPPLEMENT'
+        | 'REJECTED'
+        | 'APPROVED';
+    };
+    HostingAdministrativeAreaDto: {
+      city: string;
+      district: string | null;
+      province: string;
+    };
+    HostingApplicationDetailDto: {
+      actions: components['schemas']['HostingActionViewDto'][];
+      /** Format: uuid */
+      applicantOrganizationId: string;
+      applicantOrganizationName: string;
+      /** Format: uuid */
+      approvedEventId: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: uuid */
+      currentSubmissionId: string | null;
+      diffs: components['schemas']['HostingDiffViewDto'][];
+      draft: {
+        [key: string]: unknown;
+      } | null;
+      draftRevision: number;
+      /** Format: uuid */
+      id: string;
+      revision: number;
+      /** @enum {string} */
+      status:
+        | 'DRAFT'
+        | 'PENDING_REVIEW'
+        | 'IN_REVIEW'
+        | 'NEEDS_SUPPLEMENT'
+        | 'REJECTED'
+        | 'APPROVED';
+      submissions: components['schemas']['HostingSubmissionViewDto'][];
+      uploads: components['schemas']['HostingUploadViewDto'][];
+    };
+    HostingApplicationListItemDto: {
+      /** Format: uuid */
+      applicantOrganizationId: string;
+      applicantOrganizationName: string;
+      /** Format: uuid */
+      approvedEventId: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: uuid */
+      currentSubmissionId: string | null;
+      draftRevision: number;
+      /** Format: uuid */
+      id: string;
+      revision: number;
+      /** @enum {string} */
+      status:
+        | 'DRAFT'
+        | 'PENDING_REVIEW'
+        | 'IN_REVIEW'
+        | 'NEEDS_SUPPLEMENT'
+        | 'REJECTED'
+        | 'APPROVED';
+    };
+    HostingDiffViewDto: {
+      attachmentChanges: {
+        [key: string]: unknown;
+      }[];
+      fieldChanges: {
+        [key: string]: unknown;
+      }[];
+      /** Format: uuid */
+      fromSubmissionId: string;
+      /** Format: uuid */
+      toSubmissionId: string;
+    };
+    HostingDraftFormDto: {
+      /** Format: date */
+      endDate: string | null;
+      eventExperienceIntroduction: string | null;
+      eventName: string | null;
+      location: components['schemas']['HostingLocationDto'] | null;
+      /** Format: date */
+      startDate: string | null;
+    };
+    HostingGrantActiveDto: {
+      active: boolean;
+    };
+    HostingGrantInputDto: {
+      /** Format: uuid */
+      memberId: string;
+    };
+    HostingGrantViewDto: {
+      active: boolean;
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      memberId: string;
+      /** Format: uuid */
+      organizationId: string | null;
+    };
+    HostingLocationDto: {
+      administrativeArea: components['schemas']['HostingAdministrativeAreaDto'];
+      detailedAddress: string;
+      venueName: string;
+    };
+    HostingReasonCommandDto: {
+      expectedRevision: number;
+      /** Format: uuid */
+      key: string;
+      reason: string;
+      /** Format: uuid */
+      submissionId: string;
+    };
+    HostingReviewCommandDto: {
+      expectedRevision: number;
+      /** Format: uuid */
+      key: string;
+      /** Format: uuid */
+      submissionId: string;
+    };
+    HostingSubmissionViewDto: {
+      attachments: components['schemas']['HostingUploadViewDto'][];
+      form: {
+        [key: string]: unknown;
+      };
+      /** Format: uuid */
+      id: string;
+      /** Format: date-time */
+      submittedAt: string;
+      /** Format: uuid */
+      submittedBy: string;
+      version: number;
+    };
+    HostingSubmitDto: {
+      expectedDraftRevision: number;
+      expectedRevision: number;
+      /** Format: uuid */
+      key: string;
+    };
+    HostingUploadInputDto: {
+      expectedBytes: number;
+      /** @enum {string} */
+      extension: 'pdf' | 'png' | 'jpg' | 'jpeg';
+      originalName: string;
+      /** @enum {string} */
+      requirementCode: 'BUSINESS_LICENSE' | 'VENUE_PHOTO' | 'OTHER_DOCUMENT';
+      sha256: string;
+    };
+    HostingUploadMutationDto: {
+      expectedDraftRevision: number;
+    };
+    HostingUploadViewDto: {
+      bound: boolean;
+      expectedBytes: number;
+      /** Format: date-time */
+      expiresAt: string;
+      extension: string;
+      /** Format: uuid */
+      id: string;
+      originalName: string;
+      /** @enum {string} */
+      requirementCode: 'BUSINESS_LICENSE' | 'VENUE_PHOTO' | 'OTHER_DOCUMENT';
+      /** @enum {string} */
+      state: 'PENDING' | 'CONFIRMED';
     };
     IdDto: {
       /** Format: uuid */
@@ -1298,7 +1752,12 @@ export interface components {
         | 'organizer-b';
       organizationName: string;
       /** @enum {string} */
-      role: 'EVENT_MANAGER' | 'ORGANIZER' | 'REVIEWER' | 'SYSTEM_ADMIN';
+      role:
+        | 'EVENT_MANAGER'
+        | 'ORGANIZER'
+        | 'REVIEWER'
+        | 'SYSTEM_ADMIN'
+        | 'HEADQUARTERS_SUPER_ADMIN';
     };
     LocalSessionDto: {
       /** Format: date-time */
@@ -1340,7 +1799,12 @@ export interface components {
       /** Format: uuid */
       organizationId: string;
       /** @enum {string} */
-      role: 'EVENT_MANAGER' | 'ORGANIZER' | 'REVIEWER' | 'SYSTEM_ADMIN';
+      role:
+        | 'EVENT_MANAGER'
+        | 'ORGANIZER'
+        | 'REVIEWER'
+        | 'SYSTEM_ADMIN'
+        | 'HEADQUARTERS_SUPER_ADMIN';
       /** Format: uuid */
       userId: string;
     };
@@ -1348,7 +1812,12 @@ export interface components {
       /** Format: uuid */
       organizationId: string;
       /** @enum {string} */
-      role: 'EVENT_MANAGER' | 'ORGANIZER' | 'REVIEWER' | 'SYSTEM_ADMIN';
+      role:
+        | 'EVENT_MANAGER'
+        | 'ORGANIZER'
+        | 'REVIEWER'
+        | 'SYSTEM_ADMIN'
+        | 'HEADQUARTERS_SUPER_ADMIN';
       /** Format: uuid */
       userId: string;
     };
@@ -1416,6 +1885,10 @@ export interface components {
     SaveDraftDto: {
       entries: components['schemas']['EntryDto'][];
       expectedRevision: number;
+    };
+    SaveHostingDraftDto: {
+      expectedDraftRevision: number;
+      form: components['schemas']['HostingDraftFormDto'];
     };
     SaveIndividualDto: {
       content: components['schemas']['IndividualContentDto'];
@@ -1548,6 +2021,166 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  HostingController_handlerGrant: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingGrantInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingGrantViewDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_handlerGrantActive: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingGrantActiveDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingGrantViewDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_reviewGrant: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingGrantInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingGrantViewDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_reviewGrantActive: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingGrantActiveDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingGrantViewDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   getSecurityAudit: {
     parameters: {
       query?: never;
@@ -2708,6 +3341,584 @@ export interface operations {
         content: {
           'application/json': components['schemas']['HealthDto'];
         };
+      };
+    };
+  };
+  HostingController_list: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingApplicationListItemDto'][];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_create: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateHostingApplicationDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingApplicationListItemDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_detail: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingApplicationDetailDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_approve: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingReviewCommandDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_save: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveHostingDraftDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingApplicationDetailDto'];
+        };
+      };
+      /** @description Invalid draft form */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_reject: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingReasonCommandDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_supplement: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingReasonCommandDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_startReview: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingReviewCommandDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_submit: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingSubmitDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_uploadIntent: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingUploadInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingUploadViewDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_confirmUpload: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingUploadMutationDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingUploadViewDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_download: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': string;
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_uploadContent: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/octet-stream': string;
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: uuid */
+            id?: string;
+          };
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_removeUpload: {
+    parameters: {
+      query?: never;
+      header: {
+        authorization: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HostingUploadMutationDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingUploadViewDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

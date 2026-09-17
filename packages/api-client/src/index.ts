@@ -16,7 +16,7 @@ export type { paths, components, operations } from './generated/schema.js';
 
 export type RequestOptions = {
   url: string;
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   timeout: number;
   header?: Record<string, string>;
   data?: unknown;

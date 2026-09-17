@@ -10,7 +10,10 @@ import { WorkflowModule } from './modules/workflow/workflow.module.js';
 import { MaterialsModule } from './modules/materials/materials.module.js';
 
 import { IndividualModule } from './modules/individual-materials/individual.module.js';
-@Module({ imports: [HealthModule, MaterialsModule, IndividualModule] })
+import { HostingModule } from './modules/event-hosting-applications/hosting.module.js';
+@Module({
+  imports: [HealthModule, MaterialsModule, IndividualModule, HostingModule],
+})
 export class AppModule {
   static register(
     probe: DatabaseProbe,

@@ -7,6 +7,18 @@ export class EventInputDto {
 }
 export class EventViewDto extends EventInputDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({
+    enum: ['PREPARING_INTERNAL'],
+    nullable: true,
+    required: false,
+  })
+  lifecycleState!: 'PREPARING_INTERNAL' | null;
+  @ApiProperty({
+    type: 'object',
+    properties: {},
+    nullable: true,
+  })
+  profile!: object | null;
   @ApiProperty({ format: 'date-time' }) createdAt!: string;
 }
 export class AssignmentDto {
@@ -81,7 +93,13 @@ export class MemberChoiceDto extends IdDto {
   @ApiProperty({ format: 'uuid' }) userId!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty({
-    enum: ['EVENT_MANAGER', 'ORGANIZER', 'REVIEWER', 'SYSTEM_ADMIN'],
+    enum: [
+      'EVENT_MANAGER',
+      'ORGANIZER',
+      'REVIEWER',
+      'SYSTEM_ADMIN',
+      'HEADQUARTERS_SUPER_ADMIN',
+    ],
   })
   role!: string;
 }

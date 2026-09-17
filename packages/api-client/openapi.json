@@ -104,6 +104,20 @@
         "required": ["expectedRevision", "requirements"],
         "type": "object"
       },
+      "CreateHostingApplicationDto": {
+        "properties": {
+          "applicantOrganizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["applicantOrganizationId", "key"],
+        "type": "object"
+      },
       "CreateIndividualDto": {
         "properties": {
           "content": {
@@ -382,12 +396,22 @@
             "format": "uuid",
             "type": "string"
           },
+          "lifecycleState": {
+            "enum": ["PREPARING_INTERNAL"],
+            "nullable": true,
+            "type": "string"
+          },
           "name": {
             "maxLength": 120,
             "type": "string"
+          },
+          "profile": {
+            "nullable": true,
+            "properties": {},
+            "type": "object"
           }
         },
-        "required": ["name", "description", "id", "createdAt"],
+        "required": ["name", "description", "id", "profile", "createdAt"],
         "type": "object"
       },
       "ExecutionViewDto": {
@@ -504,6 +528,545 @@
           }
         },
         "required": ["status", "service"],
+        "type": "object"
+      },
+      "HostingActionViewDto": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "fromState": {
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "IN_REVIEW",
+              "NEEDS_SUPPLEMENT",
+              "REJECTED",
+              "APPROVED"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "toState": {
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "IN_REVIEW",
+              "NEEDS_SUPPLEMENT",
+              "REJECTED",
+              "APPROVED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "fromState",
+          "toState",
+          "actorId",
+          "occurredAt",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "HostingAdministrativeAreaDto": {
+        "properties": {
+          "city": {
+            "maxLength": 60,
+            "type": "string"
+          },
+          "district": {
+            "maxLength": 60,
+            "nullable": true,
+            "type": "string"
+          },
+          "province": {
+            "maxLength": 40,
+            "type": "string"
+          }
+        },
+        "required": ["province", "city", "district"],
+        "type": "object"
+      },
+      "HostingApplicationDetailDto": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/HostingActionViewDto"
+            },
+            "type": "array"
+          },
+          "applicantOrganizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "applicantOrganizationName": {
+            "type": "string"
+          },
+          "approvedEventId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currentSubmissionId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "diffs": {
+            "items": {
+              "$ref": "#/components/schemas/HostingDiffViewDto"
+            },
+            "type": "array"
+          },
+          "draft": {
+            "additionalProperties": true,
+            "nullable": true,
+            "type": "object"
+          },
+          "draftRevision": {
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "IN_REVIEW",
+              "NEEDS_SUPPLEMENT",
+              "REJECTED",
+              "APPROVED"
+            ],
+            "type": "string"
+          },
+          "submissions": {
+            "items": {
+              "$ref": "#/components/schemas/HostingSubmissionViewDto"
+            },
+            "type": "array"
+          },
+          "uploads": {
+            "items": {
+              "$ref": "#/components/schemas/HostingUploadViewDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "applicantOrganizationId",
+          "applicantOrganizationName",
+          "status",
+          "revision",
+          "draftRevision",
+          "currentSubmissionId",
+          "approvedEventId",
+          "createdAt",
+          "draft",
+          "uploads",
+          "submissions",
+          "actions",
+          "diffs"
+        ],
+        "type": "object"
+      },
+      "HostingApplicationListItemDto": {
+        "properties": {
+          "applicantOrganizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "applicantOrganizationName": {
+            "type": "string"
+          },
+          "approvedEventId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currentSubmissionId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "draftRevision": {
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "IN_REVIEW",
+              "NEEDS_SUPPLEMENT",
+              "REJECTED",
+              "APPROVED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "applicantOrganizationId",
+          "applicantOrganizationName",
+          "status",
+          "revision",
+          "draftRevision",
+          "currentSubmissionId",
+          "approvedEventId",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "HostingDiffViewDto": {
+        "properties": {
+          "attachmentChanges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "fieldChanges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "fromSubmissionId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "toSubmissionId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fromSubmissionId",
+          "toSubmissionId",
+          "fieldChanges",
+          "attachmentChanges"
+        ],
+        "type": "object"
+      },
+      "HostingDraftFormDto": {
+        "properties": {
+          "endDate": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
+          },
+          "eventExperienceIntroduction": {
+            "maxLength": 20000,
+            "nullable": true,
+            "type": "string"
+          },
+          "eventName": {
+            "maxLength": 120,
+            "nullable": true,
+            "type": "string"
+          },
+          "location": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HostingLocationDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "startDate": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventName",
+          "startDate",
+          "endDate",
+          "location",
+          "eventExperienceIntroduction"
+        ],
+        "type": "object"
+      },
+      "HostingGrantActiveDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": ["active"],
+        "type": "object"
+      },
+      "HostingGrantInputDto": {
+        "properties": {
+          "memberId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["memberId"],
+        "type": "object"
+      },
+      "HostingGrantViewDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "memberId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": ["id", "memberId", "organizationId", "active"],
+        "type": "object"
+      },
+      "HostingLocationDto": {
+        "properties": {
+          "administrativeArea": {
+            "$ref": "#/components/schemas/HostingAdministrativeAreaDto"
+          },
+          "detailedAddress": {
+            "maxLength": 240,
+            "type": "string"
+          },
+          "venueName": {
+            "maxLength": 120,
+            "type": "string"
+          }
+        },
+        "required": ["administrativeArea", "detailedAddress", "venueName"],
+        "type": "object"
+      },
+      "HostingReasonCommandDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "key": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "submissionId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["submissionId", "expectedRevision", "key", "reason"],
+        "type": "object"
+      },
+      "HostingReviewCommandDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "key": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "submissionId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["submissionId", "expectedRevision", "key"],
+        "type": "object"
+      },
+      "HostingSubmissionViewDto": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/HostingUploadViewDto"
+            },
+            "type": "array"
+          },
+          "form": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "submittedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "submittedBy": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "form",
+          "submittedBy",
+          "submittedAt",
+          "attachments"
+        ],
+        "type": "object"
+      },
+      "HostingSubmitDto": {
+        "properties": {
+          "expectedDraftRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "key": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["expectedDraftRevision", "expectedRevision", "key"],
+        "type": "object"
+      },
+      "HostingUploadInputDto": {
+        "properties": {
+          "expectedBytes": {
+            "maximum": 10485760,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "extension": {
+            "enum": ["pdf", "png", "jpg", "jpeg"],
+            "type": "string"
+          },
+          "originalName": {
+            "maxLength": 180,
+            "type": "string"
+          },
+          "requirementCode": {
+            "enum": ["BUSINESS_LICENSE", "VENUE_PHOTO", "OTHER_DOCUMENT"],
+            "type": "string"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "requirementCode",
+          "originalName",
+          "extension",
+          "expectedBytes",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "HostingUploadMutationDto": {
+        "properties": {
+          "expectedDraftRevision": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": ["expectedDraftRevision"],
+        "type": "object"
+      },
+      "HostingUploadViewDto": {
+        "properties": {
+          "bound": {
+            "type": "boolean"
+          },
+          "expectedBytes": {
+            "type": "integer"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "requirementCode": {
+            "enum": ["BUSINESS_LICENSE", "VENUE_PHOTO", "OTHER_DOCUMENT"],
+            "type": "string"
+          },
+          "state": {
+            "enum": ["PENDING", "CONFIRMED"],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "requirementCode",
+          "originalName",
+          "extension",
+          "expectedBytes",
+          "state",
+          "bound",
+          "expiresAt"
+        ],
         "type": "object"
       },
       "IdDto": {
@@ -958,7 +1521,13 @@
             "type": "string"
           },
           "role": {
-            "enum": ["EVENT_MANAGER", "ORGANIZER", "REVIEWER", "SYSTEM_ADMIN"],
+            "enum": [
+              "EVENT_MANAGER",
+              "ORGANIZER",
+              "REVIEWER",
+              "SYSTEM_ADMIN",
+              "HEADQUARTERS_SUPER_ADMIN"
+            ],
             "type": "string"
           }
         },
@@ -1070,7 +1639,13 @@
             "type": "string"
           },
           "role": {
-            "enum": ["EVENT_MANAGER", "ORGANIZER", "REVIEWER", "SYSTEM_ADMIN"],
+            "enum": [
+              "EVENT_MANAGER",
+              "ORGANIZER",
+              "REVIEWER",
+              "SYSTEM_ADMIN",
+              "HEADQUARTERS_SUPER_ADMIN"
+            ],
             "type": "string"
           },
           "userId": {
@@ -1088,7 +1663,13 @@
             "type": "string"
           },
           "role": {
-            "enum": ["EVENT_MANAGER", "ORGANIZER", "REVIEWER", "SYSTEM_ADMIN"],
+            "enum": [
+              "EVENT_MANAGER",
+              "ORGANIZER",
+              "REVIEWER",
+              "SYSTEM_ADMIN",
+              "HEADQUARTERS_SUPER_ADMIN"
+            ],
             "type": "string"
           },
           "userId": {
@@ -1287,6 +1868,19 @@
           }
         },
         "required": ["expectedRevision", "entries"],
+        "type": "object"
+      },
+      "SaveHostingDraftDto": {
+        "properties": {
+          "expectedDraftRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "form": {
+            "$ref": "#/components/schemas/HostingDraftFormDto"
+          }
+        },
+        "required": ["expectedDraftRevision", "form"],
         "type": "object"
       },
       "SaveIndividualDto": {
@@ -1696,6 +2290,221 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/api/v1/admin/hosting-application-handler-grants": {
+      "post": {
+        "operationId": "HostingController_handlerGrant",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingGrantInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingGrantViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "summary": "Grant application handling permission",
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/admin/hosting-application-handler-grants/{id}": {
+      "patch": {
+        "operationId": "HostingController_handlerGrantActive",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingGrantActiveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingGrantViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/admin/hosting-application-review-grants": {
+      "post": {
+        "operationId": "HostingController_reviewGrant",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingGrantInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingGrantViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/admin/hosting-application-review-grants/{id}": {
+      "patch": {
+        "operationId": "HostingController_reviewGrantActive",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingGrantActiveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingGrantViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
     "/api/v1/authorization/audit": {
       "get": {
         "operationId": "getSecurityAudit",
@@ -2717,6 +3526,785 @@
         },
         "summary": "API process liveness; independent of database",
         "tags": ["system"]
+      }
+    },
+    "/api/v1/hosting-applications": {
+      "get": {
+        "operationId": "HostingController_list",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HostingApplicationListItemDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      },
+      "post": {
+        "operationId": "HostingController_create",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHostingApplicationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingApplicationListItemDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-applications/{id}": {
+      "get": {
+        "operationId": "HostingController_detail",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingApplicationDetailDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-applications/{id}/approve": {
+      "post": {
+        "operationId": "HostingController_approve",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingReviewCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-applications/{id}/draft": {
+      "put": {
+        "operationId": "HostingController_save",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveHostingDraftDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingApplicationDetailDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid draft form"
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-applications/{id}/reject": {
+      "post": {
+        "operationId": "HostingController_reject",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingReasonCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-applications/{id}/request-supplement": {
+      "post": {
+        "operationId": "HostingController_supplement",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingReasonCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-applications/{id}/start-review": {
+      "post": {
+        "operationId": "HostingController_startReview",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingReviewCommandDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-applications/{id}/submit": {
+      "post": {
+        "operationId": "HostingController_submit",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingSubmitDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-applications/{id}/uploads": {
+      "post": {
+        "operationId": "HostingController_uploadIntent",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingUploadInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingUploadViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-uploads/{id}/confirm": {
+      "post": {
+        "operationId": "HostingController_confirmUpload",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingUploadMutationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingUploadViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-uploads/{id}/content": {
+      "get": {
+        "operationId": "HostingController_download",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      },
+      "put": {
+        "operationId": "HostingController_uploadContent",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-uploads/{id}/remove": {
+      "post": {
+        "operationId": "HostingController_removeUpload",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostingUploadMutationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingUploadViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "localIdentity": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
       }
     },
     "/api/v1/individual-material-tasks": {

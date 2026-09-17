@@ -20,6 +20,7 @@ import {
   deny,
   eventManager,
   hasRole,
+  isHeadquartersSuperAdmin,
   taskPolicy,
   type Actor,
 } from './policy.js';
@@ -104,6 +105,27 @@ export class AuthorizationService {
     if (!this.config.localIdentity || !this.database)
       throw new ServiceUnavailableException('Local identity unavailable');
     return this.database.client;
+  }
+  private async syncHostingInformationAccess(
+    tx: Prisma.TransactionClient,
+    memberIds: string[],
+  ) {
+    if (!memberIds.length) return;
+    const grants = await tx.hostingApplicationHandlerGrant.findMany({
+      where: { memberId: { in: memberIds } },
+      include: { member: { include: { user: true } } },
+    });
+    const now = (
+      await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
+    )[0]!.now;
+    for (const grant of grants) {
+      const active =
+        grant.active && grant.member.active && grant.member.user.active;
+      await tx.eventInformationAccessGrant.updateMany({
+        where: { sourceHandlerGrantId: grant.id },
+        data: { active, revokedAt: active ? null : now },
+      });
+    }
   }
   localIdentityOptions() {
     this.db();
@@ -336,6 +358,7 @@ export class AuthorizationService {
     actor: Actor,
     eventId: string,
   ) {
+    if (isHeadquartersSuperAdmin(actor)) return;
     if (hasRole(actor, 'ORGANIZER')) deny();
     await eventManager(tx, actor, eventId);
   }
@@ -393,11 +416,14 @@ export class AuthorizationService {
   }
   async directory(tx: Prisma.TransactionClient, actor: Actor) {
     if (
-      (!hasRole(actor, 'EVENT_MANAGER') && !hasRole(actor, 'SYSTEM_ADMIN')) ||
+      (!hasRole(actor, 'EVENT_MANAGER') &&
+        !hasRole(actor, 'SYSTEM_ADMIN') &&
+        !isHeadquartersSuperAdmin(actor)) ||
       hasRole(actor, 'ORGANIZER')
     )
       deny();
-    const administrator = hasRole(actor, 'SYSTEM_ADMIN');
+    const administrator =
+      hasRole(actor, 'SYSTEM_ADMIN') || isHeadquartersSuperAdmin(actor);
     const members = await tx.organizationMember.findMany({
       where: {
         active: true,
@@ -453,7 +479,8 @@ export class AuthorizationService {
       return { id: actor.id };
     }
     if (action.startsWith('admin.')) {
-      if (!hasRole(actor, 'SYSTEM_ADMIN')) deny();
+      if (!hasRole(actor, 'SYSTEM_ADMIN') && !isHeadquartersSuperAdmin(actor))
+        deny();
       if (action === 'admin.user.create') {
         const b = bodyObject(input, ['displayName']);
         return tx.internalUser.create({
@@ -470,8 +497,14 @@ export class AuthorizationService {
       }
       if (action === 'admin.member.create') {
         const b = bodyObject(input, ['userId', 'organizationId', 'role']);
-        if (!roles.includes(b.role as (typeof roles)[number]))
-          throw new BadRequestException('Invalid role');
+        if (
+          !roles.includes(b.role as (typeof roles)[number]) ||
+          (b.role === 'HEADQUARTERS_SUPER_ADMIN' &&
+            !isHeadquartersSuperAdmin(actor))
+        )
+          throw new BadRequestException(
+            'Super administrator requires super-admin authority or controlled initialization',
+          );
         return tx.organizationMember.create({
           data: {
             userId: uuid(b.userId),
@@ -485,17 +518,25 @@ export class AuthorizationService {
         const b = bodyObject(input, ['active']);
         if (typeof b.active !== 'boolean')
           throw new BadRequestException('Boolean required');
-        return action === 'admin.user.active'
-          ? tx.internalUser.update({
-              where: { id: id! },
-              data: { active: b.active },
-              select: { id: true },
-            })
-          : tx.organizationMember.update({
-              where: { id: id! },
-              data: { active: b.active },
-              select: { id: true },
-            });
+        if (action === 'admin.user.active') {
+          const user = await tx.internalUser.update({
+            where: { id: id! },
+            data: { active: b.active },
+            select: { id: true, memberships: { select: { id: true } } },
+          });
+          await this.syncHostingInformationAccess(
+            tx,
+            user.memberships.map((member) => member.id),
+          );
+          return { id: user.id };
+        }
+        const member = await tx.organizationMember.update({
+          where: { id: id! },
+          data: { active: b.active },
+          select: { id: true },
+        });
+        await this.syncHostingInformationAccess(tx, [member.id]);
+        return member;
       }
       if (action === 'admin.grant.create') {
         const b = bodyObject(input, ['eventId', 'memberId']);
@@ -506,7 +547,7 @@ export class AuthorizationService {
         if (
           !member?.active ||
           !member.user.active ||
-          member.role === 'SYSTEM_ADMIN'
+          ['SYSTEM_ADMIN', 'HEADQUARTERS_SUPER_ADMIN'].includes(member.role)
         )
           deny();
         return tx.eventGrant.create({
@@ -559,6 +600,8 @@ export class AuthorizationService {
       deny();
     }
     if (action === 'event.create') {
+      if (isHeadquartersSuperAdmin(actor))
+        return tx.eventScope.create({ data: {}, select: { id: true } });
       const member = actor.memberships.find(
         (m) => m.active && m.role === 'EVENT_MANAGER',
       );
@@ -573,6 +616,7 @@ export class AuthorizationService {
       return event;
     }
     if (action === 'event.read') {
+      if (isHeadquartersSuperAdmin(actor)) return { id };
       const grants = await tx.eventGrant.count({
         where: {
           eventId: id!,

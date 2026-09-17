@@ -15,6 +15,7 @@ import {
 import {
   deny,
   hasRole,
+  isHeadquartersSuperAdmin,
   taskPolicy,
   type Actor,
 } from '../authorization/policy.js';
@@ -68,6 +69,7 @@ function visibleTasks(actor: Actor): Prisma.MaterialTaskWhereInput {
   return { OR: [legacyVisibleTasks(actor), individualTasks(actor)] };
 }
 function legacyVisibleTasks(actor: Actor): Prisma.MaterialTaskWhereInput {
+  if (isHeadquartersSuperAdmin(actor)) return {};
   if (hasRole(actor, 'ORGANIZER'))
     return {
       state: 'PUBLISHED',
@@ -112,6 +114,7 @@ function legacyVisibleTasks(actor: Actor): Prisma.MaterialTaskWhereInput {
   };
 }
 function visibleEvents(actor: Actor): Prisma.EventWhereInput {
+  if (isHeadquartersSuperAdmin(actor)) return {};
   if (!hasRole(actor, 'ORGANIZER') && !hasRole(actor, 'REVIEWER'))
     return {
       scope: {
@@ -123,7 +126,19 @@ function visibleEvents(actor: Actor): Prisma.EventWhereInput {
         },
       },
     };
-  return { tasks: { some: visibleTasks(actor) } };
+  return {
+    OR: [
+      { tasks: { some: visibleTasks(actor) } },
+      {
+        informationGrants: {
+          some: {
+            active: true,
+            member: { userId: actor.id, active: true, user: { active: true } },
+          },
+        },
+      },
+    ],
+  };
 }
 function templateView(file: {
   id: string;
@@ -256,17 +271,28 @@ export class MaterialsService {
             },
           });
         }
-        if (action === 'events.list')
-          return tx.event.findMany({
+        if (action === 'events.list') {
+          const events = await tx.event.findMany({
             where: visibleEvents(actor),
             select: {
               id: true,
               name: true,
               description: true,
+              lifecycleState: true,
+              profileVersions: {
+                select: { profile: true },
+                orderBy: { version: 'desc' },
+                take: 1,
+              },
               createdAt: true,
             },
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
           });
+          return events.map(({ profileVersions, ...event }) => ({
+            ...event,
+            profile: profileVersions[0]?.profile ?? null,
+          }));
+        }
         if (action === 'events.read') {
           const event = await tx.event.findFirst({
             where: { AND: [{ id: id! }, visibleEvents(actor)] },
@@ -274,11 +300,18 @@ export class MaterialsService {
               id: true,
               name: true,
               description: true,
+              lifecycleState: true,
+              profileVersions: {
+                select: { profile: true },
+                orderBy: { version: 'desc' },
+                take: 1,
+              },
               createdAt: true,
             },
           });
           if (!event) deny();
-          return event;
+          const { profileVersions, ...result } = event;
+          return { ...result, profile: profileVersions[0]?.profile ?? null };
         }
         if (action.startsWith('template.')) {
           const template =
@@ -425,10 +458,11 @@ export class MaterialsService {
             if (task.state !== 'PUBLISHED' || template.state !== 'CONFIRMED')
               deny();
             const allowed =
-              hasRole(actor, 'ORGANIZER') &&
-              task.scope.handler.member.userId === actor.id &&
-              task.scope.handler.member.active &&
-              task.scope.handler.member.role === 'ORGANIZER';
+              isHeadquartersSuperAdmin(actor) ||
+              (hasRole(actor, 'ORGANIZER') &&
+                task.scope.handler.member.userId === actor.id &&
+                task.scope.handler.member.active &&
+                task.scope.handler.member.role === 'ORGANIZER');
             if (!allowed) deny();
             const snapshot = await tx.templateAttachment.findFirst({
               where: { templateId: template.id, requirement: { taskId } },

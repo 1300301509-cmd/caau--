@@ -58,7 +58,7 @@ function resolveSchema(schema) {
 const metadata = {};
 for (const [url, item] of Object.entries(spec.paths)) {
   for (const [method, operation] of Object.entries(item)) {
-    assert.ok(['get', 'post', 'patch', 'delete'].includes(method));
+    assert.ok(['get', 'post', 'put', 'patch', 'delete'].includes(method));
     assert.ok(operation.operationId && !metadata[operation.operationId]);
     const responses = {};
     for (const [status, response] of Object.entries(operation.responses)) {

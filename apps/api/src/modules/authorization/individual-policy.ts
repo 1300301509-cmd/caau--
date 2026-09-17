@@ -1,7 +1,14 @@
 import type { Prisma } from '@caau/database';
-import { deny, hasRole, eventManager, type Actor } from './policy.js';
+import {
+  deny,
+  hasRole,
+  eventManager,
+  isHeadquartersSuperAdmin,
+  type Actor,
+} from './policy.js';
 
 export function individualTasks(actor: Actor): Prisma.MaterialTaskWhereInput {
+  if (isHeadquartersSuperAdmin(actor)) return {};
   const published = {
     state: 'PUBLISHED' as const,
     individualChannel: { isNot: null },
@@ -67,6 +74,7 @@ export async function individualPolicy(
     include: { scope: { include: { handler: { include: { member: true } } } } },
   });
   if (!task) deny();
+  if (isHeadquartersSuperAdmin(actor)) return task;
   if (action === 'write') {
     if (
       !hasRole(actor, 'ORGANIZER') ||

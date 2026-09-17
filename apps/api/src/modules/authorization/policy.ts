@@ -10,11 +10,15 @@ export function deny(): never {
 export function hasRole(actor: Actor, role: string) {
   return actor.memberships.some((m) => m.active && m.role === role);
 }
+export function isHeadquartersSuperAdmin(actor: Actor) {
+  return hasRole(actor, 'HEADQUARTERS_SUPER_ADMIN');
+}
 export async function eventManager(
   tx: Prisma.TransactionClient,
   actor: Actor,
   eventId: string,
 ) {
+  if (isHeadquartersSuperAdmin(actor)) return;
   const grant = await tx.eventGrant.findFirst({
     where: {
       eventId,
@@ -38,6 +42,7 @@ export async function taskPolicy(
     },
   });
   if (!task) deny();
+  if (isHeadquartersSuperAdmin(actor)) return task;
   const handler = task.handler.member;
   const reviewer = task.reviewer?.member;
   const ownOrganization = actor.memberships.some(
