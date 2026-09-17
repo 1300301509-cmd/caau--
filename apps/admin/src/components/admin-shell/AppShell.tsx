@@ -45,62 +45,82 @@ export function AppShell({
           if (event.key === 'Escape') setSidebarOpen(false);
         }}
       >
-        <a
-          className="hq-brand"
-          href="/hosting-applications"
-          aria-label="CAAU 总部首页"
-        >
-          <svg
-            className="hq-brand-symbol"
-            viewBox="306 154 666 648"
-            preserveAspectRatio="xMidYMid meet"
-            aria-hidden="true"
-            focusable="false"
+        <div className="hq-sidebar-panel">
+          <a
+            className="hq-brand"
+            href="/hosting-applications"
+            aria-label="CAAU 总部首页"
           >
-            <image href={brandImage} width="1254" height="1254" />
-          </svg>
-          <span className="hq-brand-copy">
             <svg
-              className="hq-brand-wordmark"
-              viewBox="100 803 1054 233"
+              className="hq-brand-symbol"
+              viewBox="306 154 666 648"
               preserveAspectRatio="xMidYMid meet"
               aria-hidden="true"
               focusable="false"
             >
               <image href={brandImage} width="1254" height="1254" />
             </svg>
-            <small>赛事协作平台</small>
-          </span>
-        </a>
-        <div className="hq-nav-caption">
-          工作空间 <span>WORKSPACE</span>
-        </div>
-        <nav id="hq-primary-nav" aria-label="主要导航">
-          <a
-            className={`hq-nav-item ${active !== 'accounts' ? 'active' : ''}`}
-            href="/hosting-applications"
-            aria-current={active !== 'accounts' ? 'page' : undefined}
-          >
-            <NavIcon name="review" />
-            <span>赛事审核中心</span>
-            <span className="hq-nav-arrow" aria-hidden="true">
-              ›
+            <span className="hq-brand-copy">
+              <svg
+                className="hq-brand-wordmark"
+                viewBox="100 803 1054 233"
+                preserveAspectRatio="xMidYMid meet"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <image href={brandImage} width="1254" height="1254" />
+              </svg>
+              <small>赛事协作平台</small>
             </span>
           </a>
-          {auth.mode === 'formal' && auth.identity?.canManageAccounts && (
+          <div className="hq-nav-caption">
+            工作空间 <span>WORKSPACE</span>
+          </div>
+          <nav id="hq-primary-nav" aria-label="主要导航">
             <a
-              className={`hq-nav-item ${active === 'accounts' ? 'active' : ''}`}
-              href="/accounts"
-              aria-current={active === 'accounts' ? 'page' : undefined}
+              className={`hq-nav-item ${active !== 'accounts' ? 'active' : ''}`}
+              href="/hosting-applications"
+              aria-current={active !== 'accounts' ? 'page' : undefined}
             >
-              <NavIcon name="account" />
-              <span>账号与权限</span>
+              <NavIcon name="review" />
+              <span>赛事审核中心</span>
               <span className="hq-nav-arrow" aria-hidden="true">
                 ›
               </span>
             </a>
-          )}
-        </nav>
+            {auth.mode === 'formal' && auth.identity?.canManageAccounts && (
+              <a
+                className={`hq-nav-item ${active === 'accounts' ? 'active' : ''}`}
+                href="/accounts"
+                aria-current={active === 'accounts' ? 'page' : undefined}
+              >
+                <NavIcon name="account" />
+                <span>账号与权限</span>
+                <span className="hq-nav-arrow" aria-hidden="true">
+                  ›
+                </span>
+              </a>
+            )}
+          </nav>
+          <div className="hq-sidebar-note">
+            <div className="hq-court" aria-hidden="true">
+              <span />
+              <i />
+            </div>
+            <strong>每一场热爱，都值得认真对待。</strong>
+            <p>
+              从办赛申请到材料审核
+              <br />
+              让赛事筹备有序向前
+            </p>
+          </div>
+          <div className="hq-sidebar-footer">
+            <span>CAAU 总部工作台</span>
+            <small>
+              {auth.mode === 'local' ? '本地测试环境' : '正式账号会话'}
+            </small>
+          </div>
+        </div>
         <button
           className="hq-sidebar-toggle"
           type="button"
@@ -111,24 +131,6 @@ export function AppShell({
         >
           <span aria-hidden="true">{sidebarOpen ? '‹' : '›'}</span>
         </button>
-        <div className="hq-sidebar-note">
-          <div className="hq-court" aria-hidden="true">
-            <span />
-            <i />
-          </div>
-          <strong>每一场热爱，都值得认真对待。</strong>
-          <p>
-            从办赛申请到材料审核
-            <br />
-            让赛事筹备有序向前
-          </p>
-        </div>
-        <div className="hq-sidebar-footer">
-          <span>CAAU 总部工作台</span>
-          <small>
-            {auth.mode === 'local' ? '本地测试环境' : '正式账号会话'}
-          </small>
-        </div>
       </aside>
       <div className="hq-main">
         <header className="hq-topbar">
