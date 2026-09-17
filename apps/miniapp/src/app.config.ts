@@ -11,8 +11,8 @@ export default {
   ],
   window: {
     navigationBarTitleText: 'CAAU 承办工作台',
-    navigationBarBackgroundColor: '#ffffff',
+    navigationBarBackgroundColor: '#fcfcf9',
     navigationBarTextStyle: 'black',
-    backgroundColor: '#f5f7fa',
+    backgroundColor: '#fcfcf9',
   },
 };

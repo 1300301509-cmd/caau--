@@ -11,9 +11,7 @@ import {
   client,
   session,
 } from '../../features/materials/session';
-import banner from '../../assets/event-banner-placeholder.png';
 import logo from '../../assets/caau-logo.jpg';
-import approvalIcon from '../../assets/material-approval.png';
 
 type S = components['schemas'];
 const materialApproval = 'material-approval';
@@ -79,6 +77,23 @@ export default function Home() {
 
   return (
     <View className="page home-page">
+      <View className="home-welcome">
+        <View className="home-welcome-copy">
+          <Text className="home-kicker">CAAU · 赛事协作</Text>
+          <Text className="home-greeting">把热爱，有序展开。</Text>
+          <Text className="home-welcome-note">
+            你好，{identity || '赛事伙伴'}
+          </Text>
+        </View>
+        <View className="home-logo-slot">
+          <Image
+            className="home-logo"
+            src={logo}
+            mode="aspectFit"
+            ariaLabel="CAAU 标志"
+          />
+        </View>
+      </View>
       <View className="home-context-row">
         <View className="event-switcher">
           <Button
@@ -109,14 +124,6 @@ export default function Home() {
               className={`event-context-chevron ${eventExpanded ? 'expanded' : ''}`}
             />
           </Button>
-        </View>
-        <View className="home-logo-slot">
-          <Image
-            className="home-logo"
-            src={logo}
-            mode="aspectFit"
-            ariaLabel="CAAU 标志"
-          />
         </View>
       </View>
       {eventExpanded && (
@@ -167,31 +174,30 @@ export default function Home() {
           </View>
         </View>
       )}
-      <Image
-        className="home-banner"
-        src={banner}
-        mode="aspectFill"
-        ariaLabel="可替换的赛事主题占位横幅"
-      />
-
       <View className="home-section">
-        <Text className="home-section-title">业务板块</Text>
+        <View className="home-section-heading">
+          <Text className="home-section-title">我的工作台</Text>
+          <Text className="home-section-caption">从这里开始办理</Text>
+        </View>
         <View className="business-grid">
           <Button
-            className={`business-tile ${selected === materialApproval ? 'selected' : ''}`}
+            className={`business-tile material-tile ${selected === materialApproval ? 'selected' : ''}`}
             ariaLabel={`材料审批${selected === materialApproval ? '，当前选中' : ''}`}
             onClick={() => setSelected(materialApproval)}
           >
-            <Image
-              className="business-icon"
-              src={approvalIcon}
-              mode="aspectFit"
-              ariaLabel=""
-            />
-            <Text>材料审批</Text>
+            <View className="business-icon application-business-icon">
+              <View className="application-icon-line" />
+              <View className="application-icon-line short" />
+              <View className="application-icon-mark" />
+            </View>
+            <Text className="business-title">材料审批</Text>
+            <Text className="business-description">提交资料 · 跟进审核</Text>
+            <Text className="business-selection">
+              {selected === materialApproval ? '当前板块' : '选择板块'}
+            </Text>
           </Button>
           <Button
-            className={`business-tile ${selected === hostingApplication ? 'selected' : ''}`}
+            className={`business-tile hosting-tile ${selected === hostingApplication ? 'selected' : ''}`}
             ariaLabel={`赛事承办申请${selected === hostingApplication ? '，当前选中' : ''}`}
             onClick={() => setSelected(hostingApplication)}
           >
@@ -200,14 +206,18 @@ export default function Home() {
               <View className="application-icon-line short" />
               <View className="application-icon-mark" />
             </View>
-            <Text>承办申请</Text>
+            <Text className="business-title">承办申请</Text>
+            <Text className="business-description">发起申请 · 筹备赛事</Text>
+            <Text className="business-selection">
+              {selected === hostingApplication ? '当前板块' : '选择板块'}
+            </Text>
           </Button>
         </View>
       </View>
 
       {selected === materialApproval && (
         <View className="home-section home-submodules">
-          <Text className="home-section-title">材料审批</Text>
+          <Text className="home-section-title">材料办理</Text>
           <Text className="description">
             {currentEvent
               ? `办理${currentEvent.name}的材料业务`
@@ -219,20 +229,26 @@ export default function Home() {
               disabled={!currentEvent}
               onClick={() => openModule('materials')}
             >
-              <Text className="submodule-title">材料提交</Text>
-              <Text className="submodule-description">
-                查看任务，新增或继续提交材料
-              </Text>
+              <Text className="submodule-index">01</Text>
+              <View className="submodule-copy">
+                <Text className="submodule-title">材料提交</Text>
+                <Text className="submodule-description">
+                  查看任务，新增或继续提交材料
+                </Text>
+              </View>
             </Button>
             <Button
               className="submodule-card"
               disabled={!currentEvent}
               onClick={() => openModule('progress')}
             >
-              <Text className="submodule-title">审核进度</Text>
-              <Text className="submodule-description">
-                查看材料状态、退回原因与版本历史
-              </Text>
+              <Text className="submodule-index mint">02</Text>
+              <View className="submodule-copy">
+                <Text className="submodule-title">审核进度</Text>
+                <Text className="submodule-description">
+                  查看材料状态、退回原因与版本历史
+                </Text>
+              </View>
             </Button>
           </View>
         </View>
@@ -251,10 +267,13 @@ export default function Home() {
                 void Taro.navigateTo({ url: '/pages/hosting/index' })
               }
             >
-              <Text className="submodule-title">申请办理</Text>
-              <Text className="submodule-description">
-                新建申请、上传资料、提交补充并查看获批结果
-              </Text>
+              <Text className="submodule-index mint">01</Text>
+              <View className="submodule-copy">
+                <Text className="submodule-title">申请办理</Text>
+                <Text className="submodule-description">
+                  新建申请、上传资料、提交补充并查看获批结果
+                </Text>
+              </View>
             </Button>
           </View>
         </View>
