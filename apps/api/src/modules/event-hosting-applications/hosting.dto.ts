@@ -137,6 +137,10 @@ export class HostingApplicationListItemDto {
   currentSubmissionId!: string | null;
   @ApiProperty({ type: String, format: 'uuid', nullable: true })
   approvedEventId!: string | null;
+  @ApiProperty({
+    description: 'Current actor has active application review access',
+  })
+  canReview!: boolean;
   @ApiProperty({ format: 'date-time' }) createdAt!: string;
 }
 export class HostingApplicationDetailDto extends HostingApplicationListItemDto {

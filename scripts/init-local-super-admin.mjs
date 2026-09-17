@@ -36,10 +36,10 @@ try {
   if (existing.rowCount)
     throw new Error('An active super administrator already exists');
   const organization = await client.query(
-    'SELECT 1 FROM "Organization" WHERE id=$1 AND active',
+    'SELECT 1 FROM "Organization" WHERE id=$1',
     [organizationId],
   );
-  if (!organization.rowCount) throw new Error('Active organization not found');
+  if (!organization.rowCount) throw new Error('Organization not found');
   const userId = randomUUID();
   const memberId = randomUUID();
   await client.query(

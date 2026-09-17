@@ -253,6 +253,18 @@ export class MaterialsService {
                 actor.memberships.filter((m) => m.active).map((m) => m.role),
               ),
             ],
+            canReviewHostingApplications:
+              isHeadquartersSuperAdmin(actor) ||
+              (await tx.hostingApplicationReviewGrant.count({
+                where: {
+                  active: true,
+                  member: {
+                    userId: actor.id,
+                    active: true,
+                    user: { active: true },
+                  },
+                },
+              })) > 0,
           };
         if (action === 'workspace.directory')
           return this.auth.directory(tx, actor);

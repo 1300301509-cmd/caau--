@@ -23,6 +23,7 @@
     "events:local": "corepack pnpm build:packages && node scripts/local-events.mjs",
     "tasks:local": "corepack pnpm build:packages && node scripts/local-tasks.mjs",
     "materials:demo": "corepack pnpm build:packages && node scripts/individual-demo.mjs",
+    "hosting:demo": "corepack pnpm build:packages && node scripts/hosting-demo.mjs",
     "db:migrate:dev": "node scripts/database.mjs migrate-dev",
     "db:migrate:deploy": "node scripts/database.mjs migrate-deploy",
     "db:migrate:status": "node scripts/database.mjs migrate-status",

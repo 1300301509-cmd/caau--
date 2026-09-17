@@ -111,4 +111,8 @@ export class DirectoryDto {
 }
 export class WorkspaceIdentityDto extends PersonDto {
   @ApiProperty({ type: [String] }) roles!: string[];
+  @ApiProperty({
+    description: 'Active headquarters hosting application review access',
+  })
+  canReviewHostingApplications!: boolean;
 }

@@ -1,9 +1,21 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
+import { hostingBrowserTest } from './hosting-browser.integration.mjs';
 
 export async function hostingIntegration(t, context) {
-  const { base, tokens, users, members, orgA, orgB, hq, sql, api, session } =
-    context;
+  const {
+    base,
+    config,
+    tokens,
+    users,
+    members,
+    orgA,
+    orgB,
+    hq,
+    sql,
+    api,
+    session,
+  } = context;
   const headers = (key, json = true) => ({
     Authorization: `Bearer ${tokens[key]}`,
     ...(json ? { 'Content-Type': 'application/json' } : {}),
@@ -36,6 +48,8 @@ export async function hostingIntegration(t, context) {
   }
   for (const key of ['super', 'a', 'a2', 'b', 'reviewer', 'reviewer2'])
     await session(key, users[key]);
+  let approvedId = '';
+  let approvedLicenseName = '';
   await t.test(
     'hosting application grants, isolation, immutable submission and atomic approval',
     async () => {
@@ -338,6 +352,99 @@ export async function hostingIntegration(t, context) {
       assert.equal(downloaded.status, 200);
       assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), pdf);
       assert.equal(orgB !== orgA, true);
+      approvedId = application.id;
+      approvedLicenseName = 'synthetic.pdf';
     },
+  );
+
+  async function browserCandidate(label) {
+    const application = await call('a', 'POST', 'hosting-applications', {
+      applicantOrganizationId: orgA,
+      key: randomUUID(),
+    });
+    const draft = await call(
+      'a',
+      'PUT',
+      `hosting-applications/${application.id}/draft`,
+      {
+        expectedDraftRevision: 1,
+        form: {
+          eventName: `Browser hosting ${label}`,
+          startDate: '2027-06-01',
+          endDate: '2027-06-02',
+          location: {
+            administrativeArea: {
+              province: '北京市',
+              city: '北京市',
+              district: '朝阳区',
+            },
+            detailedAddress: '浏览器验收测试路 1 号',
+            venueName: '浏览器验收场馆',
+          },
+          eventExperienceIntroduction: '真实浏览器审核流程合成申请。',
+        },
+      },
+    );
+    const pdf = Buffer.from(`%PDF-1.7\n${label}\n%%EOF`);
+    const jpg = Buffer.from([0xff, 0xd8, 5, 6, 7, 0xff, 0xd9]);
+    let revision = draft.draftRevision;
+    for (const [requirementCode, extension, bytes] of [
+      ['BUSINESS_LICENSE', 'pdf', pdf],
+      ['VENUE_PHOTO', 'jpg', jpg],
+    ]) {
+      const upload = await call(
+        'a',
+        'POST',
+        `hosting-applications/${application.id}/uploads`,
+        {
+          requirementCode,
+          originalName: `browser-${label}.${extension}`,
+          extension,
+          expectedBytes: bytes.length,
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+        },
+      );
+      await sendFile('a', upload.id, bytes);
+      await call('a', 'POST', `hosting-uploads/${upload.id}/confirm`, {
+        expectedDraftRevision: revision,
+      });
+      revision += 1;
+    }
+    await call('a', 'POST', `hosting-applications/${application.id}/submit`, {
+      expectedDraftRevision: revision,
+      expectedRevision: draft.revision + 2,
+      key: randomUUID(),
+    });
+    return application.id;
+  }
+  const continuationId = await browserCandidate('continuation');
+  const concurrentId = await browserCandidate('concurrent');
+  const concurrent = await call(
+    'reviewer',
+    'GET',
+    `hosting-applications/${concurrentId}`,
+  );
+  await call(
+    'reviewer',
+    'POST',
+    `hosting-applications/${concurrentId}/start-review`,
+    {
+      submissionId: concurrent.currentSubmissionId,
+      expectedRevision: concurrent.revision,
+      key: randomUUID(),
+    },
+  );
+  await t.test(
+    'CAAU-027 C real browser: V2 approval, continuation, rejection, conflict, download and denied access',
+    { timeout: 90000 },
+    () =>
+      hostingBrowserTest({
+        config,
+        tokens,
+        approvedId,
+        licenseName: approvedLicenseName,
+        continuationId,
+        concurrentId,
+      }),
   );
 }

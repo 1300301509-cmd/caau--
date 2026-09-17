@@ -708,6 +708,10 @@ export const operations = {
             applicantOrganizationId: { format: 'uuid', type: 'string' },
             applicantOrganizationName: { type: 'string' },
             approvedEventId: { format: 'uuid', nullable: true, type: 'string' },
+            canReview: {
+              description: 'Current actor has active application review access',
+              type: 'boolean',
+            },
             createdAt: { format: 'date-time', type: 'string' },
             currentSubmissionId: {
               format: 'uuid',
@@ -738,6 +742,7 @@ export const operations = {
             'draftRevision',
             'currentSubmissionId',
             'approvedEventId',
+            'canReview',
             'createdAt',
           ],
           type: 'object',
@@ -767,6 +772,10 @@ export const operations = {
           applicantOrganizationId: { format: 'uuid', type: 'string' },
           applicantOrganizationName: { type: 'string' },
           approvedEventId: { format: 'uuid', nullable: true, type: 'string' },
+          canReview: {
+            description: 'Current actor has active application review access',
+            type: 'boolean',
+          },
           createdAt: { format: 'date-time', type: 'string' },
           currentSubmissionId: {
             format: 'uuid',
@@ -797,6 +806,7 @@ export const operations = {
           'draftRevision',
           'currentSubmissionId',
           'approvedEventId',
+          'canReview',
           'createdAt',
         ],
         type: 'object',
@@ -879,6 +889,10 @@ export const operations = {
           applicantOrganizationId: { format: 'uuid', type: 'string' },
           applicantOrganizationName: { type: 'string' },
           approvedEventId: { format: 'uuid', nullable: true, type: 'string' },
+          canReview: {
+            description: 'Current actor has active application review access',
+            type: 'boolean',
+          },
           createdAt: { format: 'date-time', type: 'string' },
           currentSubmissionId: {
             format: 'uuid',
@@ -1034,6 +1048,7 @@ export const operations = {
           'draftRevision',
           'currentSubmissionId',
           'approvedEventId',
+          'canReview',
           'createdAt',
           'draft',
           'uploads',
@@ -1153,6 +1168,10 @@ export const operations = {
           applicantOrganizationId: { format: 'uuid', type: 'string' },
           applicantOrganizationName: { type: 'string' },
           approvedEventId: { format: 'uuid', nullable: true, type: 'string' },
+          canReview: {
+            description: 'Current actor has active application review access',
+            type: 'boolean',
+          },
           createdAt: { format: 'date-time', type: 'string' },
           currentSubmissionId: {
             format: 'uuid',
@@ -1308,6 +1327,7 @@ export const operations = {
           'draftRevision',
           'currentSubmissionId',
           'approvedEventId',
+          'canReview',
           'createdAt',
           'draft',
           'uploads',
@@ -1645,7 +1665,7 @@ export const operations = {
       },
     ],
     requestMediaType: 'application/json',
-    responseMediaType: 'application/json',
+    responseMediaType: 'application/octet-stream',
     body: null,
     authenticated: true,
   },
@@ -5374,11 +5394,21 @@ export const operations = {
     responses: {
       '200': {
         properties: {
+          canReviewHostingApplications: {
+            description:
+              'Active headquarters hosting application review access',
+            type: 'boolean',
+          },
           displayName: { type: 'string' },
           id: { format: 'uuid', type: 'string' },
           roles: { items: { type: 'string' }, type: 'array' },
         },
-        required: ['id', 'displayName', 'roles'],
+        required: [
+          'id',
+          'displayName',
+          'roles',
+          'canReviewHostingApplications',
+        ],
         type: 'object',
       },
     },

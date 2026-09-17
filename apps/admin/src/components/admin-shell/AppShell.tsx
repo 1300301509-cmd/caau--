@@ -7,13 +7,15 @@ export function AppShell({
   active = 'materials',
 }: {
   children: ReactNode;
-  active?: 'materials' | 'events';
+  active?: 'materials' | 'events' | 'hosting';
 }) {
   const events = active === 'events';
+  const hosting = active === 'hosting';
+  const pageName = hosting ? '承办申请' : events ? '赛事管理' : '资料审核';
   return (
     <div className="review-shell">
       <a className="skip-link" href="#review-content">
-        跳到{events ? '赛事管理' : '资料审核'}内容
+        跳到{pageName}内容
       </a>
 
       <header className="global-header">
@@ -47,12 +49,20 @@ export function AppShell({
         <div className="module-navigation-inner">
           <nav aria-label="主要导航">
             <a
-              className={`module-navigation-item ${events ? '' : 'active'}`}
+              className={`module-navigation-item ${active === 'materials' ? 'active' : ''}`}
               href="/materials"
-              aria-current={events ? undefined : 'page'}
+              aria-current={active === 'materials' ? 'page' : undefined}
             >
               <NavIcon name="review" />
               <span>资料审核</span>
+            </a>
+            <a
+              className={`module-navigation-item ${hosting ? 'active' : ''}`}
+              href="/hosting-applications"
+              aria-current={hosting ? 'page' : undefined}
+            >
+              <NavIcon name="application" />
+              <span>承办申请</span>
             </a>
             <a
               className={`module-navigation-item ${events ? 'active' : ''}`}
@@ -70,16 +80,20 @@ export function AppShell({
         <header className="review-page-heading">
           <div>
             <span className="review-page-kicker">业务工作台</span>
-            <h1>{events ? '赛事管理' : '资料审核'}</h1>
+            <h1>{pageName}</h1>
             <p>
-              {events
-                ? '创建赛事并查看当前有权管理的赛事详情'
-                : '单份提交、共享审核与完整版本记录'}
+              {hosting
+                ? '审核申请、核对版本资料并追溯获批赛事'
+                : events
+                  ? '创建赛事并查看当前有权管理的赛事详情'
+                  : '单份提交、共享审核与完整版本记录'}
             </p>
           </div>
-          {events && (
+          {(events || hosting) && (
             <div className="review-page-actions">
-              <Tag color="blue">总部赛事管理员</Tag>
+              <Tag color={hosting ? 'purple' : 'blue'}>
+                {hosting ? '总部申请审核' : '总部赛事管理员'}
+              </Tag>
             </div>
           )}
         </header>

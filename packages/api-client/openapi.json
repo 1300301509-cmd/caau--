@@ -624,6 +624,10 @@
             "nullable": true,
             "type": "string"
           },
+          "canReview": {
+            "description": "Current actor has active application review access",
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -687,6 +691,7 @@
           "draftRevision",
           "currentSubmissionId",
           "approvedEventId",
+          "canReview",
           "createdAt",
           "draft",
           "uploads",
@@ -709,6 +714,10 @@
             "format": "uuid",
             "nullable": true,
             "type": "string"
+          },
+          "canReview": {
+            "description": "Current actor has active application review access",
+            "type": "boolean"
           },
           "createdAt": {
             "format": "date-time",
@@ -750,6 +759,7 @@
           "draftRevision",
           "currentSubmissionId",
           "approvedEventId",
+          "canReview",
           "createdAt"
         ],
         "type": "object"
@@ -2256,6 +2266,10 @@
       },
       "WorkspaceIdentityDto": {
         "properties": {
+          "canReviewHostingApplications": {
+            "description": "Active headquarters hosting application review access",
+            "type": "boolean"
+          },
           "displayName": {
             "type": "string"
           },
@@ -2270,7 +2284,12 @@
             "type": "array"
           }
         },
-        "required": ["id", "displayName", "roles"],
+        "required": [
+          "id",
+          "displayName",
+          "roles",
+          "canReviewHostingApplications"
+        ],
         "type": "object"
       }
     },
@@ -4162,7 +4181,7 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "application/octet-stream": {
                 "schema": {
                   "format": "binary",
                   "type": "string"

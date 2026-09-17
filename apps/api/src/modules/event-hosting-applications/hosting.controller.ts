@@ -22,6 +22,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiProduces,
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
@@ -200,6 +201,7 @@ export class HostingController {
   @Get('hosting-uploads/:id/content')
   @Permission('hosting')
   @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiProduces('application/octet-stream')
   @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
   async download(
     @Headers('authorization') identity: string | undefined,

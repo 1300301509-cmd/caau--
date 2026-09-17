@@ -854,14 +854,15 @@ export async function individualBrowserTest({
       fullPage: true,
     });
     await org.setViewportSize({ width: 375, height: 900 });
-    assert.equal(
-      await org.evaluate(
-        () =>
-          globalThis.document.documentElement.scrollWidth <=
-          globalThis.innerWidth,
-      ),
-      true,
-    );
+    await expect
+      .poll(() =>
+        org.evaluate(
+          () =>
+            globalThis.document.documentElement.scrollWidth <=
+            globalThis.innerWidth,
+        ),
+      )
+      .toBe(true);
     assert.deepEqual(pageErrors, []);
     const values = samples.map((s) => s.ms).sort((x, y) => x - y),
       quantile = (p) => values[Math.ceil(values.length * p) - 1];

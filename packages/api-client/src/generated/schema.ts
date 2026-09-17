@@ -1473,6 +1473,8 @@ export interface components {
       applicantOrganizationName: string;
       /** Format: uuid */
       approvedEventId: string | null;
+      /** @description Current actor has active application review access */
+      canReview: boolean;
       /** Format: date-time */
       createdAt: string;
       /** Format: uuid */
@@ -1502,6 +1504,8 @@ export interface components {
       applicantOrganizationName: string;
       /** Format: uuid */
       approvedEventId: string | null;
+      /** @description Current actor has active application review access */
+      canReview: boolean;
       /** Format: date-time */
       createdAt: string;
       /** Format: uuid */
@@ -2007,6 +2011,8 @@ export interface components {
       displayName: string;
     };
     WorkspaceIdentityDto: {
+      /** @description Active headquarters hosting application review access */
+      canReviewHostingApplications: boolean;
       displayName: string;
       /** Format: uuid */
       id: string;
@@ -3818,7 +3824,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': string;
+          'application/octet-stream': string;
         };
       };
       /** @description No active application permission */

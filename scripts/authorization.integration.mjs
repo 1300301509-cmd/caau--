@@ -719,6 +719,7 @@ export async function authorizationIntegration(t) {
     );
     await hostingIntegration(t, {
       base,
+      config,
       tokens,
       users,
       members,

@@ -400,6 +400,7 @@ export class HostingService {
       draftRevision: application.draftRevision,
       currentSubmissionId: application.currentSubmissionId,
       approvedEventId: application.approvedEventId,
+      canReview: scope !== 'handler',
       createdAt: application.createdAt.toISOString(),
       draft: scope === 'reviewer' ? null : application.draft,
       uploads:
@@ -431,20 +432,24 @@ export class HostingService {
         ),
     };
   }
-  private listView(application: {
-    id: string;
-    applicantOrganizationId: string;
-    status: Status;
-    revision: number;
-    draftRevision: number;
-    currentSubmissionId: string | null;
-    approvedEventId: string | null;
-    createdAt: Date;
-    applicantOrganization: { name: string };
-  }) {
+  private listView(
+    application: {
+      id: string;
+      applicantOrganizationId: string;
+      status: Status;
+      revision: number;
+      draftRevision: number;
+      currentSubmissionId: string | null;
+      approvedEventId: string | null;
+      createdAt: Date;
+      applicantOrganization: { name: string };
+    },
+    canReview: boolean,
+  ) {
     return {
       ...application,
       applicantOrganizationName: application.applicantOrganization.name,
+      canReview,
       createdAt: application.createdAt.toISOString(),
       applicantOrganization: undefined,
     };
@@ -688,7 +693,7 @@ export class HostingService {
             actorId: actor.id,
           },
         });
-        const result = this.listView(application);
+        const result = this.listView(application, false);
         await this.saveCommand(tx, application.id, actor.id, key, hash, result);
         return result;
       },
@@ -703,7 +708,8 @@ export class HostingService {
       undefined,
       async (tx, actor) => {
         let where: Prisma.EventHostingApplicationWhereInput = {};
-        if (!this.super(actor)) {
+        let canReview = this.super(actor);
+        if (!canReview) {
           const reviewer = await tx.hostingApplicationReviewGrant.count({
             where: {
               active: true,
@@ -714,7 +720,8 @@ export class HostingService {
               },
             },
           });
-          if (!reviewer) {
+          canReview = reviewer > 0;
+          if (!canReview) {
             const organizations =
               await tx.hostingApplicationHandlerGrant.findMany({
                 where: {
@@ -741,7 +748,7 @@ export class HostingService {
             include: { applicantOrganization: true },
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
           })
-        ).map((application) => this.listView(application));
+        ).map((application) => this.listView(application, canReview));
       },
     );
   }
