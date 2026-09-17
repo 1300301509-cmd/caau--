@@ -163,6 +163,7 @@ export class LocalTestIdentityController {
 
 @Controller('authorization')
 @ApiBearerAuth()
+@ApiCookieAuth('webSession')
 @ApiResponse({ status: 400, description: 'Invalid input' })
 @ApiResponse({
   status: 401,

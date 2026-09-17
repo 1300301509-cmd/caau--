@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCookieAuth,
   ApiBody,
   ApiConsumes,
   ApiOkResponse,
@@ -43,6 +44,7 @@ import {
 } from './individual.dto.js';
 @Controller()
 @ApiBearerAuth()
+@ApiCookieAuth('webSession')
 @ApiResponse({ status: 400, description: 'Invalid input' })
 @ApiResponse({ status: 401, description: 'Session expired or revoked' })
 @ApiResponse({ status: 403, description: 'Access denied' })

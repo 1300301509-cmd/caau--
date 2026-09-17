@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { Button } from 'antd';
 import { NavIcon } from './NavIcon';
+import { useAuth } from '../../features/auth/AuthContext';
 import brandImage from '../../assets/caau-brand.jpg';
 import './review-center.css';
 
@@ -8,8 +10,9 @@ export function AppShell({
   active = 'materials',
 }: {
   children: ReactNode;
-  active?: 'materials' | 'events' | 'hosting';
+  active?: 'materials' | 'events' | 'hosting' | 'accounts';
 }) {
+  const auth = useAuth();
   const events = active === 'events';
   const date = new Intl.DateTimeFormat('zh-CN', {
     month: 'long',
@@ -54,9 +57,9 @@ export function AppShell({
         </div>
         <nav aria-label="主要导航">
           <a
-            className="hq-nav-item active"
+            className={`hq-nav-item ${active !== 'accounts' ? 'active' : ''}`}
             href="/hosting-applications"
-            aria-current="page"
+            aria-current={active !== 'accounts' ? 'page' : undefined}
           >
             <NavIcon name="review" />
             <span>赛事审核中心</span>
@@ -64,6 +67,19 @@ export function AppShell({
               ›
             </span>
           </a>
+          {auth.mode === 'formal' && auth.identity?.canManageAccounts && (
+            <a
+              className={`hq-nav-item ${active === 'accounts' ? 'active' : ''}`}
+              href="/accounts"
+              aria-current={active === 'accounts' ? 'page' : undefined}
+            >
+              <NavIcon name="account" />
+              <span>账号与权限</span>
+              <span className="hq-nav-arrow" aria-hidden="true">
+                ›
+              </span>
+            </a>
+          )}
         </nav>
         <div className="hq-sidebar-note">
           <div className="hq-court" aria-hidden="true">
@@ -79,28 +95,43 @@ export function AppShell({
         </div>
         <div className="hq-sidebar-footer">
           <span>CAAU 总部工作台</span>
-          <small>本地测试环境</small>
+          <small>
+            {auth.mode === 'local' ? '本地测试环境' : '正式账号会话'}
+          </small>
         </div>
       </aside>
       <div className="hq-main">
         <header className="hq-topbar">
           <div className="hq-breadcrumb">
             总部工作台 <span>/</span>{' '}
-            <strong>{events ? '赛事详情' : '赛事审核中心'}</strong>
+            <strong>
+              {events
+                ? '赛事详情'
+                : active === 'accounts'
+                  ? '账号与权限'
+                  : '赛事审核中心'}
+            </strong>
           </div>
           <div className="hq-topbar-right">
             <time>{date}</time>
-            {active === 'hosting' ? (
-              <div id="hq-account-slot" />
-            ) : (
-              <>
-                <span className="hq-account-avatar" aria-hidden="true">
-                  总
-                </span>
-                <span className="hq-account-copy">
-                  总部工作空间<small>本地测试</small>
-                </span>
-              </>
+            <span className="hq-account-avatar" aria-hidden="true">
+              {auth.session?.displayName.slice(0, 1) ?? '总'}
+            </span>
+            <span className="hq-account-copy">
+              {auth.session?.displayName ?? '总部工作空间'}
+              <small>{auth.mode === 'formal' ? '正式账号' : '本地测试'}</small>
+            </span>
+            {auth.mode === 'formal' && (
+              <div className="hq-account-actions">
+                <a href="/account/password">修改密码</a>
+                <Button
+                  type="text"
+                  size="small"
+                  onClick={() => void auth.logout()}
+                >
+                  退出
+                </Button>
+              </div>
             )}
           </div>
         </header>
@@ -112,19 +143,29 @@ export function AppShell({
           <header className="hq-page-heading">
             <div>
               <p className="hq-eyebrow">EVENT REVIEW CENTER</p>
-              <h1>{events ? '赛事详情' : '赛事审核中心'}</h1>
+              <h1>
+                {events
+                  ? '赛事详情'
+                  : active === 'accounts'
+                    ? '账号与权限'
+                    : '赛事审核中心'}
+              </h1>
               <p>
                 {events
                   ? '查看申请获批后的赛事信息与承办机构。'
-                  : '有序处理每一份申请，让赛事从这里启程。'}
+                  : active === 'accounts'
+                    ? '创建、停用和重置总部工作账号；业务授权仍以后端为准。'
+                    : '有序处理每一份申请，让赛事从这里启程。'}
               </p>
             </div>
             <span className="hq-heading-badge">
-              <NavIcon name="application" />
-              总部审核工作台
+              <NavIcon
+                name={active === 'accounts' ? 'account' : 'application'}
+              />
+              {active === 'accounts' ? '安全管理' : '总部审核工作台'}
             </span>
           </header>
-          {!events && (
+          {!events && active !== 'accounts' && (
             <nav className="hq-review-tabs" aria-label="审核类型">
               <a
                 href="/hosting-applications"

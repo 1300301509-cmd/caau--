@@ -85,7 +85,8 @@ const initial = (): IndividualWorkspaceState => ({
 const copy = (c: Content): Content => ({ ...c, fileIds: [...c.fileIds] });
 export class IndividualWorkspace {
   value = initial();
-  private token = '';
+  private token: string | undefined;
+  private authenticated = false;
   private epoch = 0;
   private commandLock = false;
   private commandSerial = 0;
@@ -122,9 +123,10 @@ export class IndividualWorkspace {
     this.foreground = false;
     this.invalidate();
   }
-  async login(token: string) {
+  async login(token?: string) {
     this.invalidate();
-    this.token = '';
+    this.token = undefined;
+    this.authenticated = false;
     this.commandLock = false;
     this.commandSerial++;
     const e = this.epoch;
@@ -140,6 +142,7 @@ export class IndividualWorkspace {
       });
       if (e !== this.epoch) return;
       this.token = token;
+      this.authenticated = true;
       this.patch({ identity });
       this.wake();
     } catch (error) {
@@ -159,18 +162,21 @@ export class IndividualWorkspace {
     this.commandLock = false;
     const token = this.token;
     this.invalidate();
-    this.token = '';
+    const authenticated = this.authenticated;
+    this.token = undefined;
+    this.authenticated = false;
     this.value = {
       ...initial(),
       protectionEpoch: this.value.protectionEpoch + 1,
     };
     this.patch({});
-    if (token) void this.api.request('logout', { token }).catch(() => {});
+    if (authenticated)
+      void this.api.request('logout', { token }).catch(() => {});
   }
   setForeground(visible: boolean) {
     this.foreground = visible;
     this.invalidate();
-    if (!this.token) return;
+    if (!this.authenticated) return;
     if (visible) {
       this.failures = 0;
       this.wake();
@@ -186,7 +192,7 @@ export class IndividualWorkspace {
   }
   wake() {
     this.cancelTimer();
-    if (!this.token || !this.foreground) return;
+    if (!this.authenticated || !this.foreground) return;
     if (this.running) {
       this.requested = true;
       return;
@@ -194,12 +200,13 @@ export class IndividualWorkspace {
     void this.poll();
   }
   private allowed(e: number) {
-    return e === this.epoch && !!this.token && this.foreground;
+    return e === this.epoch && this.authenticated && this.foreground;
   }
   private fail(error: unknown) {
     if (error instanceof ApiError && error.status === 401) {
       this.invalidate();
-      this.token = '';
+      this.token = undefined;
+      this.authenticated = false;
       this.value = {
         ...initial(),
         protectionEpoch: this.value.protectionEpoch + 1,
@@ -264,7 +271,7 @@ export class IndividualWorkspace {
     });
   }
   private async poll() {
-    if (!this.token || !this.foreground) return;
+    if (!this.authenticated || !this.foreground) return;
     this.running = true;
     this.requested = false;
     const e = this.epoch,
@@ -362,7 +369,7 @@ export class IndividualWorkspace {
       }
     } finally {
       this.running = false;
-      if (this.token && this.foreground) {
+      if (this.authenticated && this.foreground) {
         if (this.requested || e !== this.epoch) {
           this.requested = false;
           this.timer = setTimeout(() => this.wake(), 0);

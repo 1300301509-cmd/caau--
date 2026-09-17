@@ -4,7 +4,10 @@ import type { Transport } from './index.js';
 // imported by the Taro adapter or the package's platform-neutral entry.
 export function createFetchTransport(
   request: typeof fetch = fetch,
-  authentication: { csrfToken?: () => string | undefined } = {},
+  authentication: {
+    csrfToken?: () => string | undefined;
+    onUnauthorized?: () => void;
+  } = {},
 ): Transport {
   return async ({ url, method, timeout, header, data: body, responseType }) => {
     const controller = new AbortController();
@@ -30,6 +33,7 @@ export function createFetchTransport(
         signal: controller.signal,
         cache: 'no-store',
       });
+      if (response.status === 401) authentication.onUnauthorized?.();
       let data: unknown;
       try {
         data =

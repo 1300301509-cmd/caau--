@@ -2,7 +2,8 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
+  createParamDecorator,
+  ExecutionContext,
   HttpCode,
   Param,
   Patch,
@@ -14,16 +15,16 @@ import {
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiBody,
   ApiConflictResponse,
   ApiConsumes,
+  ApiCookieAuth,
   ApiForbiddenResponse,
-  ApiHeader,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiProduces,
-  ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -45,11 +46,14 @@ import {
 } from './hosting.dto.js';
 import { HostingService } from './hosting.service.js';
 
-const token = (value: string | undefined) =>
-  value?.startsWith('Bearer ') ? value.slice(7) : '';
+const SessionToken = createParamDecorator(
+  (_data: unknown, context: ExecutionContext) =>
+    context.switchToHttp().getRequest<{ token?: string }>().token ?? '',
+);
+const token = (value: string | undefined) => value ?? '';
 @ApiTags('event-hosting-applications')
-@ApiSecurity('localIdentity')
-@ApiHeader({ name: 'authorization', required: true })
+@ApiBearerAuth()
+@ApiCookieAuth('webSession')
 @ApiForbiddenResponse({ description: 'No active application permission' })
 @ApiConflictResponse({
   description: 'Revision, state, or idempotency conflict',
@@ -64,7 +68,7 @@ export class HostingController {
   @ApiOperation({ summary: 'Grant application handling permission' })
   @ApiOkResponse({ type: HostingGrantViewDto })
   handlerGrant(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Body() body: HostingGrantInputDto,
   ) {
     return this.hosting.manageGrant(
@@ -79,7 +83,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: HostingGrantViewDto })
   handlerGrantActive(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingGrantActiveDto,
   ) {
@@ -90,7 +94,7 @@ export class HostingController {
   @HttpCode(200)
   @ApiOkResponse({ type: HostingGrantViewDto })
   reviewGrant(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Body() body: HostingGrantInputDto,
   ) {
     return this.hosting.manageGrant(token(identity), 'review', undefined, body);
@@ -100,7 +104,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: HostingGrantViewDto })
   reviewGrantActive(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingGrantActiveDto,
   ) {
@@ -111,7 +115,7 @@ export class HostingController {
   @HttpCode(200)
   @ApiOkResponse({ type: HostingApplicationListItemDto })
   create(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Body() body: CreateHostingApplicationDto,
   ) {
     return this.hosting.create(token(identity), body);
@@ -119,7 +123,7 @@ export class HostingController {
   @Get('hosting-applications')
   @Permission('hosting')
   @ApiOkResponse({ type: HostingApplicationListItemDto, isArray: true })
-  list(@Headers('authorization') identity: string | undefined) {
+  list(@SessionToken() identity: string | undefined) {
     return this.hosting.list(token(identity));
   }
   @Get('hosting-applications/:id')
@@ -127,7 +131,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: HostingApplicationDetailDto })
   detail(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
   ) {
     return this.hosting.detail(token(identity), id);
@@ -138,7 +142,7 @@ export class HostingController {
   @ApiOkResponse({ type: HostingApplicationDetailDto })
   @ApiBadRequestResponse({ description: 'Invalid draft form' })
   save(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: SaveHostingDraftDto,
   ) {
@@ -150,7 +154,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: HostingUploadViewDto })
   uploadIntent(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingUploadInputDto,
   ) {
@@ -168,7 +172,7 @@ export class HostingController {
     },
   })
   uploadContent(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Req() request: IncomingMessage,
   ) {
@@ -180,7 +184,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: HostingUploadViewDto })
   confirmUpload(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingUploadMutationDto,
   ) {
@@ -192,7 +196,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: HostingUploadViewDto })
   removeUpload(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingUploadMutationDto,
   ) {
@@ -204,7 +208,7 @@ export class HostingController {
   @ApiProduces('application/octet-stream')
   @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
   async download(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Res({ passthrough: true }) response: ServerResponse,
   ) {
@@ -222,7 +226,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
   submit(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingSubmitDto,
   ) {
@@ -234,7 +238,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
   startReview(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingReviewCommandDto,
   ) {
@@ -246,7 +250,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
   supplement(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingReasonCommandDto,
   ) {
@@ -258,7 +262,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
   reject(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingReasonCommandDto,
   ) {
@@ -270,7 +274,7 @@ export class HostingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
   approve(
-    @Headers('authorization') identity: string | undefined,
+    @SessionToken() identity: string | undefined,
     @Param('id') id: string,
     @Body() body: HostingReviewCommandDto,
   ) {

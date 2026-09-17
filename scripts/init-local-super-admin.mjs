@@ -76,33 +76,69 @@ try {
     "SELECT pg_advisory_xact_lock(hashtext('caau:first-super-admin'))",
   );
   const existing = await client.query(
-    `SELECT 1 FROM "OrganizationMember" m
+    `SELECT u.id,u."loginName",u."passwordHash",m."organizationId"
+     FROM "OrganizationMember" m
      JOIN "InternalUser" u ON u.id=m."userId"
-     WHERE m.role='HEADQUARTERS_SUPER_ADMIN' AND m.active AND u.active LIMIT 1`,
+     WHERE m.role='HEADQUARTERS_SUPER_ADMIN' AND m.active AND u.active`,
   );
-  if (existing.rowCount)
-    throw new Error('An active super administrator already exists');
   const organization = await client.query(
     'SELECT 1 FROM "Organization" WHERE id=$1',
     [organizationId],
   );
   if (!organization.rowCount) throw new Error('Organization not found');
-  const userId = randomUUID();
+  let userId;
+  let auditAction;
+  if (existing.rowCount) {
+    const current = existing.rows[0];
+    if (
+      existing.rowCount !== 1 ||
+      current.organizationId !== organizationId ||
+      current.loginName ||
+      current.passwordHash
+    )
+      throw new Error(
+        'An initialized active super administrator already exists',
+      );
+    userId = current.id;
+    auditAction = 'account.bootstrap.credentials';
+    await client.query(
+      `UPDATE "InternalUser"
+       SET "loginName"=$1,"passwordHash"=$2,"mustChangePassword"=true,
+           "passwordChangedAt"=clock_timestamp()
+       WHERE id=$3`,
+      [loginName, passwordHash, userId],
+    );
+  } else {
+    userId = randomUUID();
+    auditAction = 'account.bootstrap';
+    await client.query(
+      `INSERT INTO "InternalUser"
+         (id,"displayName","loginName","passwordHash","mustChangePassword","passwordChangedAt")
+       VALUES ($1,$2,$3,$4,true,clock_timestamp())`,
+      [userId, displayName, loginName, passwordHash],
+    );
+    await client.query(
+      `INSERT INTO "OrganizationMember"
+         (id,"userId","organizationId",role)
+       VALUES ($1,$2,$3,'HEADQUARTERS_SUPER_ADMIN')`,
+      [randomUUID(), userId, organizationId],
+    );
+  }
   await client.query(
-    `INSERT INTO "InternalUser"
-       (id,"displayName","loginName","passwordHash","mustChangePassword","passwordChangedAt")
-     VALUES ($1,$2,$3,$4,true,clock_timestamp())`,
-    [userId, displayName, loginName, passwordHash],
-  );
-  await client.query(
-    `INSERT INTO "OrganizationMember"
-       (id,"userId","organizationId",role)
-     VALUES ($1,$2,$3,'HEADQUARTERS_SUPER_ADMIN')`,
-    [randomUUID(), userId, organizationId],
+    `INSERT INTO "AuditRecord"
+       (id,action,outcome,"requestId","resourceId",context)
+     VALUES ($1,$2,'ALLOWED',$3,$4,$5::jsonb)`,
+    [
+      randomUUID(),
+      auditAction,
+      randomUUID(),
+      userId,
+      JSON.stringify({ organizationId }),
+    ],
   );
   await client.query('COMMIT');
   process.stdout.write(
-    'Initialized the first headquarters super administrator.\n',
+    'Initialized credentials for the headquarters super administrator.\n',
   );
 } catch (error) {
   await client.query('ROLLBACK').catch(() => {});

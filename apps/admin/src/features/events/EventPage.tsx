@@ -3,12 +3,14 @@ import { Alert, Button, Card, Tag } from 'antd';
 import { type components } from '@caau/api-client';
 import { client } from '../materials/client';
 import { EventManagementPanel } from './EventManagementPanel';
+import { useAuth } from '../auth/AuthContext';
 import './event.css';
 
 type S = components['schemas'];
 const tabSessionKey = 'caau.local-test-session';
 
 export function EventPage() {
+  const auth = useAuth();
   const [choices, setChoices] = useState<S['LocalIdentityChoiceDto'][]>([]);
   const [identityKey, setIdentityKey] = useState('');
   const [identity, setIdentity] = useState<S['WorkspaceIdentityDto']>();
@@ -18,8 +20,8 @@ export function EventPage() {
     () => new URLSearchParams(location.search).get('event') ?? '',
   );
   const [entryState, setEntryState] = useState<
-    'loading' | 'enabled' | 'disabled' | 'unavailable'
-  >('loading');
+    'loading' | 'enabled' | 'formal' | 'disabled' | 'unavailable'
+  >(auth.mode === 'formal' ? 'formal' : 'loading');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,7 +37,11 @@ export function EventPage() {
       client.request('getWorkspaceIdentity', { token: session }),
       client.request('listEvents', { token: session }),
     ]);
-    if (sessionStorage.getItem(tabSessionKey) !== session) return;
+    if (
+      auth.mode === 'local' &&
+      sessionStorage.getItem(tabSessionKey) !== session
+    )
+      return;
     setToken(session);
     setIdentity(nextIdentity);
     setEvents(nextEvents);
@@ -47,6 +53,16 @@ export function EventPage() {
   };
   useEffect(() => {
     let active = true;
+    if (auth.mode === 'formal') {
+      setEntryState('formal');
+      setBusy(true);
+      void load('')
+        .catch(() => setError('赛事信息暂时无法读取，请稍后重试。'))
+        .finally(() => setBusy(false));
+      return () => {
+        active = false;
+      };
+    }
     void client
       .request('listLocalTestIdentities')
       .then(async (nextChoices) => {
@@ -80,7 +96,7 @@ export function EventPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [auth.mode]);
 
   const manager =
     identity?.roles.includes('EVENT_MANAGER') &&
@@ -103,6 +119,9 @@ export function EventPage() {
           title="暂时无法连接本地 API"
           description="确认 API 服务运行后刷新页面重试。"
         />
+      )}
+      {entryState === 'formal' && error && (
+        <Alert type="error" showIcon title={error} role="alert" />
       )}
       {entryState === 'enabled' && (
         <Card
@@ -185,12 +204,15 @@ export function EventPage() {
             history.replaceState(null, '', `/events?event=${id}`);
           }}
           onCreate={async (input) => {
-            const session = token;
+            const session = auth.mode === 'formal' ? '' : token;
             const created = await client.request('createEvent', {
               token: session,
               body: input,
             });
-            if (sessionStorage.getItem(tabSessionKey) !== session)
+            if (
+              auth.mode === 'local' &&
+              sessionStorage.getItem(tabSessionKey) !== session
+            )
               throw new Error('Identity changed');
             setEvents((current) => [
               created,

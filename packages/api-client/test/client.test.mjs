@@ -76,12 +76,18 @@ test('fetch adapter preserves status on non-JSON responses and aborts a stuck re
 
 test('fetch adapter includes Web cookies and CSRF but omits cookies for Bearer calls', async () => {
   const calls = [];
+  let unauthorized = 0;
   const transport = createFetchTransport(
     async (_url, options) => {
       calls.push(options);
-      return Response.json({ id: '00000000-0000-4000-8000-000000000001' });
+      return options.method === 'DELETE'
+        ? Response.json({}, { status: 401 })
+        : Response.json({ id: '00000000-0000-4000-8000-000000000001' });
     },
-    { csrfToken: () => 'synthetic-csrf' },
+    {
+      csrfToken: () => 'synthetic-csrf',
+      onUnauthorized: () => unauthorized++,
+    },
   );
   await transport({
     url: 'http://localhost/logout',
@@ -98,6 +104,12 @@ test('fetch adapter includes Web cookies and CSRF but omits cookies for Bearer c
   assert.equal(calls[0].headers['X-CSRF-Token'], 'synthetic-csrf');
   assert.equal(calls[1].credentials, 'omit');
   assert.equal('X-CSRF-Token' in calls[1].headers, false);
+  await transport({
+    url: 'http://localhost/session',
+    method: 'DELETE',
+    timeout: 100,
+  });
+  assert.equal(unauthorized, 1);
 });
 
 test('Taro adapter uses only the supplied request capability', async () => {

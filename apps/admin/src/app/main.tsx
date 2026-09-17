@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { ConfigProvider } from 'antd';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { AuthProvider } from '../features/auth/AuthContext';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -23,7 +24,9 @@ createRoot(root).render(
         },
       }}
     >
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </ConfigProvider>
   </StrictMode>,
 );

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { createApplication } from '../apps/api/dist/application.js';
+import { authenticationBrowserTest } from './authentication-browser.integration.mjs';
 
 const origin = 'http://127.0.0.1:5173';
 const secret = () => `A!${randomBytes(18).toString('base64url')}`;
@@ -37,6 +38,22 @@ export async function authenticationIntegration(t, context) {
     }),
   });
   const accountId = account.data.id;
+  const browserLoginName = `browser.${randomBytes(6).toString('hex')}`;
+  const browserTemporaryPassword = secret();
+  const browserNextPassword = secret();
+  await call('authorization/accounts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${tokens.super}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      loginName: browserLoginName,
+      displayName: 'Synthetic browser super admin',
+      temporaryPassword: browserTemporaryPassword,
+      memberships: [{ organizationId: hq, role: 'HEADQUARTERS_SUPER_ADMIN' }],
+    }),
+  });
 
   const login = async (password, expected = 200, name = loginName) =>
     call(
@@ -63,9 +80,28 @@ export async function authenticationIntegration(t, context) {
         `missing.${randomBytes(4).toString('hex')}`,
       );
       assert.equal(unknown.data.message, 'Unable to sign in');
+      const malformed = await login('short', 401, '!');
+      assert.equal(malformed.data.message, unknown.data.message);
+      const wrongOrigin = await call(
+        'authentication/login',
+        {
+          method: 'POST',
+          headers: {
+            Origin: 'https://untrusted.invalid',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ loginName, password: temporaryPassword }),
+        },
+        403,
+      );
+      assert.equal(wrongOrigin.response.headers.get('set-cookie'), null);
       const wrong = await login(secret(), 401);
       assert.equal(wrong.data.message, unknown.data.message);
       const signedIn = await login(temporaryPassword);
+      const setCookie = signedIn.response.headers.get('set-cookie') ?? '';
+      assert.match(setCookie, /HttpOnly/i);
+      assert.match(setCookie, /SameSite=Lax/i);
+      assert.equal(/Secure/i.test(setCookie), false);
       let cookie = cookieValue(signedIn.response);
       assert.equal(signedIn.data.mustChangePassword, true);
       assert.equal('token' in signedIn.data, false);
@@ -134,6 +170,18 @@ export async function authenticationIntegration(t, context) {
         { headers: { Cookie: cookie, Origin: origin } },
         401,
       );
+    },
+  );
+
+  await t.test(
+    'formal Web login, forced change, refresh, account gate and logout',
+    async () => {
+      await authenticationBrowserTest({
+        config,
+        loginName: browserLoginName,
+        temporaryPassword: browserTemporaryPassword,
+        nextPassword: browserNextPassword,
+      });
     },
   );
 

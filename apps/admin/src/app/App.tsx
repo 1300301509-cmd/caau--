@@ -6,6 +6,8 @@ import { HealthPage } from '../features/health/HealthPage';
 import { HostingReviewPage } from '../features/hosting/HostingReviewPage';
 import { IndividualPage } from '../features/individuals/IndividualPage';
 import { WorkspacePage } from '../features/materials/WorkspacePage';
+import { AccountManagementPage } from '../features/auth/AccountManagementPage';
+import { PasswordPage } from '../features/auth/PasswordPage';
 
 function normalizePath(path: string) {
   if (path === '/') return '/hosting-applications';
@@ -13,7 +15,11 @@ function normalizePath(path: string) {
 }
 
 export function App() {
-  const path = normalizePath(location.pathname);
+  const path = normalizePath(
+    location.pathname === '/login'
+      ? '/hosting-applications'
+      : location.pathname,
+  );
   const reviewPage = path === '/materials';
   const eventPage = path === '/events';
   const hostingPage = path === '/hosting-applications';
@@ -25,9 +31,13 @@ export function App() {
         ? '赛事审核中心 · CAAU'
         : eventPage
           ? '赛事管理 · CAAU'
-          : path === '/system/health'
-            ? '工程连接检查 · CAAU'
-            : '页面未找到 · CAAU';
+          : path === '/accounts'
+            ? '账号与权限 · CAAU'
+            : path === '/account/password'
+              ? '修改密码 · CAAU'
+              : path === '/system/health'
+                ? '工程连接检查 · CAAU'
+                : '页面未找到 · CAAU';
   }, [eventPage, hostingPage, path, reviewPage]);
 
   if (reviewPage) {
@@ -48,6 +58,20 @@ export function App() {
     return (
       <AppShell active="hosting">
         <HostingReviewPage />
+      </AppShell>
+    );
+  }
+  if (path === '/accounts') {
+    return (
+      <AppShell active="accounts">
+        <AccountManagementPage />
+      </AppShell>
+    );
+  }
+  if (path === '/account/password') {
+    return (
+      <AppShell>
+        <PasswordPage />
       </AppShell>
     );
   }

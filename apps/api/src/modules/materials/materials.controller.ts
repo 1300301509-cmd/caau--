@@ -13,6 +13,7 @@ import {
 import type { IncomingMessage } from 'node:http';
 import {
   ApiBearerAuth,
+  ApiCookieAuth,
   ApiBody,
   ApiOkResponse,
   ApiOperation,
@@ -45,6 +46,7 @@ import { FILE_EXTENSIONS, MAX_FILE_BYTES } from '../workflow/private-store.js';
 import { MaterialsService } from './materials.service.js';
 @Controller()
 @ApiBearerAuth()
+@ApiCookieAuth('webSession')
 @ApiResponse({ status: 400, description: 'Invalid configuration or revision' })
 @ApiResponse({ status: 401, description: 'Invalid local session' })
 @ApiResponse({ status: 403, description: 'Resource not accessible' })

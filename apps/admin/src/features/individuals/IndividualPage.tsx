@@ -8,6 +8,7 @@ import {
 import { Alert, Button, Card, Modal, Tag } from 'antd';
 import { IndividualWorkspace, type components } from '@caau/api-client';
 import { client } from '../materials/client';
+import { useAuth } from '../auth/AuthContext';
 import './individual.css';
 type S = components['schemas'];
 const states: Record<string, string> = {
@@ -101,6 +102,7 @@ function Attachment({
   );
 }
 export function IndividualPage() {
+  const auth = useAuth();
   const model = useMemo(
     () => new IndividualWorkspace(client, () => crypto.randomUUID()),
     [],
@@ -115,14 +117,14 @@ export function IndividualPage() {
   >([]);
   const [identityKey, setIdentityKey] = useState('');
   const [entryState, setEntryState] = useState<
-    'loading' | 'enabled' | 'disabled' | 'unavailable'
-  >('loading');
+    'loading' | 'enabled' | 'formal' | 'disabled' | 'unavailable'
+  >(auth.mode === 'formal' ? 'formal' : 'loading');
   const [entryBusy, setEntryBusy] = useState(false);
   const [entryError, setEntryError] = useState('');
   const [events, setEvents] = useState<S['EventViewDto'][]>([]);
   const [eventError, setEventError] = useState('');
   const [syncFailureVisible, setSyncFailureVisible] = useState(false);
-  const loadEvents = useCallback(async (token: string) => {
+  const loadEvents = useCallback(async (token?: string) => {
     try {
       setEvents(await client.request('listEvents', { token }));
       setEventError('');
@@ -142,6 +144,21 @@ export function IndividualPage() {
   }, [model]);
   useEffect(() => {
     let active = true;
+    if (auth.mode === 'formal') {
+      setEntryState('formal');
+      setEntryBusy(true);
+      void model.login().then(async () => {
+        if (!active) return;
+        if (model.value.identity) {
+          await loadEvents();
+          openDeepLink();
+        }
+        setEntryBusy(false);
+      });
+      return () => {
+        active = false;
+      };
+    }
     void client
       .request('listLocalTestIdentities')
       .then(async (choices) => {
@@ -172,7 +189,7 @@ export function IndividualPage() {
     return () => {
       active = false;
     };
-  }, [loadEvents, model, openDeepLink]);
+  }, [auth.mode, loadEvents, model, openDeepLink]);
   useEffect(() => {
     if (s.status === 'unauthorized') {
       sessionStorage.removeItem(tabSessionKey);
@@ -296,6 +313,9 @@ export function IndividualPage() {
           title="暂时无法确认本地测试模式"
           description="请确认本地 API 正在运行后刷新页面重试。"
         />
+      )}
+      {entryState === 'formal' && eventError && (
+        <Alert type="error" showIcon title={eventError} role="alert" />
       )}
       {entryState === 'enabled' && (
         <Card

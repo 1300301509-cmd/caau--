@@ -83,6 +83,20 @@ export class AccountMembershipDto {
   @ApiProperty({ enum: roles }) role!: (typeof roles)[number];
   @ApiProperty() active!: boolean;
 }
+export class AccountEventGrantDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) eventId!: string;
+  @ApiProperty({ format: 'uuid' }) memberId!: string;
+  @ApiProperty({ nullable: true, type: String }) eventName!: string | null;
+  @ApiProperty() active!: boolean;
+}
+export class AccountHostingGrantDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) memberId!: string;
+  @ApiProperty({ nullable: true, type: String, format: 'uuid' })
+  organizationId!: string | null;
+  @ApiProperty() active!: boolean;
+}
 export class AccountSummaryDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty() displayName!: string;
@@ -93,6 +107,12 @@ export class AccountSummaryDto {
   @ApiProperty({ type: [AccountMembershipDto] })
   memberships!: AccountMembershipDto[];
   @ApiProperty({ type: [String], format: 'uuid' }) eventGrantIds!: string[];
+  @ApiProperty({ type: [AccountEventGrantDto] })
+  eventGrants!: AccountEventGrantDto[];
+  @ApiProperty({ nullable: true, type: AccountHostingGrantDto })
+  hostingHandlerGrant!: AccountHostingGrantDto | null;
+  @ApiProperty({ nullable: true, type: AccountHostingGrantDto })
+  hostingReviewGrant!: AccountHostingGrantDto | null;
   @ApiProperty({ nullable: true, type: String, format: 'uuid' })
   hostingHandlerGrantId!: string | null;
   @ApiProperty({ nullable: true, type: String, format: 'uuid' })

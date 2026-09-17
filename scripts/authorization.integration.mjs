@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { rm, readFile } from 'node:fs/promises';
 import { workflowIntegration } from './workflow.integration.mjs';
 import { deployAuthorizationBaseline } from './authorization-upgrade.mjs';
@@ -271,17 +272,101 @@ export async function authorizationIntegration(t) {
       ).id;
       await session(key, users[key]);
     }
-    users.super = randomUUID();
-    members.super = randomUUID();
-    await sql.query(
-      'INSERT INTO "InternalUser" (id,"displayName") VALUES ($1,$2)',
-      [users.super, 'Synthetic headquarters super administrator'],
+    const initializerPassword = `A!${randomBytes(18).toString('base64url')}`;
+    const runInitializer = () =>
+      new Promise((resolve) => {
+        const child = spawn(
+          process.execPath,
+          ['scripts/init-local-super-admin.mjs'],
+          {
+            cwd: root,
+            env: {
+              ...process.env,
+              DATABASE_URL: appUrl.href,
+              CAAU_ALLOW_SUPER_ADMIN_INIT: '1',
+              CAAU_SUPER_ADMIN_ORGANIZATION_ID: hq,
+              CAAU_SUPER_ADMIN_LOGIN_NAME: 'synthetic.bootstrap.super',
+              CAAU_SUPER_ADMIN_DISPLAY_NAME:
+                'Synthetic headquarters super administrator',
+            },
+            stdio: ['pipe', 'pipe', 'pipe'],
+          },
+        );
+        let stdout = '',
+          stderr = '';
+        child.stdout.on('data', (chunk) => (stdout += chunk));
+        child.stderr.on('data', (chunk) => (stderr += chunk));
+        child.once('exit', (code) => resolve({ code, stdout, stderr }));
+        child.stdin.end(`${initializerPassword}\n${initializerPassword}\n`);
+      });
+    const initialized = await runInitializer();
+    assert.equal(initialized.code, 0);
+    assert.match(initialized.stdout, /Initialized credentials/);
+    assert.equal(
+      `${initialized.stdout}${initialized.stderr}`.includes(
+        initializerPassword,
+      ),
+      false,
     );
-    await sql.query(
-      'INSERT INTO "OrganizationMember" (id,"userId","organizationId",role) VALUES ($1,$2,$3,$4)',
-      [members.super, users.super, hq, 'HEADQUARTERS_SUPER_ADMIN'],
+    const initializedAgain = await runInitializer();
+    assert.notEqual(initializedAgain.code, 0);
+    assert.equal(
+      `${initializedAgain.stdout}${initializedAgain.stderr}`.includes(
+        initializerPassword,
+      ),
+      false,
     );
-    await session('super', users.super);
+    const superRows = (
+      await sql.query(
+        `SELECT u.id "userId",m.id "memberId" FROM "InternalUser" u
+         JOIN "OrganizationMember" m ON m."userId"=u.id
+         WHERE u."loginName"='synthetic.bootstrap.super'`,
+      )
+    ).rows;
+    assert.equal(superRows.length, 1);
+    users.super = superRows[0].userId;
+    members.super = superRows[0].memberId;
+    const bootstrapLogin = await fetch(`${base}/api/v1/authentication/login`, {
+      method: 'POST',
+      headers: {
+        Origin: 'http://127.0.0.1:5173',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        loginName: 'synthetic.bootstrap.super',
+        password: initializerPassword,
+      }),
+    });
+    assert.equal(bootstrapLogin.status, 200);
+    const bootstrapSession = await bootstrapLogin.json();
+    assert.equal(bootstrapSession.mustChangePassword, true);
+    const bootstrapCookie = bootstrapLogin.headers
+      .get('set-cookie')
+      ?.split(';')[0];
+    assert.ok(bootstrapCookie);
+    const bootstrapNextPassword = `A!${randomBytes(18).toString('base64url')}`;
+    const bootstrapChange = await fetch(
+      `${base}/api/v1/authentication/change-password`,
+      {
+        method: 'POST',
+        headers: {
+          Origin: 'http://127.0.0.1:5173',
+          Cookie: bootstrapCookie,
+          'X-CSRF-Token': bootstrapSession.csrfToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentPassword: initializerPassword,
+          newPassword: bootstrapNextPassword,
+        }),
+      },
+    );
+    assert.equal(bootstrapChange.status, 200);
+    tokens.super = bootstrapChange.headers
+      .get('set-cookie')
+      ?.split(';')[0]
+      .split('=')[1];
+    assert.match(tokens.super ?? '', /^[A-Za-z0-9_-]{43}$/);
     await authenticationIntegration(t, {
       base,
       config,

@@ -1356,6 +1356,25 @@ export interface components {
       /** @enum {string} */
       action: 'task.read' | 'content.write' | 'review' | 'file.download';
     };
+    AccountEventGrantDto: {
+      active: boolean;
+      /** Format: uuid */
+      eventId: string;
+      eventName: string | null;
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      memberId: string;
+    };
+    AccountHostingGrantDto: {
+      active: boolean;
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      memberId: string;
+      /** Format: uuid */
+      organizationId: string | null;
+    };
     AccountMembershipDto: {
       active: boolean;
       /** Format: uuid */
@@ -1386,8 +1405,15 @@ export interface components {
       active: boolean;
       displayName: string;
       eventGrantIds: string[];
+      eventGrants: components['schemas']['AccountEventGrantDto'][];
+      hostingHandlerGrant:
+        | components['schemas']['AccountHostingGrantDto']
+        | null;
       /** Format: uuid */
       hostingHandlerGrantId: string | null;
+      hostingReviewGrant:
+        | components['schemas']['AccountHostingGrantDto']
+        | null;
       /** Format: uuid */
       hostingReviewGrantId: string | null;
       /** Format: uuid */
@@ -2209,9 +2235,7 @@ export interface operations {
   HostingController_handlerGrant: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path?: never;
       cookie?: never;
     };
@@ -2248,9 +2272,7 @@ export interface operations {
   HostingController_handlerGrantActive: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -2289,9 +2311,7 @@ export interface operations {
   HostingController_reviewGrant: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path?: never;
       cookie?: never;
     };
@@ -2328,9 +2348,7 @@ export interface operations {
   HostingController_reviewGrantActive: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -3928,9 +3946,7 @@ export interface operations {
   HostingController_list: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path?: never;
       cookie?: never;
     };
@@ -3963,9 +3979,7 @@ export interface operations {
   HostingController_create: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path?: never;
       cookie?: never;
     };
@@ -4002,9 +4016,7 @@ export interface operations {
   HostingController_detail: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4039,9 +4051,7 @@ export interface operations {
   HostingController_approve: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4082,9 +4092,7 @@ export interface operations {
   HostingController_save: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4130,9 +4138,7 @@ export interface operations {
   HostingController_reject: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4173,9 +4179,7 @@ export interface operations {
   HostingController_supplement: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4216,9 +4220,7 @@ export interface operations {
   HostingController_startReview: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4259,9 +4261,7 @@ export interface operations {
   HostingController_submit: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4302,9 +4302,7 @@ export interface operations {
   HostingController_uploadIntent: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4343,9 +4341,7 @@ export interface operations {
   HostingController_confirmUpload: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4384,9 +4380,7 @@ export interface operations {
   HostingController_download: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4421,9 +4415,7 @@ export interface operations {
   HostingController_uploadContent: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };
@@ -4465,9 +4457,7 @@ export interface operations {
   HostingController_removeUpload: {
     parameters: {
       query?: never;
-      header: {
-        authorization: string;
-      };
+      header?: never;
       path: {
         id: string;
       };

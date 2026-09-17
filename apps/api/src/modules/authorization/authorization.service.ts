@@ -380,53 +380,66 @@ export class AuthorizationService {
   ) {
     const now = new Date();
     const windowStart = new Date(now.getTime() - 15 * 60 * 1000);
-    await this.db().$transaction(
-      async (tx) => {
-        for (const [subjectHash, limit] of [
-          [accountSubject, 5],
-          [clientSubject, 20],
-        ] as const) {
-          const current = await tx.authenticationThrottle.findUnique({
-            where: { subjectHash },
-          });
-          const failures =
-            !current || current.windowStartedAt <= windowStart
-              ? 1
-              : current.failures + 1;
-          await tx.authenticationThrottle.upsert({
-            where: { subjectHash },
-            create: {
-              subjectHash,
-              failures,
-              windowStartedAt: now,
-              blockedUntil:
-                failures >= limit
-                  ? new Date(now.getTime() + 15 * 60 * 1000)
-                  : null,
+    const write = () =>
+      this.db().$transaction(
+        async (tx) => {
+          for (const [subjectHash, limit] of [
+            [accountSubject, 5],
+            [clientSubject, 20],
+          ] as const) {
+            const current = await tx.authenticationThrottle.findUnique({
+              where: { subjectHash },
+            });
+            const failures =
+              !current || current.windowStartedAt <= windowStart
+                ? 1
+                : current.failures + 1;
+            await tx.authenticationThrottle.upsert({
+              where: { subjectHash },
+              create: {
+                subjectHash,
+                failures,
+                windowStartedAt: now,
+                blockedUntil:
+                  failures >= limit
+                    ? new Date(now.getTime() + 15 * 60 * 1000)
+                    : null,
+              },
+              update: {
+                failures,
+                ...(current?.windowStartedAt &&
+                current.windowStartedAt > windowStart
+                  ? {}
+                  : { windowStartedAt: now }),
+                blockedUntil:
+                  failures >= limit
+                    ? new Date(now.getTime() + 15 * 60 * 1000)
+                    : current?.blockedUntil,
+              },
+            });
+          }
+          await tx.auditRecord.create({
+            data: {
+              action: 'session.password.login',
+              outcome: 'DENIED',
+              requestId: randomUUID(),
             },
-            update: {
-              failures,
-              ...(current?.windowStartedAt &&
-              current.windowStartedAt > windowStart
-                ? {}
-                : { windowStartedAt: now }),
-              blockedUntil:
-                failures >= limit
-                  ? new Date(now.getTime() + 15 * 60 * 1000)
-                  : current?.blockedUntil,
-            },
           });
-        }
-        await tx.auditRecord.create({
-          data: {
-            action: 'session.password.login',
-            outcome: 'DENIED',
-            requestId: randomUUID(),
-          },
-        });
-      },
-      { isolationLevel: 'Serializable' },
-    );
+        },
+        { isolationLevel: 'Serializable' },
+      );
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await write();
+        return;
+      } catch (error) {
+        const code =
+          typeof error === 'object' && error && 'code' in error
+            ? String(error.code)
+            : '';
+        if (attempt >= 2 || !['P2002', 'P2034'].includes(code)) throw error;
+      }
+    }
   }
   private authenticationResponse(session: {
     id: string;
@@ -452,28 +465,53 @@ export class AuthorizationService {
   async login(input: unknown, request: AuthRequest) {
     this.trustedOrigin(request);
     const body = bodyObject(input, ['loginName', 'password']);
-    const normalized = loginName(body.loginName);
-    if (!validPassword(body.password))
-      throw new BadRequestException('Invalid input');
-    const accountSubject = this.throttleSubject('account', normalized);
+    const candidate =
+      typeof body.loginName === 'string'
+        ? body.loginName.trim().toLowerCase()
+        : '';
+    const validLoginName = loginPattern.test(candidate);
+    const validSuppliedPassword = validPassword(body.password);
+    const suppliedPassword = validSuppliedPassword
+      ? (body.password as string)
+      : 'invalid-password-placeholder';
+    const accountSubject = this.throttleSubject(
+      'account',
+      validLoginName ? candidate : '<invalid>',
+    );
     const clientSubject = this.throttleSubject(
       'client',
       request.ip ?? 'unknown',
     );
-    if (await this.throttled([accountSubject, clientSubject]))
+    if (await this.throttled([accountSubject, clientSubject])) {
+      await this.db().auditRecord.create({
+        data: {
+          action: 'session.password.login',
+          outcome: 'DENIED',
+          requestId: randomUUID(),
+          context: { reason: 'THROTTLED' },
+        },
+      });
       throw new HttpException(
         'Unable to sign in',
         HttpStatus.TOO_MANY_REQUESTS,
       );
-    const user = await this.db().internalUser.findUnique({
-      where: { loginName: normalized },
-      include: { memberships: true },
-    });
+    }
+    const user = validLoginName
+      ? await this.db().internalUser.findUnique({
+          where: { loginName: candidate },
+          include: { memberships: true },
+        })
+      : null;
     const verified = await verifyPassword(
-      body.password,
+      suppliedPassword,
       user?.passwordHash ?? dummyPasswordHash,
     );
-    if (!verified || !user?.active || !user.passwordHash) {
+    if (
+      !validSuppliedPassword ||
+      !verified ||
+      !user?.active ||
+      !user.passwordHash
+    ) {
       await this.recordLoginFailure(accountSubject, clientSubject);
       if (await this.throttled([accountSubject, clientSubject]))
         throw new HttpException(
@@ -606,7 +644,11 @@ export class AuthorizationService {
             memberships: {
               include: {
                 organization: true,
-                grants: true,
+                grants: {
+                  include: {
+                    event: { include: { businessEvent: true } },
+                  },
+                },
                 hostingApplicationHandlerGrant: true,
                 hostingApplicationReviewGrant: true,
               },
@@ -633,6 +675,23 @@ export class AuthorizationService {
               .filter((grant) => grant.active)
               .map((grant) => grant.id),
           ),
+          eventGrants: user.memberships.flatMap((membership) =>
+            membership.grants.map((grant) => ({
+              id: grant.id,
+              eventId: grant.eventId,
+              memberId: grant.memberId,
+              eventName: grant.event.businessEvent?.name ?? null,
+              active: grant.active,
+            })),
+          ),
+          hostingHandlerGrant:
+            user.memberships
+              .map((membership) => membership.hostingApplicationHandlerGrant)
+              .find((grant) => !!grant) ?? null,
+          hostingReviewGrant:
+            user.memberships
+              .map((membership) => membership.hostingApplicationReviewGrant)
+              .find((grant) => !!grant) ?? null,
           hostingHandlerGrantId:
             user.memberships.find(
               (membership) => membership.hostingApplicationHandlerGrant?.active,

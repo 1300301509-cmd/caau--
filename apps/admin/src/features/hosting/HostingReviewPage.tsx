@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Modal, Tag } from 'antd';
-import { createPortal } from 'react-dom';
 import { ReviewOverview } from './ReviewOverview';
 import { ApiError, type components } from '@caau/api-client';
 import { client } from '../materials/client';
+import { useAuth } from '../auth/AuthContext';
 import './hosting.css';
 
 type S = components['schemas'];
@@ -101,18 +101,14 @@ const formOf = (submission?: Submission) =>
   (submission?.form ?? {}) as FormSnapshot;
 
 export function HostingReviewPage() {
-  const [accountSlot, setAccountSlot] = useState<HTMLElement | null>(null);
-  useEffect(
-    () => setAccountSlot(document.getElementById('hq-account-slot')),
-    [],
-  );
+  const auth = useAuth();
   const [choices, setChoices] = useState<S['LocalIdentityChoiceDto'][]>([]);
   const [identityKey, setIdentityKey] = useState('');
   const [identity, setIdentity] = useState<S['WorkspaceIdentityDto']>();
   const [token, setToken] = useState('');
   const [entryState, setEntryState] = useState<
-    'loading' | 'enabled' | 'disabled' | 'unavailable'
-  >('loading');
+    'loading' | 'enabled' | 'formal' | 'disabled' | 'unavailable'
+  >(auth.mode === 'formal' ? 'formal' : 'loading');
   const [details, setDetails] = useState<Detail[]>([]);
   const [selectedId, setSelectedId] = useState(
     () => new URLSearchParams(location.search).get('application') ?? '',
@@ -208,6 +204,15 @@ export function HostingReviewPage() {
 
   useEffect(() => {
     let mounted = true;
+    if (auth.mode === 'formal') {
+      activeToken.current = '';
+      setEntryState('formal');
+      void load('', true);
+      return () => {
+        mounted = false;
+        epoch.current += 1;
+      };
+    }
     void client
       .request('listLocalTestIdentities')
       .then(async (next) => {
@@ -238,13 +243,14 @@ export function HostingReviewPage() {
       mounted = false;
       epoch.current += 1;
     };
-  }, [load]);
+  }, [auth.mode, load]);
 
+  const credential = auth.mode === 'formal' ? '' : token;
   useEffect(() => {
-    if (!token) return;
-    const timer = window.setInterval(() => void load(token), 5000);
+    if (!identity) return;
+    const timer = window.setInterval(() => void load(credential), 5000);
     return () => window.clearInterval(timer);
-  }, [load, token]);
+  }, [credential, identity, load]);
 
   const selected = details.find((item) => item.id === selectedId);
   const currentSubmission =
@@ -273,7 +279,7 @@ export function HostingReviewPage() {
     setResult('');
     try {
       await client.request(operation, {
-        token,
+        token: credential,
         path: { id: selected.id },
         body: {
           submissionId: selected.currentSubmissionId,
@@ -282,16 +288,17 @@ export function HostingReviewPage() {
         },
       });
       setResult(success);
-      await load(token);
+      await load(credential);
     } catch (reasonValue) {
       if (reasonValue instanceof ApiError && reasonValue.status === 409) {
-        await load(token);
+        await load(credential);
         setError('申请已由其他审核员更新，已加载最新结果。');
       } else if (
         reasonValue instanceof ApiError &&
         (reasonValue.status === 401 || reasonValue.status === 403)
       ) {
-        clearProtected();
+        if (reasonValue.status === 401 && auth.mode === 'formal') auth.expire();
+        else clearProtected();
         setError('当前会话已失效或审核权限已撤销。');
       } else setError('操作未确认成功，请重试。');
     } finally {
@@ -316,7 +323,7 @@ export function HostingReviewPage() {
         : 'HostingController_supplement';
     try {
       await client.request(operation, {
-        token,
+        token: credential,
         path: { id: selected.id },
         body: {
           submissionId: selected.currentSubmissionId,
@@ -332,18 +339,19 @@ export function HostingReviewPage() {
       );
       setReviewAction(undefined);
       setReason('');
-      await load(token);
+      await load(credential);
     } catch (reasonValue) {
       if (reasonValue instanceof ApiError && reasonValue.status === 409) {
         setReasonError(
           '申请已由其他审核员更新。您的意见已保留，请核对最新状态后处理。',
         );
-        await load(token);
+        await load(credential);
       } else if (
         reasonValue instanceof ApiError &&
         (reasonValue.status === 401 || reasonValue.status === 403)
       ) {
-        clearProtected();
+        if (reasonValue.status === 401 && auth.mode === 'formal') auth.expire();
+        else clearProtected();
         setReasonError('当前会话已失效或审核权限已撤销；意见已保留。');
       } else setReasonError('操作未确认成功，意见已保留，请重试。');
     } finally {
@@ -354,7 +362,7 @@ export function HostingReviewPage() {
     setError('');
     try {
       const bytes = await client.request('HostingController_download', {
-        token,
+        token: credential,
         path: { id: attachment.id },
       });
       const url = URL.createObjectURL(
@@ -461,9 +469,7 @@ export function HostingReviewPage() {
       {entryState === 'unavailable' && (
         <Alert type="warning" showIcon title="暂时无法连接本地 API" />
       )}
-      {identity && accountSlot
-        ? createPortal(identityEntry, accountSlot)
-        : identityEntry}
+      {identityEntry}
       {error && !detailOpen && (
         <Alert
           className="hosting-alert"
@@ -472,8 +478,8 @@ export function HostingReviewPage() {
           title={error}
           role="alert"
           action={
-            token ? (
-              <Button size="small" onClick={() => void load(token, true)}>
+            identity ? (
+              <Button size="small" onClick={() => void load(credential, true)}>
                 重试
               </Button>
             ) : undefined

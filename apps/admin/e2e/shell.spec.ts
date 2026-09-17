@@ -1,9 +1,37 @@
 import { expect, test } from '@playwright/test';
 
-// These checks exercise the unauthenticated shell; no live business writes.
+// These checks exercise a restored formal Cookie session with read-only fixtures.
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/v1/local-test-identities', (route) =>
-    route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+  const identity = {
+    id: '00000000-0000-4000-8000-000000000001',
+    displayName: '总部审核员',
+    roles: ['REVIEWER'],
+    canReviewHostingApplications: true,
+    canManageAccounts: false,
+    hostingApplicantOrganizations: [],
+  };
+  await page.route('**/api/v1/authentication/session', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...identity,
+        mustChangePassword: false,
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        csrfToken: 'synthetic-csrf',
+      }),
+    }),
+  );
+  await page.route('**/api/v1/workspace/identity', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(identity),
+    }),
+  );
+  await page.route('**/api/v1/hosting-applications', (route) =>
+    route.fulfill({ contentType: 'application/json', body: '[]' }),
+  );
+  await page.route('**/api/v1/events', (route) =>
+    route.fulfill({ contentType: 'application/json', body: '[]' }),
   );
 });
 
@@ -23,9 +51,10 @@ test('review center is the default route with one primary module and two review 
   await expect(
     types.getByRole('link', { name: '承办申请审核' }),
   ).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByText('本地测试身份入口未启用')).toBeVisible();
+  await expect(page.getByText('正式账号', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '修改密码' })).toBeVisible();
   await expect(page.locator('.review-table-row')).toHaveCount(0);
-  await expect(page.locator('.metric-value').first()).toContainText('—');
+  await expect(page.locator('.metric-value').first()).toContainText('0项');
   await page.reload();
   await expect(
     page.getByRole('heading', { level: 1, name: '赛事审核中心' }),
@@ -41,7 +70,7 @@ test('material review remains accessible within the review center', async ({
       .getByRole('navigation', { name: '审核类型' })
       .getByRole('link', { name: '办赛材料审核' }),
   ).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByText('本地测试身份入口未启用')).toBeVisible();
+  await expect(page.getByText('正式账号', { exact: true })).toBeVisible();
   await expect(page.getByLabel('选择测试身份')).toHaveCount(0);
 });
 

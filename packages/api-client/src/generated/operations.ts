@@ -15,14 +15,7 @@ export const operations = {
         type: 'object',
       },
     },
-    parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-    ],
+    parameters: [],
     requestMediaType: 'application/json',
     responseMediaType: 'application/json',
     body: {
@@ -48,12 +41,6 @@ export const operations = {
       },
     },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',
@@ -85,14 +72,7 @@ export const operations = {
         type: 'object',
       },
     },
-    parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-    ],
+    parameters: [],
     requestMediaType: 'application/json',
     responseMediaType: 'application/json',
     body: {
@@ -118,12 +98,6 @@ export const operations = {
       },
     },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',
@@ -324,10 +298,36 @@ export const operations = {
               items: { format: 'uuid', type: 'string' },
               type: 'array',
             },
+            eventGrants: {
+              items: {
+                properties: {
+                  active: { type: 'boolean' },
+                  eventId: { format: 'uuid', type: 'string' },
+                  eventName: { nullable: true, type: 'string' },
+                  id: { format: 'uuid', type: 'string' },
+                  memberId: { format: 'uuid', type: 'string' },
+                },
+                required: ['id', 'eventId', 'memberId', 'eventName', 'active'],
+                type: 'object',
+              },
+              type: 'array',
+            },
+            hostingHandlerGrant: {
+              allOf: [{ $ref: '#/components/schemas/AccountHostingGrantDto' }],
+              nullable: true,
+              type: 'object',
+              properties: {},
+            },
             hostingHandlerGrantId: {
               format: 'uuid',
               nullable: true,
               type: 'string',
+            },
+            hostingReviewGrant: {
+              allOf: [{ $ref: '#/components/schemas/AccountHostingGrantDto' }],
+              nullable: true,
+              type: 'object',
+              properties: {},
             },
             hostingReviewGrantId: {
               format: 'uuid',
@@ -377,6 +377,9 @@ export const operations = {
             'mustChangePassword',
             'memberships',
             'eventGrantIds',
+            'eventGrants',
+            'hostingHandlerGrant',
+            'hostingReviewGrant',
             'hostingHandlerGrantId',
             'hostingReviewGrantId',
           ],
@@ -1084,14 +1087,7 @@ export const operations = {
         type: 'array',
       },
     },
-    parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-    ],
+    parameters: [],
     requestMediaType: 'application/json',
     responseMediaType: 'application/json',
     body: null,
@@ -1146,14 +1142,7 @@ export const operations = {
         type: 'object',
       },
     },
-    parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-    ],
+    parameters: [],
     requestMediaType: 'application/json',
     responseMediaType: 'application/json',
     body: {
@@ -1395,12 +1384,6 @@ export const operations = {
     },
     parameters: [
       {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-      {
         in: 'path',
         name: 'id',
         required: true,
@@ -1419,12 +1402,6 @@ export const operations = {
       '200': { additionalProperties: true, type: 'object', properties: {} },
     },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',
@@ -1674,12 +1651,6 @@ export const operations = {
     },
     parameters: [
       {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-      {
         in: 'path',
         name: 'id',
         required: true,
@@ -1731,12 +1702,6 @@ export const operations = {
     },
     parameters: [
       {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-      {
         in: 'path',
         name: 'id',
         required: true,
@@ -1764,12 +1729,6 @@ export const operations = {
       '200': { additionalProperties: true, type: 'object', properties: {} },
     },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',
@@ -1799,12 +1758,6 @@ export const operations = {
     },
     parameters: [
       {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-      {
         in: 'path',
         name: 'id',
         required: true,
@@ -1831,12 +1784,6 @@ export const operations = {
       '200': { additionalProperties: true, type: 'object', properties: {} },
     },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',
@@ -1889,12 +1836,6 @@ export const operations = {
       },
     },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',
@@ -1959,12 +1900,6 @@ export const operations = {
     },
     parameters: [
       {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
-      {
         in: 'path',
         name: 'id',
         required: true,
@@ -1985,12 +1920,6 @@ export const operations = {
     method: 'GET',
     responses: { '200': { format: 'binary', type: 'string' } },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',
@@ -2013,12 +1942,6 @@ export const operations = {
       },
     },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',
@@ -2063,12 +1986,6 @@ export const operations = {
       },
     },
     parameters: [
-      {
-        in: 'header',
-        name: 'authorization',
-        required: true,
-        schema: { type: 'string' },
-      },
       {
         in: 'path',
         name: 'id',

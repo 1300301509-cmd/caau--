@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCookieAuth,
   ApiBody,
   ApiConsumes,
   ApiOkResponse,
@@ -44,6 +45,7 @@ import { downloadDisposition } from './filename.js';
 import { WorkflowService } from './workflow.service.js';
 @Controller()
 @ApiBearerAuth()
+@ApiCookieAuth('webSession')
 @ApiResponse({
   status: 400,
   description: 'Invalid material, upload, review or deadline input',
