@@ -100,26 +100,6 @@ export function AppShell({
             </p>
           </div>
           <div className="hq-sidebar-footer">
-            <span>CAAU 总部工作台</span>
-            <small>
-              {auth.mode === 'local' ? '本地测试环境' : '正式账号会话'}
-            </small>
-          </div>
-        </div>
-      </aside>
-      <div className="hq-main">
-        <header className="hq-topbar">
-          <div className="hq-breadcrumb">
-            总部工作台 <span>/</span>{' '}
-            <strong>
-              {events
-                ? '赛事详情'
-                : active === 'accounts'
-                  ? '账号与权限'
-                  : '赛事审核中心'}
-            </strong>
-          </div>
-          <div className="hq-topbar-right">
             <span className="hq-account-avatar" aria-hidden="true">
               {auth.session?.displayName.slice(0, 1) ?? '总'}
             </span>
@@ -139,6 +119,20 @@ export function AppShell({
                 </Button>
               </div>
             )}
+          </div>
+        </div>
+      </aside>
+      <div className="hq-main">
+        <header className="hq-topbar">
+          <div className="hq-breadcrumb">
+            总部工作台 <span>/</span>{' '}
+            <strong>
+              {events
+                ? '赛事详情'
+                : active === 'accounts'
+                  ? '账号与权限'
+                  : '赛事审核中心'}
+            </strong>
           </div>
         </header>
         <main
