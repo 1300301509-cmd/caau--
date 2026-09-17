@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavIcon } from './NavIcon';
+import brandImage from '../../assets/caau-brand.jpg';
 import './review-center.css';
 
 export function AppShell({
@@ -26,11 +27,25 @@ export function AppShell({
           href="/hosting-applications"
           aria-label="CAAU 总部首页"
         >
-          <span className="hq-brand-symbol" aria-hidden="true">
-            C<span />
-          </span>
-          <span>
-            <strong>CAAU</strong>
+          <svg
+            className="hq-brand-symbol"
+            viewBox="306 154 666 648"
+            preserveAspectRatio="xMidYMid meet"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <image href={brandImage} width="1254" height="1254" />
+          </svg>
+          <span className="hq-brand-copy">
+            <svg
+              className="hq-brand-wordmark"
+              viewBox="100 803 1054 233"
+              preserveAspectRatio="xMidYMid meet"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <image href={brandImage} width="1254" height="1254" />
+            </svg>
             <small>赛事协作平台</small>
           </span>
         </a>

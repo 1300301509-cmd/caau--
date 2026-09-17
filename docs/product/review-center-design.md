@@ -35,3 +35,5 @@ VITE_API_BASE_URL=/api-backend corepack pnpm --filter @caau/admin exec vite --ho
 验证结果以[开发计划](../planning/roadmap.md)的CAAU-028条目为准。专用浏览器检查在5175验证新壳层，与使用3000/4173的完整`test:e2e`区分；没有关闭或复用其他任务的服务作为隔离测试。
 
 页面截图：[桌面](../evidence/caau-028-review-center/desktop.png)、[窄屏](../evidence/caau-028-review-center/mobile.png)、[申请详情](../evidence/caau-028-review-center/detail.png)。
+
+品牌标识已按用户补充图更新：篮球图标与金色CAAU字标分别以原图区域展示；资产位于`apps/admin/src/assets/caau-brand.jpg`，SVG视窗分离显示，原图不重编码或重画。
