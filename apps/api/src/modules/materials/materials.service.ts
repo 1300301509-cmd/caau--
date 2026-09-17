@@ -261,15 +261,17 @@ export class MaterialsService {
           const name = text(b.name, 120);
           const description = text(b.description, 2000);
           const scope = await this.auth.createEventAnchor(tx, actor);
-          return tx.event.create({
+          const event = await tx.event.create({
             data: { id: scope.id, name, description, createdBy: actor.id },
             select: {
               id: true,
               name: true,
               description: true,
+              lifecycleState: true,
               createdAt: true,
             },
           });
+          return { ...event, profile: null };
         }
         if (action === 'events.list') {
           const events = await tx.event.findMany({
