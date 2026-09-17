@@ -170,11 +170,6 @@ body:has(.hq-shell) {
   align-items: center;
   gap: 11px;
 }
-.hq-topbar-right time {
-  margin-right: 12px;
-  font-size: 11px;
-  color: #7c847e;
-}
 .hq-account-avatar {
   display: grid;
   place-items: center;
@@ -368,9 +363,6 @@ body:has(.hq-shell) {
   .hq-topbar {
     padding-inline: 22px;
   }
-  .hq-topbar-right time {
-    display: none;
-  }
   .hq-heading-badge {
     display: none;
   }
@@ -425,7 +417,6 @@ body:has(.hq-shell) {
     min-height: 58px;
     padding-inline: 20px;
   }
-  .hq-topbar-right time,
   .hq-account-copy {
     display: none;
   }

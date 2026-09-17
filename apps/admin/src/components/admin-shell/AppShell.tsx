@@ -15,11 +15,6 @@ export function AppShell({
   const auth = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const events = active === 'events';
-  const date = new Intl.DateTimeFormat('zh-CN', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  }).format(new Date());
   return (
     <div className="hq-shell">
       <a className="skip-link" href="#review-content">
@@ -125,7 +120,6 @@ export function AppShell({
             </strong>
           </div>
           <div className="hq-topbar-right">
-            <time>{date}</time>
             <span className="hq-account-avatar" aria-hidden="true">
               {auth.session?.displayName.slice(0, 1) ?? '总'}
             </span>
