@@ -25,8 +25,9 @@ import {
   validateHostingSubmission,
 } from '../src/features/hosting/platform';
 
-test('miniapp keeps business submodules and home/profile bottom navigation', () => {
-  assert.equal(appConfig.pages[0], 'pages/home/index');
+test('miniapp starts at login and keeps business submodules and bottom navigation', () => {
+  assert.equal(appConfig.pages[0], 'pages/login/index');
+  assert.ok(appConfig.pages.includes('pages/home/index'));
   assert.ok(appConfig.pages.includes('pages/materials/index'));
   assert.ok(appConfig.pages.includes('pages/progress/index'));
   assert.ok(appConfig.pages.includes('pages/hosting/index'));

@@ -34,7 +34,13 @@ export default function TaskPage() {
       setError(workflowError(cause));
     }
   }
-  useDidShow(() => void load());
+  useDidShow(() => {
+    if (!session.token) {
+      void Taro.reLaunch({ url: '/pages/login/index' });
+      return;
+    }
+    void load();
+  });
   if (individual === true) return <IndividualTaskPage />;
   if (individual === false) return <LegacyTaskPage />;
   return (
@@ -47,9 +53,9 @@ export default function TaskPage() {
         </Text>
         {!session.token && (
           <Button
-            onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
+            onClick={() => void Taro.reLaunch({ url: '/pages/login/index' })}
           >
-            载入本地测试身份
+            前往登录
           </Button>
         )}
         {session.token && error && (

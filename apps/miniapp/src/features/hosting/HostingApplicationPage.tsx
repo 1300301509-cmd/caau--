@@ -205,7 +205,7 @@ export function HostingApplicationPage() {
       if (cause instanceof ApiError && cause.status === 401) {
         clearSession();
         clearProtected('会话已失效，申请资料已从页面清除。');
-        void Taro.switchTab({ url: '/pages/profile/index' });
+        void Taro.reLaunch({ url: '/pages/login/index' });
       } else if (cause instanceof ApiError && cause.status === 403) {
         clearProtected('申请办理权限已撤销，受保护内容已清除。');
       } else {
@@ -230,7 +230,7 @@ export function HostingApplicationPage() {
     stop();
     if (!session.token) {
       clearProtected();
-      void Taro.switchTab({ url: '/pages/profile/index' });
+      void Taro.reLaunch({ url: '/pages/login/index' });
       return;
     }
     void refresh(true);

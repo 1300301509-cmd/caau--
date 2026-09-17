@@ -34,7 +34,7 @@ export default function EventInfo() {
   useDidShow(() => {
     const token = session.token;
     if (!token) {
-      void Taro.switchTab({ url: '/pages/profile/index' });
+      void Taro.reLaunch({ url: '/pages/login/index' });
       return;
     }
     setLoading(true);
@@ -49,7 +49,7 @@ export default function EventInfo() {
         setEvent(undefined);
         if (cause instanceof ApiError && cause.status === 401) {
           clearSession();
-          setError('会话已失效，赛事信息已清除。');
+          void Taro.reLaunch({ url: '/pages/login/index' });
         } else if (cause instanceof ApiError && cause.status === 403)
           setError('赛事基本信息查看权限已撤销。');
         else setError('赛事基本信息暂时无法读取，请稍后重试。');

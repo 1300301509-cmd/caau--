@@ -194,11 +194,11 @@ export function TaskList({
       </Text>
       {!session.token ? (
         <View className="card">
-          <Text>尚未载入本地测试身份（非微信登录）</Text>
+          <Text>登录后可查看有权办理的赛事任务。</Text>
           <Button
-            onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
+            onClick={() => void Taro.reLaunch({ url: '/pages/login/index' })}
           >
-            载入本地测试身份
+            前往登录
           </Button>
         </View>
       ) : (

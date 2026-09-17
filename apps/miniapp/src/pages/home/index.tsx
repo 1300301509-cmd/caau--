@@ -47,7 +47,7 @@ export default function Home() {
       if (token !== session.token) return;
       if (cause instanceof ApiError && cause.status === 401) {
         clearSession();
-        void Taro.switchTab({ url: '/pages/profile/index' });
+        void Taro.reLaunch({ url: '/pages/login/index' });
         return;
       }
       setEvents([]);
@@ -58,7 +58,7 @@ export default function Home() {
 
   useDidShow(() => {
     if (!session.token) {
-      void Taro.switchTab({ url: '/pages/profile/index' });
+      void Taro.reLaunch({ url: '/pages/login/index' });
       return;
     }
     setIdentity(session.identity?.displayName ?? '');

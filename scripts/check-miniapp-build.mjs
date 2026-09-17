@@ -4,6 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 const root = new URL('../apps/miniapp/dist/', import.meta.url);
 const app = JSON.parse(await readFile(new URL('app.json', root), 'utf8'));
 assert.deepEqual(app.pages, [
+  'pages/login/index',
   'pages/home/index',
   'pages/hosting/index',
   'pages/event-info/index',
