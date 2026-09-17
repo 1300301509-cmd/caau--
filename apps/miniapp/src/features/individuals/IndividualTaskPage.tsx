@@ -215,9 +215,7 @@ export function IndividualTaskPage() {
         <View className="card">
           <Text>会话不存在或已失效，受保护内容未显示。</Text>
           <Button
-            onClick={() =>
-              void Taro.navigateTo({ url: '/pages/profile/index' })
-            }
+            onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
           >
             重新载入测试身份
           </Button>

@@ -13,7 +13,10 @@ assert.deepEqual(app.pages, [
   'pages/task/index',
   'pages/index/index',
 ]);
-assert.equal('tabBar' in app, false);
+assert.deepEqual(app.tabBar.list, [
+  { pagePath: 'pages/home/index', text: '首页' },
+  { pagePath: 'pages/profile/index', text: '我的' },
+]);
 for (const file of [
   'app.js',
   'app.wxss',

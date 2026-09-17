@@ -47,9 +47,7 @@ export default function TaskPage() {
         </Text>
         {!session.token && (
           <Button
-            onClick={() =>
-              void Taro.navigateTo({ url: '/pages/profile/index' })
-            }
+            onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
           >
             载入本地测试身份
           </Button>

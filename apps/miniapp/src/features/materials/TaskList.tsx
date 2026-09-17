@@ -196,9 +196,7 @@ export function TaskList({
         <View className="card">
           <Text>尚未载入本地测试身份（非微信登录）</Text>
           <Button
-            onClick={() =>
-              void Taro.navigateTo({ url: '/pages/profile/index' })
-            }
+            onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
           >
             载入本地测试身份
           </Button>

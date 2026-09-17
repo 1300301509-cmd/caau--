@@ -34,7 +34,7 @@ export default function EventInfo() {
   useDidShow(() => {
     const token = session.token;
     if (!token) {
-      void Taro.redirectTo({ url: '/pages/profile/index' });
+      void Taro.switchTab({ url: '/pages/profile/index' });
       return;
     }
     setLoading(true);

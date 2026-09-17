@@ -47,7 +47,7 @@ export default function Home() {
       if (token !== session.token) return;
       if (cause instanceof ApiError && cause.status === 401) {
         clearSession();
-        void Taro.redirectTo({ url: '/pages/profile/index' });
+        void Taro.switchTab({ url: '/pages/profile/index' });
         return;
       }
       setEvents([]);
@@ -58,7 +58,7 @@ export default function Home() {
 
   useDidShow(() => {
     if (!session.token) {
-      void Taro.redirectTo({ url: '/pages/profile/index' });
+      void Taro.switchTab({ url: '/pages/profile/index' });
       return;
     }
     setIdentity(session.identity?.displayName ?? '');
@@ -283,7 +283,7 @@ export default function Home() {
         <Text className="home-account-name">{identity}</Text>
         <Button
           className="text-button compact-button"
-          onClick={() => void Taro.navigateTo({ url: '/pages/profile/index' })}
+          onClick={() => void Taro.switchTab({ url: '/pages/profile/index' })}
         >
           切换测试身份
         </Button>
