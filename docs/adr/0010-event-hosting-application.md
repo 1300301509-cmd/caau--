@@ -6,7 +6,7 @@
 
 当前 `POST /events` 由总部直接创建仅含名称、说明的正式赛事；`ORGANIZER EventGrant` 是成员访问授权，`TaskScope` 是材料任务指派。系统没有“赛事创建前申请”、赛事级承办机构关系、申请版本或赛事来源。
 
-新流程要求承办机构先提交赛事名称、时间、地点和申请资料；总部通过后才创建正式赛事并登记申请机构为承办方。未通过不得创建赛事。申请人仅是本次提交人，不能被技术实现推导为唯一赛事经办人。现有材料流程必须作为获批后的独立后续流程继续保留。
+新流程要求承办机构先提交赛事名称、时间、地点和申请资料；已提出的资料清单为必交营业执照、简介（办赛经验）、现场照片，选交其他文档。总部审核包含“审核中”状态，通过后才创建正式赛事并登记申请机构为承办方。未通过不得创建赛事。申请人仅是本次提交人，不能被技术实现推导为唯一赛事经办人。现有材料流程必须作为获批后的独立后续流程继续保留。
 
 ## 2. 核心决策
 
@@ -28,11 +28,11 @@
 | --- | --- |
 | `EventHostingApplication` | id、applicantOrganizationId、status、revision、draft JSON、currentSubmissionId、approvedEventId、createdBy/At；机构不可在提交后悄然替换；一个申请至多一个 approvedEventId |
 | `HostingApplicationSubmission` | id、applicationId、version、formSnapshot、requirementVersionId/requirementSnapshot、submittedBy/At；`unique(applicationId, version)`；UPDATE/DELETE/TRUNCATE 受不可变保护 |
-| `HostingApplicationRequirementVersion` | id、版本、发布信息；要求项名称/说明/required/限制；只有业务确认配置来源后才落地，不随代码种固定清单 |
+| `HostingApplicationRequirementVersion` | id、版本、发布信息；首版要求明确包含三项必交（营业执照、简介〔办赛经验〕、现场照片）和一项选交（其他文档），不得擅增项目；格式、大小、数量、特殊情况及配置/发布机制确认后落地对应限制 |
 | `HostingApplicationDocument` | 资料条目元数据，关联某要求项或经允许的自选资料；草稿阶段可修订，提交时由 SubmissionDocument 冻结 |
 | `HostingApplicationUpload` | 申请、机构、actor、私有 storageKey、原文件名、大小/hash/格式、PENDING/CONFIRMED、过期/绑定时间；不复用现有材料附件归属 |
 | `HostingSubmissionDocument` | submissionId、document snapshot、fileId；append-only，复合外键防跨申请/跨机构绑定 |
-| `HostingApplicationAction` | applicationId、submissionId、from/to、action、actor、服务器时间、结构化 detail；提交、补充要求、驳回、通过均追加历史 |
+| `HostingApplicationAction` | applicationId、submissionId、from/to、action、actor、服务器时间、结构化 detail；提交、开始审核、补充要求、驳回、通过均追加历史；打开详情不写动作 |
 | `HostingApplicationCommand` | actorId、applicationId、idempotencyKey、requestHash、result；相同键同载荷返回原结果，不同载荷 409 |
 
 草稿 JSON 可以保存尚未最终定型的时间/地点结构，正式提交快照也使用受 DTO 校验的结构化 JSON；字段口径确认后再决定是否拆成列。不可因使用 JSON 放弃长度、时区、格式和必填校验。
@@ -52,16 +52,23 @@
 
 ## 4. 状态机与命令
 
-建议状态：`DRAFT → PENDING_REVIEW → NEEDS_SUPPLEMENT → PENDING_REVIEW`，以及从 `PENDING_REVIEW` 到 `REJECTED` 或 `APPROVED`。
+状态机必须包含 `IN_REVIEW`：
+
+```text
+DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED
+                         ├────────→ REJECTED
+                         └────────→ NEEDS_SUPPLEMENT → PENDING_REVIEW
+```
 
 - `saveDraft(expectedRevision)`：仅允许有权申请方保存；CAS 冲突返回当前 revision，不覆盖。
-- `submit(expectedRevision, idempotencyKey)`：验证表单及该要求版本全部必交项，生成不可变 Vn 和 SUBMIT 动作。
-- `requestSupplement(submissionId, expectedRevision, request, idempotencyKey)`：不创建赛事；保存补充要求，当前版本保持不可变，状态进入 NEEDS_SUPPLEMENT。
-- `resubmit(...)`：从补充草稿生成 Vn+1；是否可由另一同机构人员执行取决于待确认权限。
-- `reject(submissionId, expectedRevision, reason, idempotencyKey)`：不创建赛事；是否还能继续同一申请待确认。
-- `approve(submissionId, expectedRevision, idempotencyKey)`：执行第 5 节原子事务，没有通用 `PATCH status`。
+- `submit(expectedRevision, idempotencyKey)`：验证营业执照、简介（办赛经验）、现场照片三项必交资料及表单，其他文档允许为空；生成不可变 Vn 和 SUBMIT 动作。
+- `startReview(submissionId, expectedRevision, idempotencyKey)`：**建议流程**为审核人员明确点击“开始审核”后从 PENDING_REVIEW 进入 IN_REVIEW，记录实际人员、服务器时间和目标版本。打开详情只读，不调用该命令、不改变状态。该动作是否产生领取/排他权仍待确认。
+- `requestSupplement(submissionId, expectedRevision, request, idempotencyKey)`：从 IN_REVIEW 进入 NEEDS_SUPPLEMENT；不创建赛事，保存补充要求，当前版本保持不可变。
+- `resubmit(...)`：从补充草稿生成 Vn+1 并回到 PENDING_REVIEW；是否可由另一同机构人员执行取决于待确认权限。
+- `reject(submissionId, expectedRevision, reason, idempotencyKey)`：从 IN_REVIEW 进入 REJECTED，不创建赛事；是否还能继续同一申请待确认。
+- `approve(submissionId, expectedRevision, idempotencyKey)`：从 IN_REVIEW 进入 APPROVED 并执行第 5 节原子事务；没有通用 `PATCH status`。
 
-驳回和补充必须是不同动作、状态和审计语义。只读打开详情不改变状态；是否增加“审核中”必须由并发审核规则确认。
+“审核中”状态本身是需求，不再作为可选项。明确点击开始审核是当前建议而非已确认唯一触发方式；无论最终采用何种显式操作，GET 详情都不得产生状态变更。驳回和补充必须是不同动作、状态和审计语义。
 
 ## 5. 原子获批、幂等与并发
 
@@ -76,7 +83,7 @@
 1. 开启 Serializable 事务，锁定申请行；
 2. 重新加载会话、成员和审核权限；权限策略确认前不实现放行逻辑；
 3. 读取幂等命令：同 actor/申请/key 且请求 hash 相同则在重新鉴权后返回原 eventId；不同载荷返回 409；
-4. 校验申请仍为 PENDING_REVIEW、revision/submissionId 均为当前值，且 submission 属于该申请和申请机构；
+4. 校验申请仍为 IN_REVIEW、revision/submissionId 均为当前值，且 submission 属于该申请和申请机构；
 5. 从不可变 submission 快照取得名称、时间、地点和 applicantOrganizationId，不信任审批请求重复传值；
 6. 创建 EventScope 与共享 ID 的 Event，并创建 EventProfileVersion V1；
 7. 创建 EventOrigin，唯一关联 applicationId 和 approvedSubmissionId；
@@ -133,7 +140,7 @@
 - `@caau/database`：唯一 Prisma 入口；前端不得依赖数据库实体；
 - `@caau/api-client`：只从 Nest OpenAPI 生成 DTO/请求元数据，再提供平台适配。
 
-接口按用例拆分：草稿读取/保存、提交、列表/详情、版本历史、上传/确认/下载、request-supplement、reject、approve；禁止开放客户端可任意写状态、eventId、applicantOrganizationId 或 approvedBy 的通用更新接口。
+接口按用例拆分：草稿读取/保存、提交、列表/详情、版本历史、上传/确认/下载，以及建议的 start-review、request-supplement、reject、approve；禁止开放客户端可任意写状态、eventId、applicantOrganizationId 或 approvedBy 的通用更新接口。详情 GET 必须无副作用，不能隐式调用 start-review。
 
 ## 9. Web 与小程序技术落点
 
@@ -159,8 +166,8 @@
 - **审批后依次调用“创建赛事/授权/创建任务”接口**：不能保证原子性，重复点击会产生部分成功和重复赛事。
 - **覆盖同一申请记录保存 V2**：会丢失总部实际审核版本及附件证据。
 - **从现有任务或 grant 批量推导承办关系**：现有数据语义不足，可能制造错误业务事实。
-- **代码内置固定申请资料清单**：资料规则尚未确认，不得将演示建议固化为正式要求。
+- **擅自扩充或重新标记申请资料清单**：首版三项必交和一项选交已经提出；不得因格式/大小/数量尚待确认而把整个清单标成未确认，也不得加入未提出材料。
 
 ## 12. 实施关口
 
-在进入后端阶段前，至少确认产品规格第 10 节中的申请资格、审核权限、驳回后路径、经办授权、材料任务创建时机、资料清单来源、时间/地点结构和补充材料规则。未确认项可以保留在模型扩展点中，但不得用技术默认替代业务决定。
+在进入后端阶段前，至少确认产品规格第 10 节中的申请资格、审核权限、驳回后路径、经办授权、材料任务创建时机、资料格式/大小/数量及特殊情况、要求版本配置来源、时间/地点结构、补充材料规则，以及审核中状态的最终进入/接续方式。未确认项可以保留在模型扩展点中，但不得用技术默认替代业务决定；已提出的四项资料及“审核中”状态不得降级为未确认。
