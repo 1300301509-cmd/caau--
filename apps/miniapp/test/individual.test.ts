@@ -31,10 +31,13 @@ test('miniapp keeps business submodules and home/profile bottom navigation', () 
   assert.ok(appConfig.pages.includes('pages/progress/index'));
   assert.ok(appConfig.pages.includes('pages/hosting/index'));
   assert.ok(appConfig.pages.includes('pages/event-info/index'));
-  assert.deepEqual(appConfig.tabBar.list, [
-    { pagePath: 'pages/home/index', text: '首页' },
-    { pagePath: 'pages/profile/index', text: '我的' },
-  ]);
+  assert.deepEqual(
+    appConfig.tabBar.list.map(({ pagePath, text }) => ({ pagePath, text })),
+    [
+      { pagePath: 'pages/home/index', text: '首页' },
+      { pagePath: 'pages/profile/index', text: '我的' },
+    ],
+  );
   assert.ok(
     !appConfig.pages.some((page) => /pages\/(todo|events)\//.test(page)),
   );

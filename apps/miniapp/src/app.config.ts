@@ -21,8 +21,18 @@ export default {
     backgroundColor: '#fcfcf9',
     borderStyle: 'white',
     list: [
-      { pagePath: 'pages/home/index', text: '首页' },
-      { pagePath: 'pages/profile/index', text: '我的' },
+      {
+        pagePath: 'pages/home/index',
+        text: '首页',
+        iconPath: 'assets/tab-icons/home-normal.png',
+        selectedIconPath: 'assets/tab-icons/home-active.png',
+      },
+      {
+        pagePath: 'pages/profile/index',
+        text: '我的',
+        iconPath: 'assets/tab-icons/profile-normal.png',
+        selectedIconPath: 'assets/tab-icons/profile-active.png',
+      },
     ],
   },
 };

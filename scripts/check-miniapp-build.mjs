@@ -13,13 +13,17 @@ assert.deepEqual(app.pages, [
   'pages/task/index',
   'pages/index/index',
 ]);
-assert.deepEqual(app.tabBar.list, [
-  { pagePath: 'pages/home/index', text: '首页' },
-  { pagePath: 'pages/profile/index', text: '我的' },
-]);
+assert.deepEqual(
+  app.tabBar.list.map(({ pagePath, text }) => ({ pagePath, text })),
+  [
+    { pagePath: 'pages/home/index', text: '首页' },
+    { pagePath: 'pages/profile/index', text: '我的' },
+  ],
+);
 for (const file of [
   'app.js',
   'app.wxss',
+  ...app.tabBar.list.flatMap((tab) => [tab.iconPath, tab.selectedIconPath]),
   ...app.pages.flatMap((page) => [`${page}.js`, `${page}.wxml`]),
 ]) {
   assert.ok(
