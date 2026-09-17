@@ -2,6 +2,8 @@
 
 本仓库用于建设 CAAU 微信小程序、Web 管理后台和后端 API。
 
+当前优先任务为CAAU-029“总部Web正式账号密码认证”。A阶段已基于既有`InternalUser`、角色/grant和opaque `Session`完成安全设计与验收计划，运行时代码尚未实施；目标是正常模式使用HttpOnly Cookie登录，并保留显式本地测试模式和小程序Bearer兼容。见[认证技术设计](docs/adr/0011-password-cookie-authentication.md)和[分阶段计划](docs/planning/caau-029-password-authentication.md)。
+
 CAAU-028总部“赛事审核中心”设计已作为总部Web统一界面：默认进入承办申请审核，办赛材料审核作为同模块次级入口；原5173旧壳层不再作为产品方向。视觉与信息结构见[审核中心设计](docs/product/review-center-design.md)，业务接口、权限和历史规则继续沿用CAAU-027。
 
 当前优先任务为 CAAU-027“赛事承办申请”：A规格、B后端、C总部Web及D承办方小程序源码均已完成本地验收，包含草稿/私有附件/不可变V1/V2、共享审核、原子获批、承办关系、人员基本信息查看权、总部五态审核，以及小程序独立入口、六态申请办理、补充重交、差异/历史和获批赛事只读页；完整`db:test` 44/44通过、0跳过。官方微信开发者工具已实际核验页面与只读流程，但文件选择自动化桥仍阻塞上传/下载闭环；真机未运行。操作和证据见[后端手册](docs/runbooks/event-hosting-applications.md)、[总部Web审核手册](docs/runbooks/event-hosting-application-web.md)及[承办方小程序手册](docs/runbooks/event-hosting-application-miniapp.md)。既有 CAAU-012 A/B/C/D 已完成本地交付：单份材料五态、赛事共享审核、不可变历史，以及 Web `/materials`、Taro承办页面和自动同步。42项数据库全套通过；15条浏览器同步样本 p50 1821ms、p95/max 2093ms。旧数据/附件/模板保留。官方游客模拟器加本地测试身份已完成一条新增/V1退回/V2通过主流程；真实文件选择返回后平台回调悬挂，附件闭环、正式微信身份/AppID/合法域名及真机仍未通过，现按用户指令暂缓。当前三方功能状态见 [产品功能清单](docs/product/current-function-matrix.md)，赛事创建、承办指定与信息变更问题见 [赛事管理缺口](docs/product/event-management-gap-analysis.md)；可操作演示及分层边界见 [Web手册](docs/runbooks/individual-material-web.md)、[后端手册](docs/runbooks/individual-materials.md) 和 [Taro手册](docs/runbooks/individual-material-miniapp.md)。
@@ -28,6 +30,8 @@ CAAU-028总部“赛事审核中心”设计已作为总部Web统一界面：默
 - [赛事承办申请产品规格](docs/product/event-hosting-application-spec.md)：正式赛事前置申请、审核动作、版本资料、两端入口与待确认规则。
 - [赛事承办申请技术设计](docs/adr/0010-event-hosting-application.md)：原子获批、赛事来源、机构承办关系和授权分离设计及已实现技术决策。
 - [CAAU-027 分阶段计划](docs/planning/caau-027-event-hosting-application.md)：A/B/C/D源码及本地验收状态、平台限制与阶段证据。
+- [正式账号密码认证设计](docs/adr/0011-password-cookie-authentication.md)：凭据哈希、Cookie/CSRF、限流、会话撤销、初始化与小程序兼容决策。
+- [CAAU-029 分阶段计划](docs/planning/caau-029-password-authentication.md)：后端、Web、测试和本地体验准备的阶段范围及验收矩阵。
 - [赛事承办申请后端手册](docs/runbooks/event-hosting-applications.md)：迁移、首个本地超级管理员、接口、验证证据和环境限制。
 - [总部 Web 承办申请审核](docs/runbooks/event-hosting-application-web.md)：访问入口、合成数据、测试身份、体验步骤及浏览器验收证据。
 - [承办方小程序赛事承办申请](docs/runbooks/event-hosting-application-miniapp.md)：主页入口、申请办理、同步保护、完整体验步骤及开发者工具/真机证据边界。

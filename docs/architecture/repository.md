@@ -49,6 +49,8 @@ CAAU-027新增`event-hosting-applications`后端聚合及两端feature。总部W
 
 CAAU-015 的固定本地身份定义和幂等准备位于仅服务端可用的 `@caau/database`，API authorization 模块只在显式 local 模式列出固定身份并签发原 Session；生成契约由 Web 消费。Web 的 token 只进入标签页 sessionStorage，恢复后仍通过 API 重新鉴权；角色与业务数据不写入前端存储。该入口不新增数据库模型或生产认证模块，边界见 [ADR-0009](../adr/0009-local-test-identity-switching.md)。
 
+CAAU-029计划在同一authorization模块和`InternalUser`/`Session`上追加正式密码凭据与Cookie认证，不建立平行用户或权限系统。Web统一AuthGate只消费生成客户端；密码哈希、Cookie、CSRF、限流、初始化和会话撤销均留在API/数据库侧。fetch适配器支持Cookie/CSRF，小程序Taro适配器继续Bearer。当前仅完成设计，实施边界见[ADR-0011](../adr/0011-password-cookie-authentication.md)。
+
 基础域规划：auth 管理身份与会话；organizations 管理组织和成员关系；permissions 管理操作及数据范围；events 管理赛事；tasks 管理交付与审核；files 管理附件授权。报名、财务、AI 等在对应需求确认后加入。
 
 跨模块通过明确导出的服务或接口调用，不直接使用其他模块的 repository 或修改其所属记录。需要跨域事务时，在实现前明确事务用例的负责模块和参与服务，不把事务拆成不能回滚的独立写入。
