@@ -19,6 +19,7 @@ import {
 
 import { individualIntegration } from './individual.integration.mjs';
 import { individualBrowserTest } from './individual-browser.integration.mjs';
+import { hostingIntegration } from './hosting.integration.mjs';
 export async function authorizationIntegration(t) {
   assert.equal(process.env.CAAU_DATABASE_INTEGRATION, 'test');
   assertLocalDatabaseUrls(process.env, 'test');
@@ -65,11 +66,15 @@ export async function authorizationIntegration(t) {
     sql = new pg.Client({ connectionString: url.href });
     await sql.connect();
     await t.test(
-      '006 additive migration preserves all 23 old tables, five checksums, V1/V2 and private template/file bytes',
+      'additive migrations preserve old rows, migration checksums, V1/V2 and private bytes',
       async () => {
         for (const [table, hash] of Object.entries(baseline.preserved)) {
           const expr =
-            table === 'EventGrant' ? "to_jsonb(t)-'active'" : 'to_jsonb(t)';
+            table === 'EventGrant'
+              ? "to_jsonb(t)-'active'"
+              : table === 'Event'
+                ? "to_jsonb(t)-'lifecycleState'"
+                : 'to_jsonb(t)';
           const rows = (
             await sql.query(
               `SELECT ${expr} data FROM "${table}" t ORDER BY (${expr})::text`,
@@ -84,8 +89,13 @@ export async function authorizationIntegration(t) {
         assert.deepEqual(
           (
             await sql.query(
-              'SELECT migration_name,checksum FROM _prisma_migrations WHERE migration_name<>$1 ORDER BY migration_name',
-              ['202609160001_individual_materials'],
+              'SELECT migration_name,checksum FROM _prisma_migrations WHERE migration_name<>ALL($1::text[]) ORDER BY migration_name',
+              [
+                [
+                  '202609160001_individual_materials',
+                  '202609170001_event_hosting_applications',
+                ],
+              ],
             )
           ).rows,
           baseline.checksums,
@@ -255,6 +265,17 @@ export async function authorizationIntegration(t) {
       ).id;
       await session(key, users[key]);
     }
+    users.super = randomUUID();
+    members.super = randomUUID();
+    await sql.query(
+      'INSERT INTO "InternalUser" (id,"displayName") VALUES ($1,$2)',
+      [users.super, 'Synthetic headquarters super administrator'],
+    );
+    await sql.query(
+      'INSERT INTO "OrganizationMember" (id,"userId","organizationId",role) VALUES ($1,$2,$3,$4)',
+      [members.super, users.super, hq, 'HEADQUARTERS_SUPER_ADMIN'],
+    );
+    await session('super', users.super);
     const eventA = (await api('manager', 'POST', 'event-scopes')).id;
     const eventB = (await api('managerB', 'POST', 'event-scopes')).id;
     const grants = {};
@@ -692,10 +713,23 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          6,
+          7,
         );
       },
     );
+    await hostingIntegration(t, {
+      base,
+      tokens,
+      users,
+      members,
+      orgA,
+      orgB,
+      hq,
+      sql,
+      runtime,
+      api,
+      session,
+    });
     await materialsIntegration(t, {
       base,
       config,
