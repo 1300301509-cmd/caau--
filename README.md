@@ -4,7 +4,7 @@
 
 CAAU-029“总部Web正式账号密码认证”A/B/C/D已完成本地交付：复用既有`InternalUser`、角色/grant和opaque `Session`，实现scrypt、HttpOnly Cookie、CSRF、持久限流、会话撤销、受控超级管理员初始化、全局AuthGate、首次/主动改密及账号/角色/业务授权管理；正常模式不暴露测试身份，小程序Bearer保持兼容。隔离`db:test` 48/48、Web E2E 9/9通过；本地正式登录入口和忽略凭据文件已准备，生产HTTPS/代理/密钥/多实例及远程CI未验收。见[认证运行手册](docs/runbooks/password-authentication.md)、[技术设计](docs/adr/0011-password-cookie-authentication.md)和[分阶段计划](docs/planning/caau-029-password-authentication.md)。
 
-CAAU-028总部“赛事审核中心”设计已作为总部Web统一界面：默认进入承办申请审核，办赛材料审核作为同模块次级入口；原5173旧壳层不再作为产品方向。视觉与信息结构见[审核中心设计](docs/product/review-center-design.md)，业务接口、权限和历史规则继续沿用CAAU-027。
+CAAU-028总部“赛事审核中心”设计已作为总部Web统一界面：默认进入承办申请审核，办赛材料审核作为同模块次级入口；旧版壳层不再作为产品方向。视觉与信息结构见[审核中心设计](docs/product/review-center-design.md)，业务接口、权限和历史规则继续沿用CAAU-027。
 
 当前优先任务为 CAAU-027“赛事承办申请”：A规格、B后端、C总部Web及D承办方小程序源码均已完成本地验收，包含草稿/私有附件/不可变V1/V2、共享审核、原子获批、承办关系、人员基本信息查看权、总部五态审核，以及小程序独立入口、六态申请办理、补充重交、差异/历史和获批赛事只读页；完整`db:test` 44/44通过、0跳过。官方微信开发者工具已实际核验页面与只读流程，但文件选择自动化桥仍阻塞上传/下载闭环；真机未运行。操作和证据见[后端手册](docs/runbooks/event-hosting-applications.md)、[总部Web审核手册](docs/runbooks/event-hosting-application-web.md)及[承办方小程序手册](docs/runbooks/event-hosting-application-miniapp.md)。既有 CAAU-012 A/B/C/D 已完成本地交付：单份材料五态、赛事共享审核、不可变历史，以及 Web `/materials`、Taro承办页面和自动同步。42项数据库全套通过；15条浏览器同步样本 p50 1821ms、p95/max 2093ms。旧数据/附件/模板保留。官方游客模拟器加本地测试身份已完成一条新增/V1退回/V2通过主流程；真实文件选择返回后平台回调悬挂，附件闭环、正式微信身份/AppID/合法域名及真机仍未通过，现按用户指令暂缓。当前三方功能状态见 [产品功能清单](docs/product/current-function-matrix.md)，赛事创建、承办指定与信息变更问题见 [赛事管理缺口](docs/product/event-management-gap-analysis.md)；可操作演示及分层边界见 [Web手册](docs/runbooks/individual-material-web.md)、[后端手册](docs/runbooks/individual-materials.md) 和 [Taro手册](docs/runbooks/individual-material-miniapp.md)。
 
@@ -58,7 +58,7 @@ deploy/                部署工程
 corepack pnpm install --frozen-lockfile
 # 分别在三个终端中运行：
 corepack pnpm dev:api       # http://127.0.0.1:3000/api/v1/health
-corepack pnpm dev:admin     # http://127.0.0.1:5173
+corepack pnpm dev:admin     # http://127.0.0.1:5175
 corepack pnpm dev:miniapp   # watch 编译，产物 apps/miniapp/dist
 ```
 

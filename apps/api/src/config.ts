@@ -20,7 +20,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   }
   const origins = (
     env.CORS_ORIGINS ??
-    'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173'
+    'http://127.0.0.1:5175,http://localhost:5175,http://127.0.0.1:4173'
   )
     .split(',')
     .map((origin) => origin.trim());

@@ -1,6 +1,6 @@
 # CAAU-028 总部赛事审核中心设计
 
-状态：用户已确认放弃原5173设计并全面沿用本设计；已迁入包含CAAU-027 D的当前Web并完成本地回归。依据2026-09-17用户提供的总部后台参考图和“现阶段只需要赛事审核中心”的范围。
+状态：用户已确认放弃旧版设计并全面沿用原5175“赛事审核中心”风格；该设计已迁入当前Web并完成本地回归。当前统一开发与体验端口为5175。依据2026-09-17用户提供的总部后台参考图和“现阶段只需要赛事审核中心”的范围。
 
 ## 视觉与信息结构
 
@@ -18,18 +18,18 @@
 
 ## 当前入口与迁移关系
 
-正式本地入口为<http://127.0.0.1:5173/>，根地址默认进入`/hosting-applications`。按仓库常规方式启动API与Web即可：
+正式本地入口为<http://127.0.0.1:5175/>，根地址默认进入`/hosting-applications`。按仓库常规方式启动API与Web即可：
 
 ```sh
 CAAU_IDENTITY_MODE=local corepack pnpm db:api
 corepack pnpm dev:admin
 ```
 
-选择“总部审核员甲”并点击“进入”可查看已有五项合成演示；切换“承办方B”时服务端能力位使队列清空并显示无权。原5175来自`codex/caau-028-review-center`独立工作树，是本设计的隔离预览来源；其提交现已通过Git合并迁入当前分支，5175不再是产品入口或运行前提。Vite的`/api-backend`代理仍可用于隔离本地预览，但不改变生产API边界。
+选择“总部审核员甲”并点击“进入”可查看已有五项合成演示；切换“承办方B”时服务端能力位使队列清空并显示无权。设计最初来自`codex/caau-028-review-center`独立工作树，其提交已通过Git合并迁入当前分支；现在由主工作树直接在5175运行，独立原型工作树不是运行依赖。Vite的`/api-backend`代理仍可用于隔离本地预览，但不改变生产API边界。
 
 ## 验证记录
 
-验证结果以[开发计划](../planning/roadmap.md)的CAAU-028条目为准。原5175专用浏览器检查6/6；迁入后重新执行`check`、三端`build`、普通`test`、3000/4173 Web E2E 9/9及完整隔离`db:test` 44/44。另在当前5173连接真实本地API，验证5项队列与详情弹层，1440/375px无横向溢出和pageerror。
+验证结果以[开发计划](../planning/roadmap.md)的CAAU-028条目为准。原5175专用浏览器检查6/6；迁入后重新执行`check`、三端`build`、普通`test`、3000/4173 Web E2E 9/9及完整隔离`db:test` 44/44。另在正式本地Web连接真实API，验证5项队列与详情弹层，1440/375px无横向溢出和pageerror。
 
 页面截图：[桌面](../evidence/caau-028-review-center/desktop.png)、[窄屏](../evidence/caau-028-review-center/mobile.png)、[申请详情](../evidence/caau-028-review-center/detail.png)。
 

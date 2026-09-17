@@ -17,7 +17,7 @@ CAAU_IDENTITY_MODE=local corepack pnpm db:api
 corepack pnpm dev:admin
 ```
 
-打开 `http://127.0.0.1:5173/workspace`（首页也有入口）。导入 `auth:local` 输出路径对应的本地会话 JSON 文件。文件仅在浏览器本地解析，API 只接收 bearer header；不将会话写入 localStorage、URL 或前端构建变量。会话默认 8 小时、可退出注销；不得上传真实凭据到截图、工单或 Git。沿用 [本地身份限制](authorization.md)，不称为微信登录。
+打开 `http://127.0.0.1:5175/workspace`（首页也有入口）。导入 `auth:local` 输出路径对应的本地会话 JSON 文件。文件仅在浏览器本地解析，API 只接收 bearer header；不将会话写入 localStorage、URL 或前端构建变量。会话默认 8 小时、可退出注销；不得上传真实凭据到截图、工单或 Git。沿用 [本地身份限制](authorization.md)，不称为微信登录。
 
 1. **系统管理员**：在“账号与组织登记”创建内部用户、总部及承办机构，给用户登记 EVENT_MANAGER / ORGANIZER / REVIEWER 角色。成员下拉展示用户 UUID，供可信本地终端执行 `corepack pnpm auth:local <用户UUID>` 发放合成会话；无需手改数据库。账号真实邀请/登录留后续身份集成，系统管理员不能用本身角色创建赛事或看资料。
 2. **总部赛事管理员**：导入对应会话，填写赛事名称与说明并创建；当前赛事中选择承办机构、经办人及审核员，创建任务草案。后台负责本赛事授权的事务性创建，不需要开发人员插入 EventGrant。

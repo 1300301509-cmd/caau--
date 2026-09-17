@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createApplication } from '../apps/api/dist/application.js';
 import { authenticationBrowserTest } from './authentication-browser.integration.mjs';
 
-const origin = 'http://127.0.0.1:5173';
+const origin = 'http://127.0.0.1:5175';
 const secret = () => `A!${randomBytes(18).toString('base64url')}`;
 const tokenHash = (value) => createHash('sha256').update(value).digest('hex');
 

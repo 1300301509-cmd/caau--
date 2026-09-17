@@ -329,7 +329,7 @@ export async function authorizationIntegration(t) {
     const bootstrapLogin = await fetch(`${base}/api/v1/authentication/login`, {
       method: 'POST',
       headers: {
-        Origin: 'http://127.0.0.1:5173',
+        Origin: 'http://127.0.0.1:5175',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -350,7 +350,7 @@ export async function authorizationIntegration(t) {
       {
         method: 'POST',
         headers: {
-          Origin: 'http://127.0.0.1:5173',
+          Origin: 'http://127.0.0.1:5175',
           Cookie: bootstrapCookie,
           'X-CSRF-Token': bootstrapSession.csrfToken,
           'Content-Type': 'application/json',

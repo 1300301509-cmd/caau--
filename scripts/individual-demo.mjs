@@ -131,7 +131,7 @@ async function main() {
   for (const [key, p] of Object.entries(people))
     console.log(`${key}: ${p.file}`);
   console.log(
-    '在 http://127.0.0.1:5173/materials 的独立浏览器会话分别导入 organizer/reviewerA/reviewerB 文件；令牌约8小时过期。',
+    '在 http://127.0.0.1:5175/materials 的独立浏览器会话分别导入 organizer/reviewerA/reviewerB 文件；令牌约8小时过期。',
   );
 }
 main().catch((error) => {

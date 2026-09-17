@@ -9,7 +9,7 @@ import { createFetchTransport } from '../packages/api-client/dist/fetch.js';
 
 const exec = promisify(execFile);
 const apiBase = process.env.CAAU_LOCAL_API ?? 'http://127.0.0.1:3000';
-const webBase = process.env.CAAU_LOCAL_WEB ?? 'http://127.0.0.1:5173';
+const webBase = process.env.CAAU_LOCAL_WEB ?? 'http://127.0.0.1:5175';
 const manifestPath = '.local/db/local-test-events.json';
 const definitions = [
   {

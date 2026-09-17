@@ -9,13 +9,13 @@ test('real HTTP health endpoint, CORS and unknown route', async (t) => {
   await app.listen(0, '127.0.0.1');
   const base = await app.getUrl();
   const response = await fetch(`${base}/api/v1/health`, {
-    headers: { Origin: 'http://127.0.0.1:5173' },
+    headers: { Origin: 'http://127.0.0.1:5175' },
   });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.equal(
     response.headers.get('access-control-allow-origin'),
-    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5175',
   );
   assert.deepEqual(await response.json(), {
     status: 'ok',

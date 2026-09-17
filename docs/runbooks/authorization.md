@@ -19,7 +19,7 @@ CAAU_IDENTITY_MODE=local corepack pnpm db:api
 
 `corepack pnpm auth:local prepare` 幂等准备五个固定测试身份及三个组织：总部赛事管理员、总部审核员甲/乙、承办方 A/B 经办人。固定记录只在不存在时创建，已有记录不更新、不重新启用；命令不创建赛事、授权、任务或材料。页面进入时后端也执行同一幂等准备，因此通常无需手工运行。
 
-Web 在 **http://127.0.0.1:5173/materials** 选择身份后调用本地专用签发端点，服务端创建真实 8 小时 opaque 会话，再由受保护身份接口验证。token 仅保存在当前标签页 `sessionStorage`：标签页互不覆盖，刷新重新验证并恢复，401/过期时清除并明确要求重新进入。切换身份先清除上一身份页面数据；所有业务接口继续后端逐请求鉴权。详细决策见 [ADR-0009](../adr/0009-local-test-identity-switching.md)。
+Web 在 **http://127.0.0.1:5175/materials** 选择身份后调用本地专用签发端点，服务端创建真实 8 小时 opaque 会话，再由受保护身份接口验证。token 仅保存在当前标签页 `sessionStorage`：标签页互不覆盖，刷新重新验证并恢复，401/过期时清除并明确要求重新进入。切换身份先清除上一身份页面数据；所有业务接口继续后端逐请求鉴权。详细决策见 [ADR-0009](../adr/0009-local-test-identity-switching.md)。
 
 离线兼容仍可运行 `corepack pnpm auth:local <内部用户UUID>` 为已存在、未停用的合成用户生成会话文件；它不再是当前 Web 的操作入口。不要把令牌写进 shell 历史、浏览器 URL、日志或聊天。`POST /api/v1/authorization/logout` 撤销当前会话。
 

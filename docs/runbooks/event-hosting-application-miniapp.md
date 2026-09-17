@@ -55,7 +55,7 @@ TARO_APP_API_BASE_URL=http://127.0.0.1:3000 corepack pnpm --filter @caau/miniapp
 
 - **承办方 A 经办人**：查看A机构五态合成申请，包含待补充V1与补充后V2获批。
 - **承办方 B 经办人**：查看B机构范围，用于跨机构隔离及驳回只读体验。
-- 总部操作继续在 <http://127.0.0.1:5173/hosting-applications> 使用“总部审核员甲/乙”。
+- 总部操作继续在 <http://127.0.0.1:5175/hosting-applications> 使用“总部审核员甲/乙”。
 
 ## 5. 从主页开始的完整体验
 

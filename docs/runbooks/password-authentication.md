@@ -10,10 +10,10 @@
 corepack pnpm db:up
 corepack pnpm db:migrate:deploy
 corepack pnpm db:api
-corepack pnpm dev:web
+corepack pnpm dev:admin
 ```
 
-Web启动后访问 `http://127.0.0.1:5173/login`。未登录访问受保护深链时显示登录页；成功、首次改密或刷新恢复后仍返回原URL。`/system/health`是工程诊断入口，不承载业务数据，保持公开。
+Web启动后访问 `http://127.0.0.1:5175/login`。未登录访问受保护深链时显示登录页；成功、首次改密或刷新恢复后仍返回原URL。`/system/health`是工程诊断入口，不承载业务数据，保持公开。
 
 仅自动化/本地业务回归可显式设置 `CAAU_IDENTITY_MODE=local`，且必须是非production、loopback监听。该模式由全局AuthGate识别后显示既有测试身份入口；正常模式不会渲染该入口。
 
