@@ -19,6 +19,7 @@
 7. 现有赛事不反推申请或承办关系；后续只追加迁移并保持旧流程原样。
 8. 承办申请审核使用独立、可撤销的申请审核权限，不读取 `EventGrant`；有权总部审核员共享队列，显式开始审核但不建立 owner/领取锁，其他有权审核员可接续。
 9. 所有审核写动作记录实际 actor、数据库时间和 submissionId/version；禁止审核本人提交的申请，同一版本冲突状态变更只能一个提交成功。
+10. 申请办理权属于“有效同机构成员 + 有效申请办理权限”，不属于 createdBy；同机构有权经办人共享草稿和补充版本。所有草稿写入使用 revision CAS 并记录实际 actor/时间，跨机构拒绝，已提交版本保持不可变。
 
 ## 3. 建议数据模型
 
@@ -34,8 +35,9 @@
 | `HostingApplicationDocument` | 资料条目元数据，关联某要求项或经允许的自选资料；草稿阶段可修订，提交时由 SubmissionDocument 冻结 |
 | `HostingApplicationUpload` | 申请、机构、actor、私有 storageKey、原文件名、大小/hash/格式、PENDING/CONFIRMED、过期/绑定时间；不复用现有材料附件归属 |
 | `HostingSubmissionDocument` | submissionId、document snapshot、fileId；append-only，复合外键防跨申请/跨机构绑定 |
-| `HostingApplicationAction` | applicationId、submissionId、from/to、action、actor、服务器时间、结构化 detail；提交、开始审核、补充要求、驳回、通过均追加历史；打开详情不写动作 |
+| `HostingApplicationAction` | applicationId、submissionId、from/to、action、actor、服务器时间、结构化 detail；创建/保存/附件操作/提交/补充重交、开始审核、补充要求、驳回、通过均记录实际人及 revision/version；正式版本和审核动作 append-only，打开详情不写动作 |
 | `HostingApplicationCommand` | actorId、applicationId、idempotencyKey、requestHash、result；相同键同载荷返回原结果，不同载荷 409 |
+| `HostingApplicationHandlerGrant` | id、organizationMemberId、organizationId、active、grantedBy/At、revokedBy/At；授予成员办理本机构申请的能力，不绑定 createdBy；成员与 grant 机构必须一致 |
 | `HostingApplicationReviewGrant` | id、organizationMemberId、active、grantedBy/At、revokedBy/At；独立授予总部审核员共享申请查看/处理能力，不含 eventId，不关联或派生 `EventGrant` |
 
 草稿 JSON 可以保存尚未最终定型的时间/地点结构，正式提交快照也使用受 DTO 校验的结构化 JSON；字段口径确认后再决定是否拆成列。不可因使用 JSON 放弃长度、时区、格式和必填校验。
@@ -64,11 +66,11 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
                                       同一申请 Vn+1
 ```
 
-- `saveDraft(expectedRevision)`：仅允许有权申请方保存；CAS 冲突返回当前 revision，不覆盖。
-- `submit(expectedRevision, idempotencyKey)`：验证营业执照、简介（办赛经验）、现场照片三项必交资料及表单，其他文档允许为空；生成不可变 Vn 和 SUBMIT 动作。
+- `saveDraft(expectedDraftRevision)`：允许任一当前有效、同机构且有申请办理权限的经办人保存；CAS 冲突返回最新 draft revision，不自动合并、不覆盖已成功写入。动作记录实际 actor、数据库时间和前后 revision。
+- `submit(expectedDraftRevision, expectedApplicationRevision, idempotencyKey)`：同一权限策略下验证当前权威草稿、三项必交资料及其它表单；生成不可变 Vn 和 SUBMIT 动作，submittedBy 取当前 actor 而非 createdBy。
 - `startReview(submissionId, expectedRevision, idempotencyKey)`：有独立申请审核权限的总部审核员明确点击后，从 PENDING_REVIEW 进入 IN_REVIEW，记录实际人员、数据库时间和目标版本。打开详情只读，不调用该命令、不改变状态。该动作不创建 owner、领取记录或排他锁，其他有权审核员可接续。
 - `requestSupplement(submissionId, expectedRevision, request, idempotencyKey)`：从 IN_REVIEW 进入 NEEDS_SUPPLEMENT；不创建赛事，保存补充要求，当前版本保持不可变，并在同一 applicationId 下允许准备补充草稿。
-- `resubmit(...)`：只允许 NEEDS_SUPPLEMENT 的原申请从补充草稿生成 Vn+1 并回到 PENDING_REVIEW；旧版本、补充要求和审核动作不可变。是否可由另一同机构人员执行取决于待确认权限。
+- `resubmit(...)`：只允许 NEEDS_SUPPLEMENT 的原申请由任一当前有效、同机构且有申请办理权限的经办人从补充草稿生成 Vn+1 并回到 PENDING_REVIEW；记录该次实际 submittedBy，旧版本、附件关系、补充要求和审核动作不可变。
 - `reject(submissionId, expectedRevision, reason, idempotencyKey)`：从 IN_REVIEW 进入终态 REJECTED，不创建赛事。该 applicationId 此后拒绝 saveDraft、submit/resubmit 及任何恢复命令，只允许按权限读取历史；另建申请必须生成新的 applicationId，并从 V1 开始。
 - `approve(submissionId, expectedRevision, idempotencyKey)`：从 IN_REVIEW 进入 APPROVED 并执行第 5 节原子事务；没有通用 `PATCH status`。
 
@@ -114,13 +116,13 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 
 新增独立 policy，不复用“能访问 Event”判断申请权限，因为申请尚无 Event：
 
-- applicant policy：按 active user、active organization membership、允许的组织角色和 application.applicantOrganizationId 判定；具体申请方角色待确认；
+- applicant policy：要求 active user、active OrganizationMember、active `HostingApplicationHandlerGrant`，且 member/grant/application 的 organizationId 全部相同。列表按该机构过滤；详情、草稿、文件和命令逐对象复核。createdBy 只作历史，不参与放行；
 - reviewer policy：要求 active user、active 总部成员及 active `HostingApplicationReviewGrant`。所有满足条件的审核员共享查看全部承办申请及其有权附件，不按 `EventGrant`、eventId 或开始人过滤；
 - self-review deny：若 actorId 出现在该 application 的任一 `HostingApplicationSubmission.submittedBy`，则 startReview、requestSupplement、reject、approve 全部拒绝；只读可见性仍按 reviewer policy，避免靠隐藏记录造成共享队列不一致；
 - continuation：IN_REVIEW 不保存 reviewOwnerId，不要求结论 actor 等于 start actor；每次写事务重新验证当前独立 grant，撤权后不得靠已打开页面接续；
 - approved event policy：申请通过后访问正式赛事仍由 EventGrant 等现有策略判定，承办关系和申请审核权都不直接充当赛事 bearer permission。
 
-权限矩阵必须覆盖：只有 EventGrant、没有申请审核 grant → 不可查看/处理申请；有申请审核 grant、没有任何 EventGrant → 可共享查看/处理申请；两者都有 → 各自按独立用途生效。不得在批准时把申请审核 grant 复制成赛事 grant。
+申请方权限矩阵必须覆盖：同机构 active handler grant → 可共享办理；同机构无 grant、grant 撤销/成员停用、仅是 createdBy → 不可继续办理；其它机构即使有 handler grant → 不可列表、深链、文件或写入。审核权限矩阵必须覆盖：只有 EventGrant、没有申请审核 grant → 不可查看/处理申请；有申请审核 grant、没有任何 EventGrant → 可共享查看/处理申请；两者都有 → 各自按独立用途生效。不得在批准时把申请审核 grant 复制成赛事 grant。
 
 批准时只写承办业务关系。经办授权规则确认后，可以由同一获批用例在**同一事务**显式写 EventOrganizerAgent、EventGrant 和对应审计；但这些写入必须是独立对象，不能用 grant 替代 appointment。规则未确认时不执行这些步骤。
 
@@ -131,8 +133,8 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 复用 API 侧私有存储适配、文件名清理、大小/hash/格式和受控代理下载能力，不复用旧业务外键：
 
 1. 申请上传先建 intent，再上传字节并确认；确认时核对真实字节数、SHA-256 和允许格式。
-2. 文件归属固定为 application + applicant organization + actor；绑定时再次校验，禁止跨申请、跨机构和跨版本偷绑。
-3. 草稿可移除未提交引用；已提交 SubmissionDocument 与文件核心元数据 append-only。
+2. 文件归属固定为 application + applicant organization，actorId 记录实际上传人而不是唯一访问者；任一当前有权同机构经办人可在草稿中绑定/移除，写入必须携带 expected draft revision。绑定时再次校验，禁止跨申请、跨机构和跨版本偷绑。
+3. 草稿可移除未提交引用并记录实际操作人/时间；已提交 SubmissionDocument、文件核心元数据及版本附件关系 append-only，任何经办人都不能回写。
 4. 审核员只能在有权查看对应 submission 时下载；申请方权限变化后按当前 policy 判定，不因曾上传永久开放。
 5. 旧材料附件、模板附件和申请附件保持不同关系及下载策略；不迁移、不共用业务 ID。
 
@@ -143,7 +145,7 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 后续后端建议落点：
 
 - `apps/api/src/modules/event-hosting-applications/`：申请聚合、状态机、版本、文件归属、审核编排；
-- `authorization`：公开申请方 policy、独立申请审核 grant/policy、撤权和共享事务能力；申请业务版本仍归申请模块；
+- `authorization`：公开同机构申请办理 grant/policy、独立申请审核 grant/policy、撤权和共享事务能力；申请业务草稿/版本仍归申请模块；
 - `materials/events` 当前模块：公开可在外部 transaction 中创建 EventScope/Event 的服务；不由申请模块直接访问其私有 repository；
 - 新的赛事关系服务：拥有 EventOrigin、EventProfileVersion、EventOrganizerAppointment；可在模块边界确认后独立为 events 域；
 - `@caau/database`：唯一 Prisma 入口；前端不得依赖数据库实体；
@@ -173,6 +175,7 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 - **把 EventGrant 当承办关系**：无法表达机构业务事实、来源和历史，且授权撤销会错误抹去承办事实。
 - **用 EventGrant 或正式赛事范围判断申请审核权**：申请在获批前没有 Event；会导致无法审核前置申请或借赛事授权越权读取申请，违反独立审核权限规则。
 - **申请人自动成为唯一经办人**：把一次提交动作误作长期人员关系，违反确认规则。
+- **用 createdBy 作为申请办理权限**：会阻止同机构有权经办人协作，并让已撤权创建人继续访问；创建人只能作为历史字段。
 - **审批后依次调用“创建赛事/授权/创建任务”接口**：不能保证原子性，重复点击会产生部分成功和重复赛事。
 - **覆盖同一申请记录保存 V2**：会丢失总部实际审核版本及附件证据。
 - **从现有任务或 grant 批量推导承办关系**：现有数据语义不足，可能制造错误业务事实。
@@ -180,4 +183,4 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 
 ## 12. 实施关口
 
-在进入后端阶段前，至少确认产品规格第 10 节中的申请资格、独立申请审核权限的授予/撤销管理人、经办授权、材料任务创建时机、资料格式/大小/数量及特殊情况、要求版本配置来源、时间/地点结构和补充材料可改字段/次数/时限。未确认项可以保留在模型扩展点中，但不得用技术默认替代业务决定；已提出的四项资料、独立共享审核权限、显式开始但不独占、接续处理、实际人/时间/版本、自审禁止、同版本冲突唯一成功、补充后原申请新版本及驳回终止原申请并允许另建新申请等规则不得降级为未确认。
+在进入后端阶段前，至少确认产品规格第 10 节中的申请办理/审核权限授予撤销管理人、获批经办授权、材料任务创建时机、资料格式/大小/数量及特殊情况、要求版本配置来源、时间/地点结构和补充材料可改字段/次数/时限。未确认项可以保留在模型扩展点中，但不得用技术默认替代业务决定；已提出的四项资料、同机构有权有效经办人共享办理、实际人和历史、草稿CAS、跨机构拒绝、提交版本不可变、独立共享审核权限、显式开始但不独占、接续处理、自审禁止、同版本冲突唯一成功、补充后原申请新版本及驳回终止原申请并允许另建新申请等规则不得降级为未确认。
