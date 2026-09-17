@@ -103,10 +103,6 @@ export function AppShell({
             )}
           </nav>
           <div className="hq-sidebar-note">
-            <div className="hq-court" aria-hidden="true">
-              <span />
-              <i />
-            </div>
             <strong>每一场热爱，都值得认真对待。</strong>
             <p>
               从办赛申请到材料审核
@@ -121,16 +117,6 @@ export function AppShell({
             </small>
           </div>
         </div>
-        <button
-          className="hq-sidebar-toggle"
-          type="button"
-          aria-label={sidebarOpen ? '收起导航' : '展开导航'}
-          aria-expanded={sidebarOpen}
-          aria-controls="hq-primary-nav"
-          onClick={() => setSidebarOpen((open) => !open)}
-        >
-          <span aria-hidden="true">{sidebarOpen ? '‹' : '›'}</span>
-        </button>
       </aside>
       <div className="hq-main">
         <header className="hq-topbar">

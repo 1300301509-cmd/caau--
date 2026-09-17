@@ -134,57 +134,6 @@ body:has(.hq-shell) {
   line-height: 1.8;
   font-size: 11px;
 }
-.hq-court {
-  position: relative;
-  height: 100px;
-  overflow: hidden;
-  border: 1px solid #d8e1d4;
-  border-radius: 9px;
-  background: #f2f6ee;
-}
-.hq-court:before,
-.hq-court:after {
-  content: '';
-  position: absolute;
-  top: 18px;
-  width: 32px;
-  height: 62px;
-  border: 1px solid #bdcdb8;
-  border-radius: 50%;
-}
-.hq-court:before {
-  left: -17px;
-}
-.hq-court:after {
-  right: -17px;
-}
-.hq-court span {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  border-left: 1px solid #bdcdb8;
-}
-.hq-court span:before {
-  content: '';
-  position: absolute;
-  width: 34px;
-  height: 34px;
-  top: 32px;
-  left: -18px;
-  border: 1px solid #bdcdb8;
-  border-radius: 50%;
-}
-.hq-court i {
-  position: absolute;
-  width: 23px;
-  height: 23px;
-  top: 44px;
-  right: 32px;
-  border-radius: 50%;
-  background: #edb970;
-  box-shadow: 3px 6px 10px #a8813630;
-}
 .hq-sidebar-footer {
   display: grid;
   gap: 7px;
@@ -550,9 +499,6 @@ body:has(.hq-shell) {
   }
 }
 
-.hq-sidebar-toggle {
-  display: none;
-}
 .hq-sidebar-panel {
   display: contents;
 }
@@ -652,38 +598,6 @@ body:has(.hq-shell) {
     opacity: 1;
     transform: translateX(0);
     transition-delay: 60ms;
-  }
-  .hq-sidebar-toggle {
-    position: absolute;
-    z-index: 1;
-    top: calc(50% - 22px);
-    left: 62px;
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--hq-green);
-    font-size: 20px;
-    cursor: pointer;
-    pointer-events: auto;
-    transform: translateX(0);
-    transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .hq-sidebar-toggle > span {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 32px;
-    border: 1px solid var(--hq-border);
-    border-radius: 8px;
-    background: var(--hq-paper);
-    box-shadow: 0 2px 8px #2936300d;
-  }
-  .hq-sidebar.is-expanded .hq-sidebar-toggle {
-    transform: translateX(164px);
   }
   .hq-sidebar :is(a, button):focus-visible {
     outline: 2px solid var(--hq-green);
