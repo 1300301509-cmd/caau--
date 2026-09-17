@@ -2,7 +2,7 @@
 
 本仓库用于建设 CAAU 微信小程序、Web 管理后台和后端 API。
 
-当前优先任务为 CAAU-027“赛事承办申请”设计确认：本轮仅提交[产品规格](docs/product/event-hosting-application-spec.md)、[技术设计](docs/adr/0010-event-hosting-application.md)和[分阶段计划](docs/planning/caau-027-event-hosting-application.md)，未实施业务代码、数据库迁移或页面。既有 CAAU-012 A/B/C/D 已完成本地交付：单份材料五态、赛事共享审核、不可变历史，以及 Web `/materials`、Taro承办页面和自动同步。42项数据库全套通过；15条浏览器同步样本 p50 1821ms、p95/max 2093ms。旧数据/附件/模板保留。官方游客模拟器加本地测试身份已完成一条新增/V1退回/V2通过主流程；真实文件选择返回后平台回调悬挂，附件闭环、正式微信身份/AppID/合法域名及真机仍未通过，现按用户指令暂缓。当前三方功能状态见 [产品功能清单](docs/product/current-function-matrix.md)，赛事创建、承办指定与信息变更问题见 [赛事管理缺口](docs/product/event-management-gap-analysis.md)；可操作演示及分层边界见 [Web手册](docs/runbooks/individual-material-web.md)、[后端手册](docs/runbooks/individual-materials.md) 和 [Taro手册](docs/runbooks/individual-material-miniapp.md)。
+当前优先任务为 CAAU-027“赛事承办申请”：A 规格已收口，B 阶段已实现追加迁移、独立权限矩阵、草稿/私有附件/不可变 V1/V2、共享审核、原子获批、承办关系与人员基本信息查看权，并生成 OpenAPI 客户端；C 总部 Web 与 D 承办方小程序尚未开始。操作和实测边界见[承办申请后端手册](docs/runbooks/event-hosting-applications.md)。既有 CAAU-012 A/B/C/D 已完成本地交付：单份材料五态、赛事共享审核、不可变历史，以及 Web `/materials`、Taro承办页面和自动同步。42项数据库全套通过；15条浏览器同步样本 p50 1821ms、p95/max 2093ms。旧数据/附件/模板保留。官方游客模拟器加本地测试身份已完成一条新增/V1退回/V2通过主流程；真实文件选择返回后平台回调悬挂，附件闭环、正式微信身份/AppID/合法域名及真机仍未通过，现按用户指令暂缓。当前三方功能状态见 [产品功能清单](docs/product/current-function-matrix.md)，赛事创建、承办指定与信息变更问题见 [赛事管理缺口](docs/product/event-management-gap-analysis.md)；可操作演示及分层边界见 [Web手册](docs/runbooks/individual-material-web.md)、[后端手册](docs/runbooks/individual-materials.md) 和 [Taro手册](docs/runbooks/individual-material-miniapp.md)。
 
 既有成果：CAAU-005 第一段已完成本地验收：真实赛事/材料任务创建、承办机构/经办/审核指派、要求配置、不可变 V1 发布及范围查询，提供总部 Web 工作台。沿用 CAAU-004 身份/权限/审计；真实 PostgreSQL 与浏览器闭环通过。第二段已加入本地私有文件、草稿 CAS、不可变幂等提交、整包审核/退回重交、延期和同机构交接后端；第三段已实现总部审核/历史/管理操作、承办 Web 联调页面及 Taro“待办/赛事/我的”业务页面。真实浏览器闭环通过，小程序游客模拟器已有部分运行证据，平台文件闭环和真机仍待验证，无部署或真实微信登录。小程序编译与请求逻辑测试通过不等于微信开发者工具或真机验收通过。原始架构建议见 [agent.md](agent.md)，其中的示例模型、业务规则和实施顺序不等于已确认需求。
 
@@ -24,8 +24,9 @@
 - [总部赛事管理 Web](docs/runbooks/event-management-web.md)：赛事列表、当前字段创建、详情及权限边界。
 - [赛事级承办关系最小设计](docs/product/event-organizer-relationship-design.md)：机构、人员、访问授权和任务指派的区分及待确认问题，不代表已实施模型。
 - [赛事承办申请产品规格](docs/product/event-hosting-application-spec.md)：正式赛事前置申请、审核动作、版本资料、两端入口与待确认规则。
-- [赛事承办申请技术设计](docs/adr/0010-event-hosting-application.md)：原子获批、赛事来源、机构承办关系和授权分离设计，尚未实施。
-- [CAAU-027 分阶段计划](docs/planning/caau-027-event-hosting-application.md)：设计确认后依次实施后端、总部 Web 和承办方小程序。
+- [赛事承办申请技术设计](docs/adr/0010-event-hosting-application.md)：原子获批、赛事来源、机构承办关系和授权分离设计及已实现技术决策。
+- [CAAU-027 分阶段计划](docs/planning/caau-027-event-hosting-application.md)：A 已完成，B 后端已实现并进入收尾验收，C/D 未开始。
+- [赛事承办申请后端手册](docs/runbooks/event-hosting-applications.md)：迁移、首个本地超级管理员、接口、验证证据和环境限制。
 - [数据库与契约操作](docs/runbooks/database-contract.md)：Docker 官方安装、隔离开发/测试、迁移规则与待执行验证。
 
 ## 目录

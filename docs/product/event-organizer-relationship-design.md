@@ -1,6 +1,6 @@
-# 赛事级承办关系最小设计（待确认，不实施）
+# 赛事级承办关系最小设计
 
-状态：CAAU-018 通用设计提案，未实施。CAAU-027 已确认“赛事承办申请通过后，将申请机构登记为该赛事承办方”，并在[赛事承办申请产品规格](event-hosting-application-spec.md)与[ADR-0010](../adr/0010-event-hosting-application.md)中采用独立机构承办关系；关系基数、类型、经办人员和授权联动仍未确认。当前产品不得把 `ORGANIZER EventGrant` 或材料任务指派显示成赛事承办关系。
+状态：CAAU-018 通用提案保留。CAAU-027 已确认并在承办申请获批路径实现“将单一申请机构登记为该赛事承办方”，通过 `EventOrganizerAppointment` 与人员 `EventInformationAccessGrant` 分离记录；该实现不自动确认其他赛事创建路径、多承办方或完整关系类型。当前产品不得把 `ORGANIZER EventGrant` 或材料任务指派显示成赛事承办关系。
 
 ## 1. 必须区分的四件事
 
