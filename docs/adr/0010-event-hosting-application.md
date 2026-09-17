@@ -55,20 +55,21 @@
 状态机必须包含 `IN_REVIEW`：
 
 ```text
-DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED
-                         ├────────→ REJECTED
+DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
+                         ├────────→ REJECTED       （当前申请终态）
                          └────────→ NEEDS_SUPPLEMENT → PENDING_REVIEW
+                                      同一申请 Vn+1
 ```
 
 - `saveDraft(expectedRevision)`：仅允许有权申请方保存；CAS 冲突返回当前 revision，不覆盖。
 - `submit(expectedRevision, idempotencyKey)`：验证营业执照、简介（办赛经验）、现场照片三项必交资料及表单，其他文档允许为空；生成不可变 Vn 和 SUBMIT 动作。
 - `startReview(submissionId, expectedRevision, idempotencyKey)`：**建议流程**为审核人员明确点击“开始审核”后从 PENDING_REVIEW 进入 IN_REVIEW，记录实际人员、服务器时间和目标版本。打开详情只读，不调用该命令、不改变状态。该动作是否产生领取/排他权仍待确认。
-- `requestSupplement(submissionId, expectedRevision, request, idempotencyKey)`：从 IN_REVIEW 进入 NEEDS_SUPPLEMENT；不创建赛事，保存补充要求，当前版本保持不可变。
-- `resubmit(...)`：从补充草稿生成 Vn+1 并回到 PENDING_REVIEW；是否可由另一同机构人员执行取决于待确认权限。
-- `reject(submissionId, expectedRevision, reason, idempotencyKey)`：从 IN_REVIEW 进入 REJECTED，不创建赛事；是否还能继续同一申请待确认。
+- `requestSupplement(submissionId, expectedRevision, request, idempotencyKey)`：从 IN_REVIEW 进入 NEEDS_SUPPLEMENT；不创建赛事，保存补充要求，当前版本保持不可变，并在同一 applicationId 下允许准备补充草稿。
+- `resubmit(...)`：只允许 NEEDS_SUPPLEMENT 的原申请从补充草稿生成 Vn+1 并回到 PENDING_REVIEW；旧版本、补充要求和审核动作不可变。是否可由另一同机构人员执行取决于待确认权限。
+- `reject(submissionId, expectedRevision, reason, idempotencyKey)`：从 IN_REVIEW 进入终态 REJECTED，不创建赛事。该 applicationId 此后拒绝 saveDraft、submit/resubmit 及任何恢复命令，只允许按权限读取历史；另建申请必须生成新的 applicationId，并从 V1 开始。
 - `approve(submissionId, expectedRevision, idempotencyKey)`：从 IN_REVIEW 进入 APPROVED 并执行第 5 节原子事务；没有通用 `PATCH status`。
 
-“审核中”状态本身是需求，不再作为可选项。明确点击开始审核是当前建议而非已确认唯一触发方式；无论最终采用何种显式操作，GET 详情都不得产生状态变更。驳回和补充必须是不同动作、状态和审计语义。
+“审核中”状态本身是需求，不再作为可选项。明确点击开始审核是当前建议而非已确认唯一触发方式；无论最终采用何种显式操作，GET 详情都不得产生状态变更。驳回和补充必须是不同动作、状态和审计语义：补充沿用原申请生成新版本，驳回终止原申请且不能重新打开状态机。
 
 ## 5. 原子获批、幂等与并发
 
@@ -101,6 +102,7 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED
 - 审核终局动作对 application/current submission 建部分唯一约束；
 - 命令键 `(actorId, applicationId, idempotencyKey)` unique 并保存规范化请求 hash；
 - CAS revision 与行锁防两个审核员对同一版本作相反结论；
+- 状态转换约束拒绝从 REJECTED 返回 DRAFT、NEEDS_SUPPLEMENT 或 PENDING_REVIEW；服务层和数据库约束共同防止恢复原申请；
 - 唯一冲突只在本命令内读取已提交幂等结果，不自动更换 submission/revision 重试。
 
 预期并发结果：两个相同通过请求只得到同一 eventId；通过与驳回并发仅一个成功，另一个 409；审计或承办关系写入失败时不存在正式赛事。网络丢失响应后用原幂等键重试，不生成第二个赛事。
@@ -140,7 +142,7 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED
 - `@caau/database`：唯一 Prisma 入口；前端不得依赖数据库实体；
 - `@caau/api-client`：只从 Nest OpenAPI 生成 DTO/请求元数据，再提供平台适配。
 
-接口按用例拆分：草稿读取/保存、提交、列表/详情、版本历史、上传/确认/下载，以及建议的 start-review、request-supplement、reject、approve；禁止开放客户端可任意写状态、eventId、applicantOrganizationId 或 approvedBy 的通用更新接口。详情 GET 必须无副作用，不能隐式调用 start-review。
+接口按用例拆分：新建申请、草稿读取/保存、首次提交、补充后重交、列表/详情、版本历史、上传/确认/下载，以及建议的 start-review、request-supplement、reject、approve；禁止开放客户端可任意写状态、恢复 REJECTED、复用旧 applicationId 新建、或写 eventId/applicantOrganizationId/approvedBy 的通用更新接口。详情 GET 必须无副作用，不能隐式调用 start-review。
 
 ## 9. Web 与小程序技术落点
 
@@ -170,4 +172,4 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED
 
 ## 12. 实施关口
 
-在进入后端阶段前，至少确认产品规格第 10 节中的申请资格、审核权限、驳回后路径、经办授权、材料任务创建时机、资料格式/大小/数量及特殊情况、要求版本配置来源、时间/地点结构、补充材料规则，以及审核中状态的最终进入/接续方式。未确认项可以保留在模型扩展点中，但不得用技术默认替代业务决定；已提出的四项资料及“审核中”状态不得降级为未确认。
+在进入后端阶段前，至少确认产品规格第 10 节中的申请资格、审核权限、经办授权、材料任务创建时机、资料格式/大小/数量及特殊情况、要求版本配置来源、时间/地点结构、补充材料可改字段/次数/时限，以及审核中状态的最终进入/接续方式。未确认项可以保留在模型扩展点中，但不得用技术默认替代业务决定；已提出的四项资料、“审核中”状态、补充后原申请新版本及驳回终止原申请并允许另建新申请的规则不得降级为未确认。
