@@ -244,15 +244,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         try {
+          const authenticationMode = await client.request(
+            'getAuthenticationMode',
+          );
+          if (!active) return;
+          if (!authenticationMode.localIdentityEnabled) {
+            setMode('signed-out');
+            return;
+          }
           await client.request('listLocalTestIdentities');
           if (active) setMode('local');
-        } catch (localError) {
-          if (!active) return;
-          setMode(
-            localError instanceof ApiError && localError.status === 503
-              ? 'signed-out'
-              : 'unavailable',
-          );
+        } catch {
+          if (active) setMode('unavailable');
         }
       });
     return () => {

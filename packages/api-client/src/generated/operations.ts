@@ -243,6 +243,22 @@ export const operations = {
     body: null,
     authenticated: true,
   },
+  getAuthenticationMode: {
+    path: '/api/v1/authentication/mode',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: { localIdentityEnabled: { type: 'boolean' } },
+        required: ['localIdentityEnabled'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: false,
+  },
   getAuthenticationSession: {
     path: '/api/v1/authentication/session',
     method: 'GET',

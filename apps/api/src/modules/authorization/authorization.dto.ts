@@ -40,6 +40,9 @@ export class LocalSessionDto {
   @ApiProperty() token!: string;
   @ApiProperty({ format: 'date-time' }) expiresAt!: string;
 }
+export class AuthenticationModeDto {
+  @ApiProperty() localIdentityEnabled!: boolean;
+}
 export class LoginRequestDto {
   @ApiProperty({ minLength: 3, maxLength: 64 }) loginName!: string;
   @ApiProperty({ minLength: 12, maxLength: 128, writeOnly: true })

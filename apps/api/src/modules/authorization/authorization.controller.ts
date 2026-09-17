@@ -29,6 +29,7 @@ import {
   AccountSummaryDto,
   ActiveDto,
   AuditDto,
+  AuthenticationModeDto,
   AuthenticationSessionDto,
   ChangePasswordDto,
   CreateAccountDto,
@@ -59,6 +60,15 @@ type CookieResponse = {
 @ApiResponse({ status: 503, description: 'Authentication unavailable' })
 export class AuthenticationController {
   constructor(private readonly service: AuthorizationService) {}
+
+  @Get('mode')
+  @Public()
+  @ApiOperation({ operationId: 'getAuthenticationMode' })
+  @ApiOkResponse({ type: AuthenticationModeDto })
+  @Header('Cache-Control', 'no-store')
+  mode() {
+    return { localIdentityEnabled: this.service.localIdentityEnabled };
+  }
 
   @Post('login')
   @Public()

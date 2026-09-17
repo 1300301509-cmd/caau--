@@ -267,6 +267,15 @@
         ],
         "type": "object"
       },
+      "AuthenticationModeDto": {
+        "properties": {
+          "localIdentityEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["localIdentityEnabled"],
+        "type": "object"
+      },
       "AuthenticationSessionDto": {
         "properties": {
           "csrfToken": {
@@ -2978,6 +2987,41 @@
             "webSession": []
           }
         ],
+        "summary": "",
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/v1/authentication/mode": {
+      "get": {
+        "operationId": "getAuthenticationMode",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationModeDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required or failed"
+          },
+          "403": {
+            "description": "Origin, CSRF or access denied"
+          },
+          "429": {
+            "description": "Sign-in temporarily unavailable"
+          },
+          "503": {
+            "description": "Authentication unavailable"
+          }
+        },
         "summary": "",
         "tags": ["Authentication"]
       }

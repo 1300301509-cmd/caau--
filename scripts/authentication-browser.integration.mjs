@@ -49,12 +49,18 @@ export async function authenticationBrowserTest({
     });
     const page = await context.newPage();
     const errors = [];
+    const localIdentityRequests = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    page.on('request', (request) => {
+      if (request.url().includes('/local-test-identities'))
+        localIdentityRequests.push(request.url());
+    });
     await page.goto('http://127.0.0.1:4173/accounts');
     await expect(
       page.getByRole('heading', { name: '登录总部工作台' }),
     ).toBeVisible();
     await expect(page.getByLabel('选择测试身份')).toHaveCount(0);
+    assert.deepEqual(localIdentityRequests, []);
     await page.getByLabel('登录账号').fill(loginName);
     await page.getByLabel('密码').fill('definitely-wrong-password');
     await page.getByTestId('formal-login-submit').click();
@@ -81,6 +87,7 @@ export async function authenticationBrowserTest({
     await page.getByRole('link', { name: '赛事审核中心' }).click();
     await expect(page.getByLabel('搜索赛事或申请机构')).toBeVisible();
     await expect(page.getByLabel('选择测试身份')).toHaveCount(0);
+    assert.deepEqual(localIdentityRequests, []);
     await page.setViewportSize({ width: 375, height: 812 });
     await expect(page.getByLabel('搜索赛事或申请机构')).toBeVisible();
     assert.equal(

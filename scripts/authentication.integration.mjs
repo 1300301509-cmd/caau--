@@ -272,6 +272,13 @@ export async function authenticationIntegration(t, context) {
       try {
         await normal.listen(0, '127.0.0.1');
         const normalBase = await normal.getUrl();
+        const modeResponse = await fetch(
+          `${normalBase}/api/v1/authentication/mode`,
+        );
+        assert.equal(modeResponse.status, 200);
+        assert.deepEqual(await modeResponse.json(), {
+          localIdentityEnabled: false,
+        });
         assert.equal(
           (await fetch(`${normalBase}/api/v1/local-test-identities`)).status,
           503,

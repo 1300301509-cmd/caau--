@@ -156,6 +156,9 @@ export class AuthorizationService {
       maxAge: config.sessionTtlMs,
     };
   }
+  get localIdentityEnabled() {
+    return this.config.localIdentity;
+  }
   async onModuleDestroy() {
     await this.database?.close();
   }

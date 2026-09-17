@@ -113,6 +113,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/authentication/mode': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getAuthenticationMode'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/authentication/session': {
     parameters: {
       query?: never;
@@ -1445,6 +1461,9 @@ export interface components {
       requestId: string;
       resourceId: string | null;
     };
+    AuthenticationModeDto: {
+      localIdentityEnabled: boolean;
+    };
     AuthenticationSessionDto: {
       csrfToken: string;
       displayName: string;
@@ -2515,6 +2534,60 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication required or failed */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Origin, CSRF or access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Sign-in temporarily unavailable */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getAuthenticationMode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthenticationModeDto'];
         };
       };
       /** @description Invalid input */
