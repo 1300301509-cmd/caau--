@@ -6,7 +6,7 @@
 
 当前 `POST /events` 由总部直接创建仅含名称、说明的正式赛事；`ORGANIZER EventGrant` 是成员访问授权，`TaskScope` 是材料任务指派。系统没有“赛事创建前申请”、赛事级承办机构关系、申请版本或赛事来源。
 
-新流程要求承办机构先提交赛事名称、时间、地点和申请资料；已提出的资料清单为必交营业执照、简介（办赛经验）、现场照片，选交其他文档。总部审核包含“审核中”状态，通过后才创建正式赛事并登记申请机构为承办方。未通过不得创建赛事。申请人仅是本次提交人，不能被技术实现推导为唯一赛事经办人。现有材料流程必须作为获批后的独立后续流程继续保留。
+新流程要求承办机构先提交赛事名称、开始日期、结束日期、地点和申请资料；已提出的资料清单为必交营业执照、简介（办赛经验）、现场照片，选交其他文档。总部审核包含“审核中”状态，通过后才创建正式赛事并登记申请机构为承办方。未通过不得创建赛事。申请人仅是本次提交人，不能被技术实现推导为唯一赛事经办人。现有材料流程必须作为获批后的独立后续流程继续保留。
 
 ## 2. 核心决策
 
@@ -20,6 +20,7 @@
 8. 承办申请审核使用独立、可撤销的申请审核权限，不读取 `EventGrant`；有权总部审核员共享队列，显式开始审核但不建立 owner/领取锁，其他有权审核员可接续。
 9. 所有审核写动作记录实际 actor、数据库时间和 submissionId/version；禁止审核本人提交的申请，同一版本冲突状态变更只能一个提交成功。
 10. 申请办理权属于“有效同机构成员 + 有效申请办理权限”，不属于 createdBy；同机构有权经办人共享草稿和补充版本。所有草稿写入使用 revision CAS 并记录实际 actor/时间，跨机构拒绝，已提交版本保持不可变。
+11. 首版表单固定为 eventName、startDate、endDate、location；提交时四项必填，日期使用严格 `YYYY-MM-DD`，且 endDate 不得早于 startDate。文件格式、大小和数量值只列实现建议，不增加业务必填项。
 
 ## 3. 建议数据模型
 
@@ -31,7 +32,7 @@
 | --- | --- |
 | `EventHostingApplication` | id、applicantOrganizationId、status、revision、draft JSON、currentSubmissionId、approvedEventId、createdBy/At；机构不可在提交后悄然替换；一个申请至多一个 approvedEventId |
 | `HostingApplicationSubmission` | id、applicationId、version、formSnapshot、requirementVersionId/requirementSnapshot、submittedBy/At；`unique(applicationId, version)`；UPDATE/DELETE/TRUNCATE 受不可变保护 |
-| `HostingApplicationRequirementVersion` | id、版本、发布信息；首版要求明确包含三项必交（营业执照、简介〔办赛经验〕、现场照片）和一项选交（其他文档），不得擅增项目；格式、大小、数量、特殊情况及配置/发布机制确认后落地对应限制 |
+| `HostingApplicationRequirementVersion` | id、版本、发布信息；首版要求固定包含三项必交（营业执照、简介〔办赛经验〕、现场照片）和一项选交（其他文档），不得擅增项目；格式、大小、数量建议不是业务规则，确认后才落地正式限制 |
 | `HostingApplicationDocument` | 资料条目元数据，关联某要求项或经允许的自选资料；草稿阶段可修订，提交时由 SubmissionDocument 冻结 |
 | `HostingApplicationUpload` | 申请、机构、actor、私有 storageKey、原文件名、大小/hash/格式、PENDING/CONFIRMED、过期/绑定时间；不复用现有材料附件归属 |
 | `HostingSubmissionDocument` | submissionId、document snapshot、fileId；append-only，复合外键防跨申请/跨机构绑定 |
@@ -40,19 +41,70 @@
 | `HostingApplicationHandlerGrant` | id、organizationMemberId、organizationId、active、grantedBy/At、revokedBy/At；授予成员办理本机构申请的能力，不绑定 createdBy；成员与 grant 机构必须一致 |
 | `HostingApplicationReviewGrant` | id、organizationMemberId、active、grantedBy/At、revokedBy/At；独立授予总部审核员共享申请查看/处理能力，不含 eventId，不关联或派生 `EventGrant` |
 
-草稿 JSON 可以保存尚未最终定型的时间/地点结构，正式提交快照也使用受 DTO 校验的结构化 JSON；字段口径确认后再决定是否拆成列。不可因使用 JSON 放弃长度、时区、格式和必填校验。
+草稿 JSON 可保存尚未填完整的首版表单，正式提交快照必须使用受 DTO 与领域规则校验的固定结构。不能因使用 JSON 放弃字段白名单、真实日历日期、跨字段顺序和提交必填校验。
 
-### 3.2 正式赛事来源与承办关系
+### 3.2 DTO 与校验设计
+
+以下仅是后端实施结构设计，不代表已生成契约或源码：
+
+```text
+CreateHostingApplicationDto {
+  applicantOrganizationId: uuid  // 仅指定目标，不能作为授权依据
+  idempotencyKey: uuid
+}
+
+HostingApplicationDraftFormInputDto {
+  eventName?: string | null
+  startDate?: string | null       // YYYY-MM-DD
+  endDate?: string | null         // YYYY-MM-DD
+  location?: string | null
+}
+
+SaveHostingApplicationDraftDto {
+  expectedDraftRevision: integer
+  form: HostingApplicationDraftFormInputDto
+}
+
+SubmitHostingApplicationDto {
+  expectedDraftRevision: integer
+  expectedApplicationRevision: integer
+  idempotencyKey: uuid
+}
+
+HostingApplicationFormSnapshotDto {
+  eventName: string
+  startDate: string               // YYYY-MM-DD
+  endDate: string                 // YYYY-MM-DD
+  location: string
+}
+
+HostingApplicationDocumentGroupDto {
+  requirementCode: BUSINESS_LICENSE
+                 | EVENT_EXPERIENCE_INTRO
+                 | VENUE_PHOTO
+                 | OTHER_DOCUMENT
+  fileIds: uuid[]
+}
+```
+
+- create DTO 的 applicantOrganizationId 只指定目标机构；服务端必须以当前 active member + handler grant 重新授权，不能信任该 ID，并建立空草稿。create 不接受四个表单业务字段；草稿 DTO 四字段可空，不能因为部分填写而拒绝保存；若 startDate/endDate 同时非空，则保存时也拒绝 endDate 早于 startDate。
+- 日期先按 `YYYY-MM-DD` 语法校验，再用日历日期解析验证闰年/月日，不经 JavaScript `Date` 或 UTC 转换后截断；比较的是日期值。相同日期有效。
+- submit 不接受客户端再次传表单正文，而是在事务中读取指定 revision 的权威草稿；提交前要求四字段为去除首尾空白后的非空值，并再次校验日期与顺序，生成 `HostingApplicationFormSnapshotDto`。
+- 除 create 命令中用于指定目标且必须重新鉴权的 applicantOrganizationId 外，organizationId、createdBy、submittedBy、状态和版本号不属于客户端可写 DTO；均由会话、授权和服务端事务决定。DTO 使用白名单并拒绝额外字段，不能靠客户端隐藏字段保证安全。
+- 资料通过固定 requirementCode 与私有 confirmed fileId 关联；三项必交组在提交时至少存在一个有效文件，OTHER_DOCUMENT 可缺省或为空。具体最大数量、格式和大小只在业务确认后进入 requirement snapshot/上传能力交集。
+- DTO 文本最大长度属于防滥用技术边界，实施时应结合数据库/API能力设上限并在契约公开，但不得把技术上限描述成新增业务字段或内容要求。
+
+### 3.3 正式赛事来源与承办关系
 
 | 对象 | 关键字段与不变量 |
 | --- | --- |
 | `EventOrigin` | eventId 主键、applicationId unique、approvedSubmissionId unique、createdAt；三者不可变，保证一申请/一获批版本只创建一个赛事 |
-| `EventProfileVersion` | eventId、version、name/time/location 快照、sourceType/sourceSubmissionId、createdBy/At；V1 来源为获批提交，后续正式变更追加版本 |
+| `EventProfileVersion` | eventId、version、eventName/startDate/endDate/location 快照、sourceType/sourceSubmissionId、createdBy/At；V1 来源为获批提交，后续正式变更追加版本 |
 | `EventOrganizerAppointment` | id、eventId、organizationId、sourceApplicationId/sourceSubmissionId、status/effectiveAt、createdBy/At；是机构关系，不含人员 grant |
 | `EventInformationAccessGrant` | id、eventId、organizationMemberId、capability=`EVENT_BASIC_INFO_VIEW`、sourceHandlerGrantId/sourceApplicationId/sourceSubmissionId、active、grantedAt/revokedAt；逐人最小查看授权，独立于 appointment、`EventGrant` 和 TaskScope；`unique(eventId, organizationMemberId, capability, source)` |
 | `EventOrganizerAgent` | appointmentId、organizationMemberId、职责/状态/有效期；仅在后续经办关系规则确认后实施，不由申请人或基本查看授权自动生成 |
 
-现有 `Event.name` 可作为当前名称投影以兼容已有查询，但初始值必须来自同一获批快照并在事务内写入；时间和地点的正式字段/版本结构待产品口径确认。`EventOrigin` 是创建来源，`EventProfileVersion` 是当时正式信息版本，两者均不能被后续编辑覆盖。
+现有 `Event.name` 可作为当前名称投影以兼容已有查询，但初始值必须来自同一获批快照并在事务内写入；首版 profile 保存已确认的 startDate、endDate 和 location。`EventOrigin` 是创建来源，`EventProfileVersion` 是当时正式信息版本，两者均不能被后续编辑覆盖。
 
 若业务最终确认一个赛事只能有一家承办机构，再增加相应唯一约束；当前不以数据库约束擅自限定主办/承办/协办基数。
 
@@ -68,7 +120,7 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 ```
 
 - `saveDraft(expectedDraftRevision)`：允许任一当前有效、同机构且有申请办理权限的经办人保存；CAS 冲突返回最新 draft revision，不自动合并、不覆盖已成功写入。动作记录实际 actor、数据库时间和前后 revision。
-- `submit(expectedDraftRevision, expectedApplicationRevision, idempotencyKey)`：同一权限策略下验证当前权威草稿、三项必交资料及其它表单；生成不可变 Vn 和 SUBMIT 动作，submittedBy 取当前 actor 而非 createdBy。
+- `submit(expectedDraftRevision, expectedApplicationRevision, idempotencyKey)`：同一权限策略下读取当前权威草稿，验证四个表单字段、真实日期、endDate >= startDate、三项必交资料及固定资料代码；生成不可变 Vn 和 SUBMIT 动作，submittedBy 取当前 actor 而非 createdBy。
 - `startReview(submissionId, expectedRevision, idempotencyKey)`：有独立申请审核权限的总部审核员明确点击后，从 PENDING_REVIEW 进入 IN_REVIEW，记录实际人员、数据库时间和目标版本。打开详情只读，不调用该命令、不改变状态。该动作不创建 owner、领取记录或排他锁，其他有权审核员可接续。
 - `requestSupplement(submissionId, expectedRevision, request, idempotencyKey)`：从 IN_REVIEW 进入 NEEDS_SUPPLEMENT；不创建赛事，保存补充要求，当前版本保持不可变，并在同一 applicationId 下允许准备补充草稿。
 - `resubmit(...)`：只允许 NEEDS_SUPPLEMENT 的原申请由任一当前有效、同机构且有申请办理权限的经办人从补充草稿生成 Vn+1 并回到 PENDING_REVIEW；记录该次实际 submittedBy，旧版本、附件关系、补充要求和审核动作不可变。
@@ -91,7 +143,7 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 2. 重新加载会话、active 总部成员和独立 `HostingApplicationReviewGrant`；不查询 `EventGrant`。若 actor 是该申请任一提交版本的 submittedBy，则拒绝审核写命令；
 3. 读取幂等命令：同 actor/申请/key 且请求 hash 相同则在重新鉴权后返回原 eventId；不同载荷返回 409；
 4. 校验申请仍为 IN_REVIEW、revision/submissionId 均为当前值，且 submission 属于该申请和申请机构；
-5. 从不可变 submission 快照取得名称、时间、地点和 applicantOrganizationId，不信任审批请求重复传值；
+5. 从不可变 submission 快照取得 eventName、startDate、endDate、location 和 applicantOrganizationId，不信任审批请求重复传值；
 6. 按统一锁序读取并锁定该申请机构在事务时点的 active member + active `HostingApplicationHandlerGrant` 集合，作为本次自动查看授权对象；并发授予/撤销按事务提交顺序决定，不使用请求开始前缓存；
 7. 创建 EventScope 与共享 ID 的 Event，并创建 EventProfileVersion V1；
 8. 创建 EventOrigin，唯一关联 applicationId 和 approvedSubmissionId；
@@ -154,7 +206,7 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 4. 审核员只能在有权查看对应 submission 时下载；申请方权限变化后按当前 policy 判定，不因曾上传永久开放。
 5. 旧材料附件、模板附件和申请附件保持不同关系及下载策略；不迁移、不共用业务 ID。
 
-具体允许格式和大小属于待确认要求；技术上限不得宣传为业务默认。
+产品规格第 3.2 节建议优先复用当前 txt/pdf/png/jpg/jpeg、单文件 10 MiB、每资料项最多 10 个文件的已验证技术能力，并按资料项使用更窄候选子集/数量；这些值及总大小仍待业务确认，不得写入 requirement version 作为正式默认。未确认前只保留能力评估和扩展点，不据此新增业务必填资料。
 
 ## 8. 模块与接口边界
 
@@ -201,4 +253,4 @@ DRAFT → PENDING_REVIEW → IN_REVIEW → APPROVED       （终态）
 
 ## 12. 实施关口
 
-在进入后端阶段前，至少确认产品规格第 10 节中的申请办理/审核权限授予撤销管理人、批准时无有效经办人的处理、获批后新增经办人/撤权/停用的联动规则、后续材料任务具体配置、资料格式/大小/数量及特殊情况、要求版本配置来源、时间/地点结构和补充材料可改字段/次数/时限。未确认项可以保留在模型扩展点中，但不得用技术默认替代业务决定；获批时为当时有效申请经办人原子授予独立基本信息只读权、不复用宽泛角色、关系与人员授权分记、不自动创建材料任务并沿用现有后续任务规则，以及此前已确认申请/审核规则均不得降级为未确认。本文第 6.1 节及产品规格第 6.1 节的人员变化处理只作为建议，未获确认前不实现自动联动。
+在进入后端阶段前，至少确认产品规格第 10 节中的申请办理/审核权限授予撤销管理人、批准时无有效经办人的处理、获批后新增经办人/撤权/停用的联动规则、后续材料任务具体配置、资料正式格式/大小/数量及特殊情况、要求版本配置来源、补充材料可改字段/次数/时限。未确认项可以保留在模型扩展点中，但不得用技术默认替代业务决定；获批时为当时有效申请经办人原子授予独立基本信息只读权、不复用宽泛角色、关系与人员授权分记、不自动创建材料任务并沿用现有后续任务规则，以及此前已确认申请/审核规则均不得降级为未确认。本文第 6.1 节及产品规格第 6.1 节的人员变化处理只作为建议，未获确认前不实现自动联动。
