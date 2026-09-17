@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from 'antd';
 import { NavIcon } from './NavIcon';
 import { useAuth } from '../../features/auth/AuthContext';
@@ -13,6 +13,7 @@ export function AppShell({
   active?: 'materials' | 'events' | 'hosting' | 'accounts';
 }) {
   const auth = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const events = active === 'events';
   const date = new Intl.DateTimeFormat('zh-CN', {
     month: 'long',
@@ -24,7 +25,26 @@ export function AppShell({
       <a className="skip-link" href="#review-content">
         跳到审核内容
       </a>
-      <aside className="hq-sidebar">
+      <aside
+        className={`hq-sidebar ${sidebarOpen ? 'is-expanded' : ''}`}
+        aria-label="总部侧栏"
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') setSidebarOpen(true);
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') setSidebarOpen(false);
+        }}
+        onFocus={(event) => {
+          if (event.target.matches(':focus-visible')) setSidebarOpen(true);
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget))
+            setSidebarOpen(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setSidebarOpen(false);
+        }}
+      >
         <a
           className="hq-brand"
           href="/hosting-applications"
@@ -55,7 +75,7 @@ export function AppShell({
         <div className="hq-nav-caption">
           工作空间 <span>WORKSPACE</span>
         </div>
-        <nav aria-label="主要导航">
+        <nav id="hq-primary-nav" aria-label="主要导航">
           <a
             className={`hq-nav-item ${active !== 'accounts' ? 'active' : ''}`}
             href="/hosting-applications"
@@ -81,6 +101,16 @@ export function AppShell({
             </a>
           )}
         </nav>
+        <button
+          className="hq-sidebar-toggle"
+          type="button"
+          aria-label={sidebarOpen ? '收起导航' : '展开导航'}
+          aria-expanded={sidebarOpen}
+          aria-controls="hq-primary-nav"
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          <span aria-hidden="true">{sidebarOpen ? '‹' : '›'}</span>
+        </button>
         <div className="hq-sidebar-note">
           <div className="hq-court" aria-hidden="true">
             <span />
