@@ -1,6 +1,6 @@
 # CAAU-029 总部 Web 正式账号密码认证计划
 
-状态：A设计与B后端/迁移/契约已完成本地验收；C Web页面尚未开始。
+状态：A/B/C/D已完成本地交付；生产部署与安全环境验收不在本次完成声明内。
 
 ## 1. 目标
 
@@ -55,7 +55,7 @@
 - 后端实现版本化scrypt、统一登录错误、账号/客户端HMAC限流、Cookie Session、稳定HMAC CSRF、Origin/CORS、登录恢复/退出/改密、账号列表/创建/重置/停用撤销、最后超级管理员保护，以及受控stdin/隐藏TTY初始化脚本。正常模式与授权数据库解耦，local签发保持三重限制。
 - OpenAPI和生成客户端已更新；fetch在Cookie请求使用`credentials=include`和CSRF，在Bearer请求强制`credentials=omit`；Taro适配器未改变。
 - 完整隔离`db:test` **47/47、0失败、0跳过**，其中新增3项真实认证集成子测试；初跑暴露旧测试错误假设“账号恢复后旧会话复活”，按新需求改为必须签发新会话后全套通过。密码/API/client单测通过。
-- 尚未实现全局Web登录门、登录/改密/账号管理页面或正常模式页面收敛，故本阶段不提供正式Web体验账号。
+- B提交时尚未实现全局Web登录门、登录/改密/账号管理页面或正常模式页面收敛；这些内容已在后续C/D阶段完成。
 
 ### C：Web登录与账号管理（独立提交）
 
@@ -73,6 +73,14 @@
 - 正常模式页面和网络均不出现local identity签发入口；
 - 既有承办申请、办赛材料和赛事详情真实接口流程不回退。
 
+### C阶段实际证据（2026-09-17）
+
+- 全局`AuthProvider/AuthGate`覆盖受保护深链：正常模式恢复Cookie会话，未登录显示正式登录；首次临时密码只能进入强制改密；401清空受保护状态，403不伪造权限。工程`/system/health`保持公开且不承载业务数据。
+- `/accounts`仅在后端`canManageAccounts`为真时进入导航；支持创建、启停、重置，以及既有组织角色、赛事范围、承办申请办理/审核grant管理。按钮可见性不是安全边界，接口继续逐请求鉴权。
+- 承办申请旧控制器已从“自行解析Authorization头”收敛为消费Guard解析的Session token，Cookie和Bearer执行同一服务/策略；OpenAPI为保护接口同时声明Cookie或Bearer。
+- 正常模式不渲染本地身份选择；local模式仍恢复原标签页Bearer流程。`IndividualWorkspace`增加平台无关Cookie凭据状态，不把Cookie/token暴露给React。
+- Web E2E **9/9**；隔离真实Chromium覆盖错误登录、首次强制改密、原`/accounts`目标返回、刷新恢复、权限页、Cookie承办申请读取、退出和375px无溢出。
+
 ### D：完整回归、体验准备与交付（独立提交）
 
 范围：
@@ -82,6 +90,14 @@
 - 更新README、roadmap、架构、认证和部署运行手册；恢复服务并核验入口。
 
 验收报告分别列出：本地构建/API/数据库/浏览器结果、未运行的生产HTTPS/代理/多实例压测/远程CI/正式微信/真机项。不得把本地通过描述为生产安全配置或部署验收。
+
+### D阶段实际证据（2026-09-17）
+
+- 隔离`db:test`最终 **48/48、0失败、0跳过**：追加迁移deploy/status/diff/shadow/replay、旧数据保留、受控初始化、密码/Cookie/CSRF、统一错误、限流、撤销、正常模式关闭local、Bearer业务回归及真实正式登录浏览器均通过。
+- `test:e2e` **9/9**；`check`、三端`build`和普通`test`按最终代码重跑，结果见roadmap。初轮失败分别定位为旧会话测试假设、测试Cookie属性误写、local测试模式配置及Ant中文按钮定位器，均修复后从头通过。
+- dev库只执行第8个前向迁移。既有唯一无凭据超级管理员由受控CLI补齐凭据并写审计；随机临时密码仅保存在忽略且0600的`.local/auth/caau-029-dev-login.txt`，未输出、未提交。正常模式API/Web已恢复，ready/HTTP及local签发503已核验。
+- 本地登录页在1440/375px无横向溢出、`pageerror=0`；证据位于忽略目录`.local/evidence/caau-029-auth/`。
+- 未运行：生产TLS/代理/密钥注入与轮换、多实例限流压测、生产数据库授权审查、备份恢复、监控告警、安全评审、远程CI；本任务没有新增正式微信身份或真机结论。操作见[认证运行手册](../runbooks/password-authentication.md)。
 
 ## 4. 验收矩阵
 

@@ -1,6 +1,6 @@
 # 本地身份、范围授权与审计（CAAU-004）
 
-依据 [首版规格](../product/mvp-material-review-spec.md) 与 [ADR-0003](../adr/0003-authorization.md)。本轮交付权限底座，不是材料业务闭环、微信登录或生产认证。
+依据 [首版规格](../product/mvp-material-review-spec.md) 与 [ADR-0003](../adr/0003-authorization.md)。本文保留早期Bearer/local权限底座操作；总部Web正式账号、Cookie/CSRF、受控初始化与账号页面见[正式认证手册](password-authentication.md)。正式微信身份仍不在当前实现内。
 
 ## 启动与引导
 

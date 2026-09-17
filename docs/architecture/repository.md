@@ -49,7 +49,7 @@ CAAU-027新增`event-hosting-applications`后端聚合及两端feature。总部W
 
 CAAU-015 的固定本地身份定义和幂等准备位于仅服务端可用的 `@caau/database`，API authorization 模块只在显式 local 模式列出固定身份并签发原 Session；生成契约由 Web 消费。Web 的 token 只进入标签页 sessionStorage，恢复后仍通过 API 重新鉴权；角色与业务数据不写入前端存储。该入口不新增数据库模型或生产认证模块，边界见 [ADR-0009](../adr/0009-local-test-identity-switching.md)。
 
-CAAU-029在同一authorization模块和`InternalUser`/`Session`上追加正式密码凭据与Cookie认证，不建立平行用户或权限系统。B阶段已实现服务端scrypt、Cookie、CSRF、持久限流、初始化和会话撤销；fetch适配器支持Cookie/CSRF，小程序Taro适配器继续Bearer。Web统一AuthGate和账号页面留C阶段；边界见[ADR-0011](../adr/0011-password-cookie-authentication.md)。
+CAAU-029在同一authorization模块和`InternalUser`/`Session`上追加正式密码凭据与Cookie认证，不建立平行用户或权限系统。服务端实现scrypt、Cookie、CSRF、持久限流、受控初始化和会话撤销；Web统一AuthGate负责恢复、401清理、登录和强制改密，`/accounts`复用既有成员角色、赛事及承办申请grant，导航能力来自API。fetch适配器支持Cookie/CSRF并在Bearer调用禁用Cookie，小程序Taro适配器继续Bearer。正常模式和local入口由服务端配置分离；边界与运行方式见[ADR-0011](../adr/0011-password-cookie-authentication.md)和[认证手册](../runbooks/password-authentication.md)。
 
 基础域规划：auth 管理身份与会话；organizations 管理组织和成员关系；permissions 管理操作及数据范围；events 管理赛事；tasks 管理交付与审核；files 管理附件授权。报名、财务、AI 等在对应需求确认后加入。
 

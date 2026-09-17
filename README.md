@@ -2,7 +2,7 @@
 
 本仓库用于建设 CAAU 微信小程序、Web 管理后台和后端 API。
 
-当前优先任务为CAAU-029“总部Web正式账号密码认证”。A设计与B后端/追加迁移/生成契约已完成本地验收，隔离`db:test` 47/47通过；C Web登录、改密和账号管理页面尚未开始。实现复用既有`InternalUser`、角色/grant和opaque `Session`，正常模式使用HttpOnly Cookie，并保留显式本地测试模式和小程序Bearer兼容。见[认证技术设计](docs/adr/0011-password-cookie-authentication.md)和[分阶段计划](docs/planning/caau-029-password-authentication.md)。
+CAAU-029“总部Web正式账号密码认证”A/B/C/D已完成本地交付：复用既有`InternalUser`、角色/grant和opaque `Session`，实现scrypt、HttpOnly Cookie、CSRF、持久限流、会话撤销、受控超级管理员初始化、全局AuthGate、首次/主动改密及账号/角色/业务授权管理；正常模式不暴露测试身份，小程序Bearer保持兼容。隔离`db:test` 48/48、Web E2E 9/9通过；本地正式登录入口和忽略凭据文件已准备，生产HTTPS/代理/密钥/多实例及远程CI未验收。见[认证运行手册](docs/runbooks/password-authentication.md)、[技术设计](docs/adr/0011-password-cookie-authentication.md)和[分阶段计划](docs/planning/caau-029-password-authentication.md)。
 
 CAAU-028总部“赛事审核中心”设计已作为总部Web统一界面：默认进入承办申请审核，办赛材料审核作为同模块次级入口；原5173旧壳层不再作为产品方向。视觉与信息结构见[审核中心设计](docs/product/review-center-design.md)，业务接口、权限和历史规则继续沿用CAAU-027。
 
@@ -30,6 +30,7 @@ CAAU-028总部“赛事审核中心”设计已作为总部Web统一界面：默
 - [赛事承办申请产品规格](docs/product/event-hosting-application-spec.md)：正式赛事前置申请、审核动作、版本资料、两端入口与待确认规则。
 - [赛事承办申请技术设计](docs/adr/0010-event-hosting-application.md)：原子获批、赛事来源、机构承办关系和授权分离设计及已实现技术决策。
 - [CAAU-027 分阶段计划](docs/planning/caau-027-event-hosting-application.md)：A/B/C/D源码及本地验收状态、平台限制与阶段证据。
+- [正式账号密码认证运行手册](docs/runbooks/password-authentication.md)：正常/local模式、受控初始化、账号权限管理、Cookie/CSRF及生产前缺口。
 - [正式账号密码认证设计](docs/adr/0011-password-cookie-authentication.md)：凭据哈希、Cookie/CSRF、限流、会话撤销、初始化与小程序兼容决策。
 - [CAAU-029 分阶段计划](docs/planning/caau-029-password-authentication.md)：后端、Web、测试和本地体验准备的阶段范围及验收矩阵。
 - [赛事承办申请后端手册](docs/runbooks/event-hosting-applications.md)：迁移、首个本地超级管理员、接口、验证证据和环境限制。
@@ -61,7 +62,7 @@ corepack pnpm dev:admin     # http://127.0.0.1:5173
 corepack pnpm dev:miniapp   # watch 编译，产物 apps/miniapp/dist
 ```
 
-Web 当前提供 `/materials` 资料审核、`/events` 赛事管理和 `/hosting-applications` 承办申请审核三个业务入口，使用同一套紧凑后台壳层；赛事管理仅支持有权赛事列表、名称/说明创建和详情，不包含赛事级承办指派。原 `/workspace` 不进入导航，仅暂留自动化回归兼容。需按操作文档准备数据库，以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 开启本地身份；页面可直接选择五个固定测试身份，后端签发真实测试会话，当前标签页刷新恢复且标签页间互不覆盖。`corepack pnpm events:local` 幂等准备两个本地测试赛事及范围授权；`corepack pnpm tasks:local` 进一步准备两个空材料清单、可自由新增的体验任务，不代替用户新增、提交或审核。`corepack pnpm materials:demo` 才会追加带预置业务过程的合成演示任务。工程连接辅助页位于 `/system/health`。小程序需在微信开发者工具中导入`apps/miniapp`；材料流程见[材料Taro手册](docs/runbooks/individual-material-miniapp.md)，承办申请见[申请小程序手册](docs/runbooks/event-hosting-application-miniapp.md)。当前仍是`touristappid`和回环HTTP，承办申请页面已在官方模拟器运行，文件选择闭环、正式平台与真机仍未完成。API 开发命令先编译再启动，不自动热重载。
+Web 当前提供 `/materials` 资料审核、`/events` 赛事管理、`/hosting-applications` 承办申请审核和受权可见的`/accounts`账号权限管理，使用同一套紧凑后台壳层；正常模式统一进入正式账号登录，不显示测试身份。原 `/workspace` 不进入导航，仅暂留自动化回归兼容。只有自动化/本地业务回归才以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 显式开启五个固定测试身份；后端签发真实Bearer测试会话，当前标签页刷新恢复且标签页间互不覆盖。`corepack pnpm events:local` 幂等准备两个本地测试赛事及范围授权；`corepack pnpm tasks:local` 进一步准备两个空材料清单、可自由新增的体验任务，不代替用户新增、提交或审核。`corepack pnpm materials:demo` 才会追加带预置业务过程的合成演示任务。工程连接辅助页位于 `/system/health`。小程序需在微信开发者工具中导入`apps/miniapp`；材料流程见[材料Taro手册](docs/runbooks/individual-material-miniapp.md)，承办申请见[申请小程序手册](docs/runbooks/event-hosting-application-miniapp.md)。当前仍是`touristappid`和回环HTTP，承办申请页面已在官方模拟器运行，文件选择闭环、正式平台与真机仍未完成。API 开发命令先编译再启动，不自动热重载。
 
 ## 检查与构建
 
