@@ -84,9 +84,6 @@ export function AppShell({
             >
               <NavIcon name="review" />
               <span>赛事审核中心</span>
-              <span className="hq-nav-arrow" aria-hidden="true">
-                ›
-              </span>
             </a>
             {auth.mode === 'formal' && auth.identity?.canManageAccounts && (
               <a
@@ -96,9 +93,6 @@ export function AppShell({
               >
                 <NavIcon name="account" />
                 <span>账号与权限</span>
-                <span className="hq-nav-arrow" aria-hidden="true">
-                  ›
-                </span>
               </a>
             )}
           </nav>

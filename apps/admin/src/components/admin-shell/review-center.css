@@ -113,10 +113,6 @@ body:has(.hq-shell) {
   height: 19px;
   flex-shrink: 0;
 }
-.hq-nav-arrow {
-  margin-left: auto;
-  font-size: 21px;
-}
 .hq-sidebar-note {
   margin: auto 3px 26px;
   padding-top: 100px;
@@ -419,9 +415,6 @@ body:has(.hq-shell) {
     min-height: 42px;
     font-size: 12px;
     padding: 8px 11px;
-  }
-  .hq-nav-arrow {
-    display: none;
   }
   .hq-nav-caption,
   .hq-sidebar-note,
