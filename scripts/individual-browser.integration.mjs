@@ -256,7 +256,7 @@ export async function individualBrowserTest({
     );
     await eventPage.reload();
     await expect(
-      eventPage.getByRole('heading', { level: 1, name: '赛事管理' }),
+      eventPage.getByRole('heading', { level: 1, name: '赛事详情' }),
     ).toBeVisible();
     await eventPage.getByRole('button', { name: '创建赛事' }).click();
     await eventPage.getByLabel('赛事名称').fill('CAAU018 页面创建赛事');

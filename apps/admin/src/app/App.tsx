@@ -8,7 +8,7 @@ import { IndividualPage } from '../features/individuals/IndividualPage';
 import { WorkspacePage } from '../features/materials/WorkspacePage';
 
 function normalizePath(path: string) {
-  if (path === '/') return '/materials';
+  if (path === '/') return '/hosting-applications';
   return path.length > 1 ? path.replace(/\/+$/, '') : path;
 }
 
@@ -20,9 +20,9 @@ export function App() {
 
   useEffect(() => {
     document.title = reviewPage
-      ? '资料审核 · CAAU'
+      ? '办赛材料审核 · CAAU'
       : hostingPage
-        ? '承办申请 · CAAU'
+        ? '赛事审核中心 · CAAU'
         : eventPage
           ? '赛事管理 · CAAU'
           : path === '/system/health'
@@ -60,10 +60,10 @@ export function App() {
     <Result
       status="404"
       title="页面未找到"
-      subTitle="当前地址不存在，请从顶部业务导航进入。"
+      subTitle="当前地址不存在，请返回赛事审核中心。"
       extra={
-        <Button type="primary" href="/materials">
-          进入资料审核
+        <Button type="primary" href="/hosting-applications">
+          进入赛事审核中心
         </Button>
       }
     />

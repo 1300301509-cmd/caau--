@@ -12,7 +12,9 @@ async function enter(page, token, url) {
     [sessionKey, token],
   );
   await page.reload();
-  await expect(page.getByText('承办申请队列')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('.hosting-detail-dialog')).toBeVisible({
+    timeout: 15000,
+  });
 }
 async function confirm(page, testId) {
   await page.getByTestId(testId).click();
@@ -192,7 +194,7 @@ export async function hostingBrowserTest({
     await expect(
       deniedPage.getByText('当前身份没有承办申请审核权限，或权限已被撤销。'),
     ).toBeVisible({ timeout: 15000 });
-    await expect(deniedPage.getByText('承办申请队列')).toHaveCount(0);
+    await expect(deniedPage.locator('.review-table-row')).toHaveCount(0);
     await denied.close();
   } finally {
     await browser?.close();

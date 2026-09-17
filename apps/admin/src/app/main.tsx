@@ -12,14 +12,14 @@ createRoot(root).render(
       theme={{
         token: {
           motion: false,
-          colorPrimary: '#206bc4',
-          colorPrimaryHover: '#1a5aa6',
-          colorPrimaryActive: '#174f91',
+          colorPrimary: '#23695b',
+          colorPrimaryHover: '#1b594c',
+          colorPrimaryActive: '#15483e',
           colorError: '#b91c1c',
           colorErrorHover: '#991b1b',
-          colorText: '#172033',
+          colorText: '#2b332f',
           fontSize: 14,
-          borderRadius: 4,
+          borderRadius: 10,
         },
       }}
     >
