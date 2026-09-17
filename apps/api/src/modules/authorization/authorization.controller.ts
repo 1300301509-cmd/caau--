@@ -9,10 +9,12 @@ import {
   Patch,
   Post,
   Req,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiCookieAuth,
   ApiOkResponse,
   ApiOperation,
   ApiResponse,
@@ -24,19 +26,112 @@ import {
 import { Permission, Public } from './authorization.guard.js';
 import {
   AccessDto,
+  AccountSummaryDto,
   ActiveDto,
   AuditDto,
+  AuthenticationSessionDto,
+  ChangePasswordDto,
+  CreateAccountDto,
   GrantDto,
   IdDto,
   LocalIdentityChoiceDto,
   LocalSessionDto,
   LocalSessionRequestDto,
+  LoginRequestDto,
   MemberDto,
   OrganizationDto,
+  ResetPasswordDto,
   ReviewerDto,
   TaskDto,
   UserDto,
 } from './authorization.dto.js';
+
+type CookieResponse = {
+  cookie(name: string, value: string, options: Record<string, unknown>): void;
+  clearCookie(name: string, options: Record<string, unknown>): void;
+};
+
+@Controller('authentication')
+@ApiResponse({ status: 400, description: 'Invalid input' })
+@ApiResponse({ status: 401, description: 'Authentication required or failed' })
+@ApiResponse({ status: 403, description: 'Origin, CSRF or access denied' })
+@ApiResponse({ status: 429, description: 'Sign-in temporarily unavailable' })
+@ApiResponse({ status: 503, description: 'Authentication unavailable' })
+export class AuthenticationController {
+  constructor(private readonly service: AuthorizationService) {}
+
+  @Post('login')
+  @Public()
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'passwordLogin' })
+  @ApiBody({ type: LoginRequestDto })
+  @ApiOkResponse({ type: AuthenticationSessionDto })
+  @Header('Cache-Control', 'no-store')
+  async login(
+    @Req() request: AuthRequest,
+    @Res({ passthrough: true }) response: CookieResponse,
+    @Body() body: LoginRequestDto,
+  ) {
+    const result = await this.service.login(body, request);
+    response.cookie(
+      this.service.cookieName,
+      result.token,
+      this.service.cookieOptions,
+    );
+    return result.response;
+  }
+
+  @Get('session')
+  @Permission('session.status')
+  @ApiCookieAuth('webSession')
+  @ApiOperation({ operationId: 'getAuthenticationSession' })
+  @ApiOkResponse({ type: AuthenticationSessionDto })
+  @Header('Cache-Control', 'no-store')
+  session(@Req() request: AuthRequest) {
+    return this.service.sessionStatus(request.token!);
+  }
+
+  @Post('logout')
+  @Permission('session.logout')
+  @ApiCookieAuth('webSession')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'passwordLogout' })
+  @ApiOkResponse({ type: IdDto })
+  async logout(
+    @Req() request: AuthRequest,
+    @Res({ passthrough: true }) response: CookieResponse,
+  ) {
+    const result = await this.service.execute(request.token!, 'session.logout');
+    response.clearCookie(this.service.cookieName, {
+      httpOnly: true,
+      secure: this.service.cookieOptions.secure,
+      sameSite: this.service.cookieOptions.sameSite,
+      path: this.service.cookieOptions.path,
+    });
+    return result;
+  }
+
+  @Post('change-password')
+  @Permission('session.password.change')
+  @ApiCookieAuth('webSession')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'changePassword' })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiOkResponse({ type: AuthenticationSessionDto })
+  async changePassword(
+    @Req() request: AuthRequest,
+    @Res({ passthrough: true }) response: CookieResponse,
+    @Body() body: ChangePasswordDto,
+  ) {
+    const result = await this.service.changePassword(request.token!, body);
+    response.cookie(
+      this.service.cookieName,
+      result.token,
+      this.service.cookieOptions,
+    );
+    return result.response;
+  }
+}
 
 @Controller('local-test-identities')
 @ApiResponse({ status: 400, description: 'Invalid fixed identity' })
@@ -100,6 +195,38 @@ export class AuthorizationController {
   @ApiOkResponse({ type: IdDto })
   logout(@Req() r: AuthRequest) {
     return this.service.execute(r.token!, 'session.logout');
+  }
+
+  @Get('accounts')
+  @Permission('admin.account.read')
+  @ApiOperation({ operationId: 'listAccounts' })
+  @ApiOkResponse({ type: AccountSummaryDto, isArray: true })
+  accounts(@Req() request: AuthRequest) {
+    return this.service.listAccounts(request.token!);
+  }
+
+  @Post('accounts')
+  @HttpCode(200)
+  @Permission('admin.account.create')
+  @ApiOperation({ operationId: 'createAccount' })
+  @ApiBody({ type: CreateAccountDto })
+  @ApiOkResponse({ type: IdDto })
+  account(@Req() request: AuthRequest, @Body() body: CreateAccountDto) {
+    return this.service.createAccount(request.token!, body);
+  }
+
+  @Post('accounts/:id/reset-password')
+  @HttpCode(200)
+  @Permission('admin.account.password.reset')
+  @ApiOperation({ operationId: 'resetAccountPassword' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiOkResponse({ type: IdDto })
+  resetAccountPassword(
+    @Req() request: AuthRequest,
+    @Param('id') id: string,
+    @Body() body: ResetPasswordDto,
+  ) {
+    return this.service.resetAccountPassword(request.token!, id, body);
   }
 
   @Post('users')

@@ -3,16 +3,26 @@ import {
   ConflictException,
   ForbiddenException,
   HttpException,
+  HttpStatus,
   Injectable,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from 'node:crypto';
 import {
   createAuthorizationDatabase,
+  hashPassword,
   localTestIdentities,
   localTestOrganizations,
   prepareLocalTestIdentities,
+  validPassword,
+  verifyPassword,
   type Prisma,
 } from '@caau/database';
 import { localIdentityKeys, roles, taskActions } from './authorization.dto.js';
@@ -28,10 +38,24 @@ import {
 export interface AuthorizationConfig {
   databaseUrl?: string;
   localIdentity: boolean;
+  production: boolean;
+  cookieSecure: boolean;
+  csrfSecret: string;
+  throttleSecret: string;
+  sessionTtlMs: number;
+  origins: string[];
 }
 export interface AuthRequest {
-  headers: { authorization?: string };
+  headers: {
+    authorization?: string;
+    cookie?: string;
+    origin?: string;
+    'x-csrf-token'?: string;
+  };
+  method?: string;
+  ip?: string;
   token?: string;
+  credential?: 'bearer' | 'cookie';
 }
 export const hashToken = (token: string) =>
   createHash('sha256').update(token).digest('hex');
@@ -59,6 +83,22 @@ export function text(value: unknown, max: number) {
   if (typeof value !== 'string' || !value.trim() || value.length > max)
     throw new BadRequestException('Invalid text');
   return value.trim();
+}
+const loginPattern = /^[a-z0-9][a-z0-9._-]{2,63}$/;
+// A valid-format non-credential record keeps unknown-account verification on
+// the same scrypt path without creating an extra usable password.
+const dummyPasswordHash = `$scrypt$v=1$N=131072$r=8$p=1$${Buffer.alloc(16).toString('base64url')}$${Buffer.alloc(64).toString('base64url')}`;
+export function loginName(value: unknown) {
+  if (typeof value !== 'string') throw new BadRequestException('Invalid input');
+  const normalized = value.trim().toLowerCase();
+  if (!loginPattern.test(normalized))
+    throw new BadRequestException('Invalid input');
+  return normalized;
+}
+function constantEqual(left: string, right: string) {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // Only allowlisted IDs, enums and booleans; never names, arbitrary body, or tokens.
@@ -93,18 +133,41 @@ function auditContext(input: unknown): Prisma.InputJsonObject {
 @Injectable()
 export class AuthorizationService {
   private readonly database;
+  readonly cookieName: string;
+  readonly cookieOptions: {
+    httpOnly: true;
+    secure: boolean;
+    sameSite: 'lax';
+    path: '/';
+    maxAge: number;
+  };
   constructor(private readonly config: AuthorizationConfig) {
     this.database = config.databaseUrl
       ? createAuthorizationDatabase(config.databaseUrl)
       : undefined;
+    this.cookieName = config.production
+      ? '__Host-caau_session'
+      : 'caau_session';
+    this.cookieOptions = {
+      httpOnly: true,
+      secure: config.cookieSecure,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: config.sessionTtlMs,
+    };
   }
   async onModuleDestroy() {
     await this.database?.close();
   }
   private db() {
-    if (!this.config.localIdentity || !this.database)
-      throw new ServiceUnavailableException('Local identity unavailable');
+    if (!this.database)
+      throw new ServiceUnavailableException('Authorization unavailable');
     return this.database.client;
+  }
+  private localDb() {
+    if (!this.config.localIdentity)
+      throw new ServiceUnavailableException('Local identity unavailable');
+    return this.db();
   }
   private async syncHostingInformationAccess(
     tx: Prisma.TransactionClient,
@@ -128,7 +191,7 @@ export class AuthorizationService {
     }
   }
   localIdentityOptions() {
-    this.db();
+    this.localDb();
     return localTestIdentities.map((identity) => ({
       key: identity.key,
       displayName: identity.displayName,
@@ -140,7 +203,7 @@ export class AuthorizationService {
     }));
   }
   async issueLocalTestSession(input: unknown) {
-    const db = this.db();
+    const db = this.localDb();
     const body = bodyObject(input, ['identity']);
     if (
       typeof body.identity !== 'string' ||
@@ -153,7 +216,7 @@ export class AuthorizationService {
       (candidate) => candidate.key === body.identity,
     )!;
     const token = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + this.config.sessionTtlMs);
     try {
       await db.$transaction(
         async (tx) => {
@@ -201,7 +264,7 @@ export class AuthorizationService {
       throw new ServiceUnavailableException('Local identity unavailable');
     }
   }
-  private async actor(tx: Prisma.TransactionClient, token: string) {
+  private async session(tx: Prisma.TransactionClient, token: string) {
     const session = await tx.session.findUnique({
       where: { tokenHash: hashToken(token) },
       include: { user: { include: { memberships: true } } },
@@ -213,22 +276,78 @@ export class AuthorizationService {
       !session.user.active
     )
       throw new UnauthorizedException('Invalid session');
-    return session.user;
+    return session;
+  }
+  private async actor(tx: Prisma.TransactionClient, token: string) {
+    return (await this.session(tx, token)).user;
   }
   async reloadActor(tx: Prisma.TransactionClient, token: string) {
     return this.actor(tx, token);
   }
-  async authenticate(request: AuthRequest) {
-    const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(
+  private cookieToken(header = '') {
+    const prefix = `${this.cookieName}=`;
+    for (const part of header.split(';')) {
+      const value = part.trim();
+      if (value.startsWith(prefix)) return value.slice(prefix.length);
+    }
+    return undefined;
+  }
+  private trustedOrigin(request: AuthRequest) {
+    if (
+      !request.headers.origin ||
+      !this.config.origins.includes(request.headers.origin)
+    )
+      throw new ForbiddenException('Request origin denied');
+  }
+  private csrfToken(session: { id: string; createdAt: Date }) {
+    return createHmac('sha256', this.config.csrfSecret)
+      .update(`${session.id}:${session.createdAt.toISOString()}`)
+      .digest('base64url');
+  }
+  private throttleSubject(scope: 'account' | 'client', value: string) {
+    return createHmac('sha256', this.config.throttleSecret)
+      .update(`${scope}:${value}`)
+      .digest('hex');
+  }
+  async authenticate(request: AuthRequest, action?: string) {
+    const bearer = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(
       request.headers.authorization ?? '',
-    );
+    )?.[1];
+    const cookie = this.cookieToken(request.headers.cookie);
     try {
-      if (!match?.[1])
-        throw new UnauthorizedException('Bearer session required');
-      await this.actor(this.db(), match[1]);
-      request.token = match[1];
+      if (bearer && cookie)
+        throw new UnauthorizedException('Ambiguous session credentials');
+      const token = bearer ?? cookie;
+      if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token))
+        throw new UnauthorizedException('Session required');
+      const session = await this.session(this.db(), token);
+      const credential = bearer ? 'bearer' : 'cookie';
+      if (
+        session.user.mustChangePassword &&
+        ![
+          'session.status',
+          'session.logout',
+          'session.password.change',
+        ].includes(action ?? '')
+      )
+        throw new ForbiddenException('Password change required');
+      if (
+        credential === 'cookie' &&
+        ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method ?? '')
+      ) {
+        this.trustedOrigin(request);
+        if (
+          !constantEqual(
+            request.headers['x-csrf-token'] ?? '',
+            this.csrfToken(session),
+          )
+        )
+          throw new ForbiddenException('CSRF validation failed');
+      }
+      request.token = token;
+      request.credential = credential;
     } catch (error) {
-      if (this.config.localIdentity && this.database) {
+      if (this.database) {
         try {
           await this.database.client.auditRecord.create({
             data: {
@@ -244,6 +363,394 @@ export class AuthorizationService {
       if (error instanceof HttpException) throw error;
       throw new ServiceUnavailableException('Authorization unavailable');
     }
+  }
+  private async throttled(subjectHashes: string[]) {
+    return (
+      (await this.db().authenticationThrottle.count({
+        where: {
+          subjectHash: { in: subjectHashes },
+          blockedUntil: { gt: new Date() },
+        },
+      })) > 0
+    );
+  }
+  private async recordLoginFailure(
+    accountSubject: string,
+    clientSubject: string,
+  ) {
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - 15 * 60 * 1000);
+    await this.db().$transaction(
+      async (tx) => {
+        for (const [subjectHash, limit] of [
+          [accountSubject, 5],
+          [clientSubject, 20],
+        ] as const) {
+          const current = await tx.authenticationThrottle.findUnique({
+            where: { subjectHash },
+          });
+          const failures =
+            !current || current.windowStartedAt <= windowStart
+              ? 1
+              : current.failures + 1;
+          await tx.authenticationThrottle.upsert({
+            where: { subjectHash },
+            create: {
+              subjectHash,
+              failures,
+              windowStartedAt: now,
+              blockedUntil:
+                failures >= limit
+                  ? new Date(now.getTime() + 15 * 60 * 1000)
+                  : null,
+            },
+            update: {
+              failures,
+              ...(current?.windowStartedAt &&
+              current.windowStartedAt > windowStart
+                ? {}
+                : { windowStartedAt: now }),
+              blockedUntil:
+                failures >= limit
+                  ? new Date(now.getTime() + 15 * 60 * 1000)
+                  : current?.blockedUntil,
+            },
+          });
+        }
+        await tx.auditRecord.create({
+          data: {
+            action: 'session.password.login',
+            outcome: 'DENIED',
+            requestId: randomUUID(),
+          },
+        });
+      },
+      { isolationLevel: 'Serializable' },
+    );
+  }
+  private authenticationResponse(session: {
+    id: string;
+    createdAt: Date;
+    expiresAt: Date;
+    user: Actor;
+  }) {
+    return {
+      id: session.user.id,
+      displayName: session.user.displayName,
+      roles: [
+        ...new Set(
+          session.user.memberships
+            .filter((membership) => membership.active)
+            .map((membership) => membership.role),
+        ),
+      ],
+      mustChangePassword: session.user.mustChangePassword,
+      expiresAt: session.expiresAt.toISOString(),
+      csrfToken: this.csrfToken(session),
+    };
+  }
+  async login(input: unknown, request: AuthRequest) {
+    this.trustedOrigin(request);
+    const body = bodyObject(input, ['loginName', 'password']);
+    const normalized = loginName(body.loginName);
+    if (!validPassword(body.password))
+      throw new BadRequestException('Invalid input');
+    const accountSubject = this.throttleSubject('account', normalized);
+    const clientSubject = this.throttleSubject(
+      'client',
+      request.ip ?? 'unknown',
+    );
+    if (await this.throttled([accountSubject, clientSubject]))
+      throw new HttpException(
+        'Unable to sign in',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    const user = await this.db().internalUser.findUnique({
+      where: { loginName: normalized },
+      include: { memberships: true },
+    });
+    const verified = await verifyPassword(
+      body.password,
+      user?.passwordHash ?? dummyPasswordHash,
+    );
+    if (!verified || !user?.active || !user.passwordHash) {
+      await this.recordLoginFailure(accountSubject, clientSubject);
+      if (await this.throttled([accountSubject, clientSubject]))
+        throw new HttpException(
+          'Unable to sign in',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      throw new UnauthorizedException('Unable to sign in');
+    }
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + this.config.sessionTtlMs);
+    const session = await this.db().$transaction(
+      async (tx) => {
+        const current = await tx.internalUser.findUnique({
+          where: { id: user.id },
+          include: { memberships: true },
+        });
+        if (
+          !current?.active ||
+          !current.passwordHash ||
+          current.passwordHash !== user.passwordHash
+        )
+          throw new UnauthorizedException('Unable to sign in');
+        const created = await tx.session.create({
+          data: { userId: current.id, tokenHash: hashToken(token), expiresAt },
+          include: { user: { include: { memberships: true } } },
+        });
+        await tx.authenticationThrottle.deleteMany({
+          where: { subjectHash: { in: [accountSubject, clientSubject] } },
+        });
+        await tx.auditRecord.create({
+          data: {
+            actorId: current.id,
+            action: 'session.password.login',
+            resourceId: current.id,
+            outcome: 'ALLOWED',
+            requestId: randomUUID(),
+          },
+        });
+        return created;
+      },
+      { isolationLevel: 'Serializable' },
+    );
+    return { token, response: this.authenticationResponse(session) };
+  }
+  async sessionStatus(token: string) {
+    return this.authenticationResponse(await this.session(this.db(), token));
+  }
+  async changePassword(token: string, input: unknown) {
+    const body = bodyObject(input, ['currentPassword', 'newPassword']);
+    if (
+      !validPassword(body.currentPassword) ||
+      !validPassword(body.newPassword)
+    )
+      throw new BadRequestException('Invalid password');
+    const currentSession = await this.session(this.db(), token);
+    if (
+      !currentSession.user.passwordHash ||
+      !(await verifyPassword(
+        body.currentPassword,
+        currentSession.user.passwordHash,
+      ))
+    )
+      throw new UnauthorizedException('Current password is incorrect');
+    if (
+      await verifyPassword(body.newPassword, currentSession.user.passwordHash)
+    )
+      throw new BadRequestException('New password must be different');
+    const nextHash = await hashPassword(body.newPassword);
+    const nextToken = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + this.config.sessionTtlMs);
+    const next = await this.db().$transaction(
+      async (tx) => {
+        const current = await tx.internalUser.findUnique({
+          where: { id: currentSession.user.id },
+        });
+        if (
+          !current?.active ||
+          current.passwordHash !== currentSession.user.passwordHash
+        )
+          throw new UnauthorizedException('Current password is incorrect');
+        await tx.internalUser.update({
+          where: { id: current.id },
+          data: {
+            passwordHash: nextHash,
+            mustChangePassword: false,
+            passwordChangedAt: new Date(),
+          },
+        });
+        await tx.session.updateMany({
+          where: { userId: current.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        const created = await tx.session.create({
+          data: {
+            userId: current.id,
+            tokenHash: hashToken(nextToken),
+            expiresAt,
+          },
+          include: { user: { include: { memberships: true } } },
+        });
+        await tx.auditRecord.create({
+          data: {
+            actorId: current.id,
+            action: 'session.password.change',
+            resourceId: current.id,
+            outcome: 'ALLOWED',
+            requestId: randomUUID(),
+          },
+        });
+        return created;
+      },
+      { isolationLevel: 'Serializable' },
+    );
+    return { token: nextToken, response: this.authenticationResponse(next) };
+  }
+  private accountAdministrator(actor: Actor) {
+    if (!hasRole(actor, 'SYSTEM_ADMIN') && !isHeadquartersSuperAdmin(actor))
+      deny();
+  }
+  async listAccounts(token: string) {
+    return this.run(
+      token,
+      'admin.account.read',
+      undefined,
+      undefined,
+      async (tx, actor) => {
+        this.accountAdministrator(actor);
+        const users = await tx.internalUser.findMany({
+          include: {
+            memberships: {
+              include: {
+                organization: true,
+                grants: true,
+                hostingApplicationHandlerGrant: true,
+                hostingApplicationReviewGrant: true,
+              },
+            },
+          },
+          orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+        });
+        return users.map((user) => ({
+          id: user.id,
+          displayName: user.displayName,
+          loginName: user.loginName,
+          active: user.active,
+          passwordConfigured: !!user.passwordHash,
+          mustChangePassword: user.mustChangePassword,
+          memberships: user.memberships.map((membership) => ({
+            id: membership.id,
+            organizationId: membership.organizationId,
+            organizationName: membership.organization.name,
+            role: membership.role,
+            active: membership.active,
+          })),
+          eventGrantIds: user.memberships.flatMap((membership) =>
+            membership.grants
+              .filter((grant) => grant.active)
+              .map((grant) => grant.id),
+          ),
+          hostingHandlerGrantId:
+            user.memberships.find(
+              (membership) => membership.hostingApplicationHandlerGrant?.active,
+            )?.hostingApplicationHandlerGrant?.id ?? null,
+          hostingReviewGrantId:
+            user.memberships.find(
+              (membership) => membership.hostingApplicationReviewGrant?.active,
+            )?.hostingApplicationReviewGrant?.id ?? null,
+        }));
+      },
+    );
+  }
+  async createAccount(token: string, input: unknown) {
+    const body = bodyObject(input, [
+      'loginName',
+      'displayName',
+      'temporaryPassword',
+      'memberships',
+    ]);
+    const normalized = loginName(body.loginName);
+    const displayName = text(body.displayName, 80);
+    if (!validPassword(body.temporaryPassword))
+      throw new BadRequestException('Invalid temporary password');
+    if (
+      !Array.isArray(body.memberships) ||
+      body.memberships.length < 1 ||
+      body.memberships.length > 10
+    )
+      throw new BadRequestException('Memberships required');
+    const memberships = body.memberships.map((value) => {
+      const membership = bodyObject(value, ['organizationId', 'role']);
+      if (!roles.includes(membership.role as (typeof roles)[number]))
+        throw new BadRequestException('Invalid role');
+      return {
+        organizationId: uuid(membership.organizationId),
+        role: membership.role as (typeof roles)[number],
+      };
+    });
+    if (
+      new Set(
+        memberships.map(
+          (membership) => `${membership.organizationId}:${membership.role}`,
+        ),
+      ).size !== memberships.length
+    )
+      throw new BadRequestException('Duplicate membership');
+    const passwordHash = await hashPassword(body.temporaryPassword);
+    return this.run(
+      token,
+      'admin.account.create',
+      undefined,
+      { memberships },
+      async (tx, actor) => {
+        this.accountAdministrator(actor);
+        if (
+          memberships.some(
+            (membership) => membership.role === 'HEADQUARTERS_SUPER_ADMIN',
+          ) &&
+          !isHeadquartersSuperAdmin(actor)
+        )
+          deny();
+        const user = await tx.internalUser.create({
+          data: {
+            loginName: normalized,
+            displayName,
+            passwordHash,
+            mustChangePassword: true,
+            passwordChangedAt: new Date(),
+            memberships: { create: memberships },
+          },
+          select: { id: true },
+        });
+        return user;
+      },
+    );
+  }
+  async resetAccountPassword(token: string, id: string, input: unknown) {
+    const body = bodyObject(input, ['temporaryPassword']);
+    if (!validPassword(body.temporaryPassword))
+      throw new BadRequestException('Invalid temporary password');
+    const passwordHash = await hashPassword(body.temporaryPassword);
+    return this.run(
+      token,
+      'admin.account.password.reset',
+      id,
+      undefined,
+      async (tx, actor, targetId) => {
+        this.accountAdministrator(actor);
+        if (actor.id === targetId) deny();
+        const target = await tx.internalUser.findUnique({
+          where: { id: targetId! },
+          include: { memberships: true },
+        });
+        if (!target?.loginName) deny();
+        if (
+          target.memberships.some(
+            (membership) =>
+              membership.active &&
+              membership.role === 'HEADQUARTERS_SUPER_ADMIN',
+          ) &&
+          !isHeadquartersSuperAdmin(actor)
+        )
+          deny();
+        await tx.internalUser.update({
+          where: { id: target.id },
+          data: {
+            passwordHash,
+            mustChangePassword: true,
+            passwordChangedAt: new Date(),
+          },
+        });
+        await tx.session.updateMany({
+          where: { userId: target.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        return { id: target.id };
+      },
+    );
   }
   execute(token: string, action: string, resource?: string, input?: unknown) {
     return this.run(token, action, resource, input, (tx, actor, id) =>
@@ -519,11 +1026,42 @@ export class AuthorizationService {
         if (typeof b.active !== 'boolean')
           throw new BadRequestException('Boolean required');
         if (action === 'admin.user.active') {
-          const user = await tx.internalUser.update({
+          const target = await tx.internalUser.findUnique({
             where: { id: id! },
+            include: { memberships: true },
+          });
+          if (!target) deny();
+          const targetIsSuper = target.memberships.some(
+            (membership) =>
+              membership.active &&
+              membership.role === 'HEADQUARTERS_SUPER_ADMIN',
+          );
+          if (targetIsSuper && !isHeadquartersSuperAdmin(actor)) deny();
+          if (!b.active && target.id === actor.id) deny();
+          if (!b.active && targetIsSuper) {
+            const otherSuperAdministrators = await tx.organizationMember.count({
+              where: {
+                role: 'HEADQUARTERS_SUPER_ADMIN',
+                active: true,
+                userId: { not: target.id },
+                user: { active: true },
+              },
+            });
+            if (!otherSuperAdministrators)
+              throw new ConflictException(
+                'The last active super administrator cannot be disabled',
+              );
+          }
+          const user = await tx.internalUser.update({
+            where: { id: target.id },
             data: { active: b.active },
             select: { id: true, memberships: { select: { id: true } } },
           });
+          if (!b.active)
+            await tx.session.updateMany({
+              where: { userId: user.id, revokedAt: null },
+              data: { revokedAt: new Date() },
+            });
           await this.syncHostingInformationAccess(
             tx,
             user.memberships.map((member) => member.id),

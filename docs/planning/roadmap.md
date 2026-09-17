@@ -3,10 +3,10 @@
 ## 当前优先任务（CAAU-029，总部Web正式账号密码认证）
 
 - 目标：复用现有`InternalUser`、组织成员角色、业务grant和opaque `Session`，以正式账号密码和HttpOnly Cookie替换总部Web正常使用时的测试身份选择；后端继续逐请求鉴权。
-- 当前阶段：A技术设计与分阶段验收计划已完成；运行时代码、schema和迁移尚未修改。设计见[ADR-0011](../adr/0011-password-cookie-authentication.md)，实施计划见[CAAU-029计划](caau-029-password-authentication.md)。
+- 当前阶段：A设计与B后端/追加迁移/生成契约已完成本地验收；C Web登录、改密和账号管理页面尚未开始。设计见[ADR-0011](../adr/0011-password-cookie-authentication.md)，实施证据见[CAAU-029计划](caau-029-password-authentication.md)。
 - 首版范围：无公众注册；管理员创建/启停/重置账号并配置既有角色和授权；登录/退出/主动及首次强制改密；刷新恢复、过期重登和安全returnTo；scrypt、Cookie/CSRF、精确CORS、持久限流、会话撤销和受控首个超级管理员初始化。
 - 兼容边界：正常模式不开放local identity端点；显式local模式和现有小程序Bearer继续使用同一Session/权限模型。不做短信、邮件、扫码、MFA、SSO、正式微信登录或生产部署。
-- 现场结论：无需新建平行身份系统；现有256位opaque token/数据库SHA-256、active检查、角色/grant和默认拒绝Guard可复用。必须拆除authorization数据库入口对`CAAU_IDENTITY_MODE=local`的错误依赖，并为Web增加Cookie/CSRF及全局认证状态。
+- B阶段证据：第8个追加迁移、scrypt、Cookie/CSRF、双维度持久限流、登录/恢复/退出/改密、账号创建/重置/停用撤销、受控初始化及Bearer兼容已实现；隔离`db:test` **47/47、0失败、0跳过**。dev前向迁移已部署且API ready；未reset、删卷或生成默认密码。
 
 ## CAAU-028 总部赛事审核中心界面重构（已采用并迁入当前Web）
 
@@ -154,7 +154,7 @@ Logo补充（2026-09-17，完成）：使用用户提供且仓库已有的1254×
 | CAAU-026 | 小程序Logo等比缩放 | 025、用户Logo | 完成（本地）：正方形容器和`aspectFit`等比显示通过官方游客模拟器尺寸核验 |
 | CAAU-027 | 赛事承办申请前置流程 | R-036、现有赛事/授权/材料现状 | A/B/C/D源码及本地完成：db:test 44/44；开发者工具页面通过、文件闭环和真机阻塞 |
 | CAAU-028 | 总部赛事审核中心前端重构 | 用户参考图、CAAU-027 C/D | 完成（本地）：5175设计已迁入5173；check/build/test、Web E2E 9/9、db:test 44/44通过 |
-| CAAU-029 | 总部Web正式账号密码认证 | 现有身份/权限/Session、CAAU-028 | A设计完成：安全设计与分阶段验收计划独立提交；B/C/D未开始 |
+| CAAU-029 | 总部Web正式账号密码认证 | 现有身份/权限/Session、CAAU-028 | A/B完成：设计提交727353a，后端db:test 47/47；C Web未开始 |
 | CAAU-006 | 预发布与试点准备 | 核心流程验收、资源就绪 | 待开始 |
 
 不按未确认范围承诺工期；每个任务开始前继续拆分为可验证的交付。

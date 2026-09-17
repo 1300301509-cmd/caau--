@@ -74,6 +74,32 @@ test('fetch adapter preserves status on non-JSON responses and aborts a stuck re
   );
 });
 
+test('fetch adapter includes Web cookies and CSRF but omits cookies for Bearer calls', async () => {
+  const calls = [];
+  const transport = createFetchTransport(
+    async (_url, options) => {
+      calls.push(options);
+      return Response.json({ id: '00000000-0000-4000-8000-000000000001' });
+    },
+    { csrfToken: () => 'synthetic-csrf' },
+  );
+  await transport({
+    url: 'http://localhost/logout',
+    method: 'POST',
+    timeout: 100,
+  });
+  await transport({
+    url: 'http://localhost/action',
+    method: 'POST',
+    timeout: 100,
+    header: { Authorization: 'Bearer synthetic' },
+  });
+  assert.equal(calls[0].credentials, 'include');
+  assert.equal(calls[0].headers['X-CSRF-Token'], 'synthetic-csrf');
+  assert.equal(calls[1].credentials, 'omit');
+  assert.equal('X-CSRF-Token' in calls[1].headers, false);
+});
+
 test('Taro adapter uses only the supplied request capability', async () => {
   const transport = createTaroTransport(async (options) => {
     assert.equal(options.timeout, 5000);
@@ -105,6 +131,7 @@ test('generated authorization paths, methods, bodies and headers reach fetch and
               options.headers,
               JSON.parse(options.body),
             );
+            assert.equal(options.credentials, 'omit');
             return Response.json({ id: 'synthetic-id' });
           })
         : createTaroTransport(async (options) => {

@@ -1,6 +1,6 @@
 # CAAU-029 总部 Web 正式账号密码认证计划
 
-状态：A技术设计与分阶段验收计划已完成；B后端实现尚未开始。
+状态：A设计与B后端/迁移/契约已完成本地验收；C Web页面尚未开始。
 
 ## 1. 目标
 
@@ -48,6 +48,14 @@
 - 真实隔离PostgreSQL/API覆盖正确/错误/不存在账号统一响应，账号/IP限流，未登录，Cookie/CSRF，过期、退出、改密轮换、重置/停用全撤销、越权、最后超级管理员保护；
 - 正常模式local identity GET/POST均不可用；Bearer业务及小程序客户端测试不回退；
 - migration deploy重复、status/diff、shadow、旧用户/Session/角色/grant/历史保留。
+
+### B阶段实际证据（2026-09-17）
+
+- 追加第8个迁移：既有用户保持无凭据不可密码登录，Session追加创建时间，新建共享登录限流表；deploy重复、status/diff、shadow/replay及旧身份、角色、grant、业务历史和私有字节保留通过。dev只执行前向deploy，未reset或删卷。
+- 后端实现版本化scrypt、统一登录错误、账号/客户端HMAC限流、Cookie Session、稳定HMAC CSRF、Origin/CORS、登录恢复/退出/改密、账号列表/创建/重置/停用撤销、最后超级管理员保护，以及受控stdin/隐藏TTY初始化脚本。正常模式与授权数据库解耦，local签发保持三重限制。
+- OpenAPI和生成客户端已更新；fetch在Cookie请求使用`credentials=include`和CSRF，在Bearer请求强制`credentials=omit`；Taro适配器未改变。
+- 完整隔离`db:test` **47/47、0失败、0跳过**，其中新增3项真实认证集成子测试；初跑暴露旧测试错误假设“账号恢复后旧会话复活”，按新需求改为必须签发新会话后全套通过。密码/API/client单测通过。
+- 尚未实现全局Web登录门、登录/改密/账号管理页面或正常模式页面收敛，故本阶段不提供正式Web体验账号。
 
 ### C：Web登录与账号管理（独立提交）
 

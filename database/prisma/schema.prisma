@@ -39,6 +39,10 @@ model InternalUser {
   id                  String                         @id @default(uuid()) @db.Uuid
   displayName         String                         @db.VarChar(80)
   active              Boolean                        @default(true)
+  loginName           String?                        @unique @db.VarChar(64)
+  passwordHash        String?                        @db.VarChar(255)
+  mustChangePassword  Boolean                        @default(false)
+  passwordChangedAt   DateTime?                      @db.Timestamptz(3)
   memberships         OrganizationMember[]
   sessions            Session[]
   hostingApplications EventHostingApplication[]      @relation("HostingApplicationCreator")
@@ -108,9 +112,20 @@ model Session {
   id        String       @id @default(uuid()) @db.Uuid
   tokenHash String       @unique @db.Char(64)
   userId    String       @db.Uuid
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
   expiresAt DateTime     @db.Timestamptz(3)
   revokedAt DateTime?    @db.Timestamptz(3)
   user      InternalUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model AuthenticationThrottle {
+  subjectHash     String    @id @db.Char(64)
+  failures        Int
+  windowStartedAt DateTime  @db.Timestamptz(3)
+  blockedUntil    DateTime? @db.Timestamptz(3)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@index([blockedUntil])
 }
 
 model AuditRecord {

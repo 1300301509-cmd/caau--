@@ -20,6 +20,7 @@ import {
 import { individualIntegration } from './individual.integration.mjs';
 import { individualBrowserTest } from './individual-browser.integration.mjs';
 import { hostingIntegration } from './hosting.integration.mjs';
+import { authenticationIntegration } from './authentication.integration.mjs';
 export async function authorizationIntegration(t) {
   assert.equal(process.env.CAAU_DATABASE_INTEGRATION, 'test');
   assertLocalDatabaseUrls(process.env, 'test');
@@ -74,7 +75,11 @@ export async function authorizationIntegration(t) {
               ? "to_jsonb(t)-'active'"
               : table === 'Event'
                 ? "to_jsonb(t)-'lifecycleState'"
-                : 'to_jsonb(t)';
+                : table === 'InternalUser'
+                  ? "to_jsonb(t)-'loginName'-'passwordHash'-'mustChangePassword'-'passwordChangedAt'"
+                  : table === 'Session'
+                    ? "to_jsonb(t)-'createdAt'"
+                    : 'to_jsonb(t)';
           const rows = (
             await sql.query(
               `SELECT ${expr} data FROM "${table}" t ORDER BY (${expr})::text`,
@@ -94,6 +99,7 @@ export async function authorizationIntegration(t) {
                 [
                   '202609160001_individual_materials',
                   '202609170001_event_hosting_applications',
+                  '202609180001_password_authentication',
                 ],
               ],
             )
@@ -276,6 +282,13 @@ export async function authorizationIntegration(t) {
       [members.super, users.super, hq, 'HEADQUARTERS_SUPER_ADMIN'],
     );
     await session('super', users.super);
+    await authenticationIntegration(t, {
+      base,
+      config,
+      tokens,
+      hq,
+      sql,
+    });
     const eventA = (await api('manager', 'POST', 'event-scopes')).id;
     const eventB = (await api('managerB', 'POST', 'event-scopes')).id;
     const grants = {};
@@ -616,6 +629,7 @@ export async function authorizationIntegration(t) {
         await api('sys', 'PATCH', `users/${users.a}`, { active: false });
         await api('a', 'GET', 'me', undefined, 401);
         await api('sys', 'PATCH', `users/${users.a}`, { active: true });
+        await session('a', users.a);
         await api('manager', 'PATCH', `task-scopes/${taskA}/reviewer`, {
           reviewerGrantId: null,
         });
@@ -713,7 +727,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          7,
+          8,
         );
       },
     );

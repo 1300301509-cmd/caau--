@@ -6,6 +6,13 @@ import type { Prisma } from './generated/prisma/client.js';
 // Prisma is constructed only here; callers never import generated internals.
 export type { Prisma } from './generated/prisma/client.js';
 export { Role } from './generated/prisma/client.js';
+export {
+  hashPassword,
+  passwordPolicy,
+  productionScrypt,
+  validPassword,
+  verifyPassword,
+} from './password.js';
 
 export const localTestOrganizations = [
   {

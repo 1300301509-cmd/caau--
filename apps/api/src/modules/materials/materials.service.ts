@@ -253,6 +253,12 @@ export class MaterialsService {
                 actor.memberships.filter((m) => m.active).map((m) => m.role),
               ),
             ],
+            canManageAccounts: actor.memberships.some(
+              (membership) =>
+                membership.active &&
+                (membership.role === 'SYSTEM_ADMIN' ||
+                  membership.role === 'HEADQUARTERS_SUPER_ADMIN'),
+            ),
             canReviewHostingApplications:
               isHeadquartersSuperAdmin(actor) ||
               (await tx.hostingApplicationReviewGrant.count({

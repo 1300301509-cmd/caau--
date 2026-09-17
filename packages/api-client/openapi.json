@@ -11,6 +11,122 @@
         "required": ["action"],
         "type": "object"
       },
+      "AccountMembershipDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "EVENT_MANAGER",
+              "ORGANIZER",
+              "REVIEWER",
+              "SYSTEM_ADMIN",
+              "HEADQUARTERS_SUPER_ADMIN"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "organizationName",
+          "role",
+          "active"
+        ],
+        "type": "object"
+      },
+      "AccountMembershipInputDto": {
+        "properties": {
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "EVENT_MANAGER",
+              "ORGANIZER",
+              "REVIEWER",
+              "SYSTEM_ADMIN",
+              "HEADQUARTERS_SUPER_ADMIN"
+            ],
+            "type": "string"
+          }
+        },
+        "required": ["organizationId", "role"],
+        "type": "object"
+      },
+      "AccountSummaryDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "eventGrantIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "hostingHandlerGrantId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "hostingReviewGrantId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "loginName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/AccountMembershipDto"
+            },
+            "type": "array"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          },
+          "passwordConfigured": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "loginName",
+          "active",
+          "passwordConfigured",
+          "mustChangePassword",
+          "memberships",
+          "eventGrantIds",
+          "hostingHandlerGrantId",
+          "hostingReviewGrantId"
+        ],
+        "type": "object"
+      },
       "ActivateIndividualDto": {
         "properties": {
           "expectedRevision": {
@@ -77,6 +193,68 @@
         ],
         "type": "object"
       },
+      "AuthenticationSessionDto": {
+        "properties": {
+          "csrfToken": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          },
+          "roles": {
+            "items": {
+              "enum": [
+                "EVENT_MANAGER",
+                "ORGANIZER",
+                "REVIEWER",
+                "SYSTEM_ADMIN",
+                "HEADQUARTERS_SUPER_ADMIN"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "roles",
+          "mustChangePassword",
+          "expiresAt",
+          "csrfToken"
+        ],
+        "type": "object"
+      },
+      "ChangePasswordDto": {
+        "properties": {
+          "currentPassword": {
+            "maxLength": 128,
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          },
+          "newPassword": {
+            "maxLength": 128,
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": ["currentPassword", "newPassword"],
+        "type": "object"
+      },
       "CloseDto": {
         "properties": {
           "expectedRevision": {
@@ -102,6 +280,38 @@
           }
         },
         "required": ["expectedRevision", "requirements"],
+        "type": "object"
+      },
+      "CreateAccountDto": {
+        "properties": {
+          "displayName": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "loginName": {
+            "maxLength": 64,
+            "minLength": 3,
+            "type": "string"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/AccountMembershipInputDto"
+            },
+            "type": "array"
+          },
+          "temporaryPassword": {
+            "maxLength": 128,
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "loginName",
+          "displayName",
+          "temporaryPassword",
+          "memberships"
+        ],
         "type": "object"
       },
       "CreateHostingApplicationDto": {
@@ -1596,6 +1806,23 @@
         "required": ["identity"],
         "type": "object"
       },
+      "LoginRequestDto": {
+        "properties": {
+          "loginName": {
+            "maxLength": 64,
+            "minLength": 3,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": ["loginName", "password"],
+        "type": "object"
+      },
       "MaterialRequirementDto": {
         "properties": {
           "acceptanceStandard": {
@@ -1788,6 +2015,18 @@
           }
         },
         "required": ["deadline", "materials"],
+        "type": "object"
+      },
+      "ResetPasswordDto": {
+        "properties": {
+          "temporaryPassword": {
+            "maxLength": 128,
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": ["temporaryPassword"],
         "type": "object"
       },
       "ReviewDto": {
@@ -2279,6 +2518,10 @@
       },
       "WorkspaceIdentityDto": {
         "properties": {
+          "canManageAccounts": {
+            "description": "Current actor may administer internal accounts",
+            "type": "boolean"
+          },
           "canReviewHostingApplications": {
             "description": "Active headquarters hosting application review access",
             "type": "boolean"
@@ -2309,6 +2552,7 @@
           "displayName",
           "roles",
           "canReviewHostingApplications",
+          "canManageAccounts",
           "hostingApplicantOrganizations"
         ],
         "type": "object"
@@ -2319,14 +2563,20 @@
         "bearerFormat": "JWT",
         "scheme": "bearer",
         "type": "http"
+      },
+      "webSession": {
+        "description": "HttpOnly Web session cookie. Unsafe requests also require X-CSRF-Token.",
+        "in": "cookie",
+        "name": "caau_session",
+        "type": "apiKey"
       }
     }
   },
   "info": {
     "contact": {},
-    "description": "Local identity, events, private material files, drafts, immutable submissions, whole-package reviews, extensions and same-organization handover. No WeChat or production identity integration.",
+    "description": "Internal password/Cookie and local Bearer identity, events, private files, immutable submissions and reviews. No public registration or production deployment claim.",
     "title": "CAAU API",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -2543,6 +2793,331 @@
           }
         ],
         "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/authentication/change-password": {
+      "post": {
+        "operationId": "changePassword",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationSessionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required or failed"
+          },
+          "403": {
+            "description": "Origin, CSRF or access denied"
+          },
+          "429": {
+            "description": "Sign-in temporarily unavailable"
+          },
+          "503": {
+            "description": "Authentication unavailable"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/v1/authentication/login": {
+      "post": {
+        "operationId": "passwordLogin",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationSessionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required or failed"
+          },
+          "403": {
+            "description": "Origin, CSRF or access denied"
+          },
+          "429": {
+            "description": "Sign-in temporarily unavailable"
+          },
+          "503": {
+            "description": "Authentication unavailable"
+          }
+        },
+        "summary": "",
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/v1/authentication/logout": {
+      "post": {
+        "operationId": "passwordLogout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required or failed"
+          },
+          "403": {
+            "description": "Origin, CSRF or access denied"
+          },
+          "429": {
+            "description": "Sign-in temporarily unavailable"
+          },
+          "503": {
+            "description": "Authentication unavailable"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/v1/authentication/session": {
+      "get": {
+        "operationId": "getAuthenticationSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationSessionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required or failed"
+          },
+          "403": {
+            "description": "Origin, CSRF or access denied"
+          },
+          "429": {
+            "description": "Sign-in temporarily unavailable"
+          },
+          "503": {
+            "description": "Authentication unavailable"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/v1/authorization/accounts": {
+      "get": {
+        "operationId": "listAccounts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountSummaryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      },
+      "post": {
+        "operationId": "createAccount",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/authorization/accounts/{id}/reset-password": {
+      "post": {
+        "operationId": "resetAccountPassword",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing, expired or revoked local session"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "409": {
+            "description": "Constraint or concurrent change conflict"
+          },
+          "503": {
+            "description": "Identity, database or audit unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authorization"]
       }
     },
     "/api/v1/authorization/audit": {

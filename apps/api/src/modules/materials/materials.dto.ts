@@ -120,6 +120,10 @@ export class WorkspaceIdentityDto extends PersonDto {
   })
   canReviewHostingApplications!: boolean;
   @ApiProperty({
+    description: 'Current actor may administer internal accounts',
+  })
+  canManageAccounts!: boolean;
+  @ApiProperty({
     type: [HostingApplicantOrganizationDto],
     description:
       'Organizations where the current actor has active hosting application handling access',

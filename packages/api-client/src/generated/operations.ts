@@ -140,6 +140,340 @@ export const operations = {
     },
     authenticated: true,
   },
+  changePassword: {
+    path: '/api/v1/authentication/change-password',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          csrfToken: { type: 'string', writeOnly: true },
+          displayName: { type: 'string' },
+          expiresAt: { format: 'date-time', type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          mustChangePassword: { type: 'boolean' },
+          roles: {
+            items: {
+              enum: [
+                'EVENT_MANAGER',
+                'ORGANIZER',
+                'REVIEWER',
+                'SYSTEM_ADMIN',
+                'HEADQUARTERS_SUPER_ADMIN',
+              ],
+              type: 'string',
+            },
+            type: 'array',
+          },
+        },
+        required: [
+          'id',
+          'displayName',
+          'roles',
+          'mustChangePassword',
+          'expiresAt',
+          'csrfToken',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        currentPassword: {
+          maxLength: 128,
+          minLength: 12,
+          type: 'string',
+          writeOnly: true,
+        },
+        newPassword: {
+          maxLength: 128,
+          minLength: 12,
+          type: 'string',
+          writeOnly: true,
+        },
+      },
+      required: ['currentPassword', 'newPassword'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  passwordLogin: {
+    path: '/api/v1/authentication/login',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          csrfToken: { type: 'string', writeOnly: true },
+          displayName: { type: 'string' },
+          expiresAt: { format: 'date-time', type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          mustChangePassword: { type: 'boolean' },
+          roles: {
+            items: {
+              enum: [
+                'EVENT_MANAGER',
+                'ORGANIZER',
+                'REVIEWER',
+                'SYSTEM_ADMIN',
+                'HEADQUARTERS_SUPER_ADMIN',
+              ],
+              type: 'string',
+            },
+            type: 'array',
+          },
+        },
+        required: [
+          'id',
+          'displayName',
+          'roles',
+          'mustChangePassword',
+          'expiresAt',
+          'csrfToken',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        loginName: { maxLength: 64, minLength: 3, type: 'string' },
+        password: {
+          maxLength: 128,
+          minLength: 12,
+          type: 'string',
+          writeOnly: true,
+        },
+      },
+      required: ['loginName', 'password'],
+      type: 'object',
+    },
+    authenticated: false,
+  },
+  passwordLogout: {
+    path: '/api/v1/authentication/logout',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: { id: { format: 'uuid', type: 'string' } },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  getAuthenticationSession: {
+    path: '/api/v1/authentication/session',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: {
+          csrfToken: { type: 'string', writeOnly: true },
+          displayName: { type: 'string' },
+          expiresAt: { format: 'date-time', type: 'string' },
+          id: { format: 'uuid', type: 'string' },
+          mustChangePassword: { type: 'boolean' },
+          roles: {
+            items: {
+              enum: [
+                'EVENT_MANAGER',
+                'ORGANIZER',
+                'REVIEWER',
+                'SYSTEM_ADMIN',
+                'HEADQUARTERS_SUPER_ADMIN',
+              ],
+              type: 'string',
+            },
+            type: 'array',
+          },
+        },
+        required: [
+          'id',
+          'displayName',
+          'roles',
+          'mustChangePassword',
+          'expiresAt',
+          'csrfToken',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  listAccounts: {
+    path: '/api/v1/authorization/accounts',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            active: { type: 'boolean' },
+            displayName: { type: 'string' },
+            eventGrantIds: {
+              items: { format: 'uuid', type: 'string' },
+              type: 'array',
+            },
+            hostingHandlerGrantId: {
+              format: 'uuid',
+              nullable: true,
+              type: 'string',
+            },
+            hostingReviewGrantId: {
+              format: 'uuid',
+              nullable: true,
+              type: 'string',
+            },
+            id: { format: 'uuid', type: 'string' },
+            loginName: { nullable: true, type: 'string' },
+            memberships: {
+              items: {
+                properties: {
+                  active: { type: 'boolean' },
+                  id: { format: 'uuid', type: 'string' },
+                  organizationId: { format: 'uuid', type: 'string' },
+                  organizationName: { type: 'string' },
+                  role: {
+                    enum: [
+                      'EVENT_MANAGER',
+                      'ORGANIZER',
+                      'REVIEWER',
+                      'SYSTEM_ADMIN',
+                      'HEADQUARTERS_SUPER_ADMIN',
+                    ],
+                    type: 'string',
+                  },
+                },
+                required: [
+                  'id',
+                  'organizationId',
+                  'organizationName',
+                  'role',
+                  'active',
+                ],
+                type: 'object',
+              },
+              type: 'array',
+            },
+            mustChangePassword: { type: 'boolean' },
+            passwordConfigured: { type: 'boolean' },
+          },
+          required: [
+            'id',
+            'displayName',
+            'loginName',
+            'active',
+            'passwordConfigured',
+            'mustChangePassword',
+            'memberships',
+            'eventGrantIds',
+            'hostingHandlerGrantId',
+            'hostingReviewGrantId',
+          ],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  createAccount: {
+    path: '/api/v1/authorization/accounts',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: { id: { format: 'uuid', type: 'string' } },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        displayName: { maxLength: 80, type: 'string' },
+        loginName: { maxLength: 64, minLength: 3, type: 'string' },
+        memberships: {
+          items: {
+            properties: {
+              organizationId: { format: 'uuid', type: 'string' },
+              role: {
+                enum: [
+                  'EVENT_MANAGER',
+                  'ORGANIZER',
+                  'REVIEWER',
+                  'SYSTEM_ADMIN',
+                  'HEADQUARTERS_SUPER_ADMIN',
+                ],
+                type: 'string',
+              },
+            },
+            required: ['organizationId', 'role'],
+            type: 'object',
+          },
+          type: 'array',
+        },
+        temporaryPassword: {
+          maxLength: 128,
+          minLength: 12,
+          type: 'string',
+          writeOnly: true,
+        },
+      },
+      required: [
+        'loginName',
+        'displayName',
+        'temporaryPassword',
+        'memberships',
+      ],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  resetAccountPassword: {
+    path: '/api/v1/authorization/accounts/{id}/reset-password',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: { id: { format: 'uuid', type: 'string' } },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        temporaryPassword: {
+          maxLength: 128,
+          minLength: 12,
+          type: 'string',
+          writeOnly: true,
+        },
+      },
+      required: ['temporaryPassword'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
   getSecurityAudit: {
     path: '/api/v1/authorization/audit',
     method: 'GET',
@@ -5394,6 +5728,10 @@ export const operations = {
     responses: {
       '200': {
         properties: {
+          canManageAccounts: {
+            description: 'Current actor may administer internal accounts',
+            type: 'boolean',
+          },
           canReviewHostingApplications: {
             description:
               'Active headquarters hosting application review access',
@@ -5421,6 +5759,7 @@ export const operations = {
           'displayName',
           'roles',
           'canReviewHostingApplications',
+          'canManageAccounts',
           'hostingApplicantOrganizations',
         ],
         type: 'object',

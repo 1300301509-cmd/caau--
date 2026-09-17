@@ -2,7 +2,7 @@
 
 本仓库用于建设 CAAU 微信小程序、Web 管理后台和后端 API。
 
-当前优先任务为CAAU-029“总部Web正式账号密码认证”。A阶段已基于既有`InternalUser`、角色/grant和opaque `Session`完成安全设计与验收计划，运行时代码尚未实施；目标是正常模式使用HttpOnly Cookie登录，并保留显式本地测试模式和小程序Bearer兼容。见[认证技术设计](docs/adr/0011-password-cookie-authentication.md)和[分阶段计划](docs/planning/caau-029-password-authentication.md)。
+当前优先任务为CAAU-029“总部Web正式账号密码认证”。A设计与B后端/追加迁移/生成契约已完成本地验收，隔离`db:test` 47/47通过；C Web登录、改密和账号管理页面尚未开始。实现复用既有`InternalUser`、角色/grant和opaque `Session`，正常模式使用HttpOnly Cookie，并保留显式本地测试模式和小程序Bearer兼容。见[认证技术设计](docs/adr/0011-password-cookie-authentication.md)和[分阶段计划](docs/planning/caau-029-password-authentication.md)。
 
 CAAU-028总部“赛事审核中心”设计已作为总部Web统一界面：默认进入承办申请审核，办赛材料审核作为同模块次级入口；原5173旧壳层不再作为产品方向。视觉与信息结构见[审核中心设计](docs/product/review-center-design.md)，业务接口、权限和历史规则继续沿用CAAU-027。
 

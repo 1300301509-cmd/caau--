@@ -17,6 +17,7 @@ export async function createApplication(
       logger: ['error', 'warn'],
     },
   );
+  if (config.trustProxy > 0) app.set('trust proxy', config.trustProxy);
   app.useBodyParser('json', { limit: '512kb' });
   app.use(
     (
@@ -32,8 +33,8 @@ export async function createApplication(
   app.enableCors({
     origin: config.origins,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: false,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+    credentials: true,
   });
   SwaggerModule.setup('openapi', app, createOpenApiDocument(app), {
     ui: false,

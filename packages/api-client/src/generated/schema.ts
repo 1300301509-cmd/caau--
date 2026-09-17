@@ -65,6 +65,102 @@ export interface paths {
     patch: operations['HostingController_reviewGrantActive'];
     trace?: never;
   };
+  '/api/v1/authentication/change-password': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['changePassword'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/authentication/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['passwordLogin'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/authentication/logout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['passwordLogout'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/authentication/session': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getAuthenticationSession'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/authorization/accounts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listAccounts'];
+    put?: never;
+    post: operations['createAccount'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/authorization/accounts/{id}/reset-password': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['resetAccountPassword'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/authorization/audit': {
     parameters: {
       query?: never;
@@ -1260,6 +1356,47 @@ export interface components {
       /** @enum {string} */
       action: 'task.read' | 'content.write' | 'review' | 'file.download';
     };
+    AccountMembershipDto: {
+      active: boolean;
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      organizationId: string;
+      organizationName: string;
+      /** @enum {string} */
+      role:
+        | 'EVENT_MANAGER'
+        | 'ORGANIZER'
+        | 'REVIEWER'
+        | 'SYSTEM_ADMIN'
+        | 'HEADQUARTERS_SUPER_ADMIN';
+    };
+    AccountMembershipInputDto: {
+      /** Format: uuid */
+      organizationId: string;
+      /** @enum {string} */
+      role:
+        | 'EVENT_MANAGER'
+        | 'ORGANIZER'
+        | 'REVIEWER'
+        | 'SYSTEM_ADMIN'
+        | 'HEADQUARTERS_SUPER_ADMIN';
+    };
+    AccountSummaryDto: {
+      active: boolean;
+      displayName: string;
+      eventGrantIds: string[];
+      /** Format: uuid */
+      hostingHandlerGrantId: string | null;
+      /** Format: uuid */
+      hostingReviewGrantId: string | null;
+      /** Format: uuid */
+      id: string;
+      loginName: string | null;
+      memberships: components['schemas']['AccountMembershipDto'][];
+      mustChangePassword: boolean;
+      passwordConfigured: boolean;
+    };
     ActivateIndividualDto: {
       expectedRevision: number;
       reason: string;
@@ -1282,6 +1419,26 @@ export interface components {
       requestId: string;
       resourceId: string | null;
     };
+    AuthenticationSessionDto: {
+      csrfToken: string;
+      displayName: string;
+      /** Format: date-time */
+      expiresAt: string;
+      /** Format: uuid */
+      id: string;
+      mustChangePassword: boolean;
+      roles: (
+        | 'EVENT_MANAGER'
+        | 'ORGANIZER'
+        | 'REVIEWER'
+        | 'SYSTEM_ADMIN'
+        | 'HEADQUARTERS_SUPER_ADMIN'
+      )[];
+    };
+    ChangePasswordDto: {
+      currentPassword: string;
+      newPassword: string;
+    };
     CloseDto: {
       expectedRevision: number;
       reason: string;
@@ -1289,6 +1446,12 @@ export interface components {
     ConfigureTaskDto: {
       expectedRevision: number;
       requirements: components['schemas']['RequirementsDto'];
+    };
+    CreateAccountDto: {
+      displayName: string;
+      loginName: string;
+      memberships: components['schemas']['AccountMembershipInputDto'][];
+      temporaryPassword: string;
     };
     CreateHostingApplicationDto: {
       /** Format: uuid */
@@ -1789,6 +1952,10 @@ export interface components {
         | 'organizer-a'
         | 'organizer-b';
     };
+    LoginRequestDto: {
+      loginName: string;
+      password: string;
+    };
     MaterialRequirementDto: {
       acceptanceStandard: string;
       /** Format: date-time */
@@ -1862,6 +2029,9 @@ export interface components {
       deadline: string;
       /** @description Empty allowed only for individual channel tasks */
       materials: components['schemas']['MaterialRequirementDto'][];
+    };
+    ResetPasswordDto: {
+      temporaryPassword: string;
     };
     ReviewDto: {
       /** @enum {string} */
@@ -2016,6 +2186,8 @@ export interface components {
       displayName: string;
     };
     WorkspaceIdentityDto: {
+      /** @description Current actor may administer internal accounts */
+      canManageAccounts: boolean;
       /** @description Active headquarters hosting application review access */
       canReviewHostingApplications: boolean;
       displayName: string;
@@ -2187,6 +2359,402 @@ export interface operations {
       };
       /** @description Revision, state, or idempotency conflict */
       409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  changePassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ChangePasswordDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthenticationSessionDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication required or failed */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Origin, CSRF or access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Sign-in temporarily unavailable */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  passwordLogin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LoginRequestDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthenticationSessionDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication required or failed */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Origin, CSRF or access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Sign-in temporarily unavailable */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  passwordLogout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication required or failed */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Origin, CSRF or access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Sign-in temporarily unavailable */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getAuthenticationSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthenticationSessionDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication required or failed */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Origin, CSRF or access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Sign-in temporarily unavailable */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  listAccounts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AccountSummaryDto'][];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Missing, expired or revoked local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Constraint or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Identity, database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  createAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateAccountDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Missing, expired or revoked local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Constraint or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Identity, database or audit unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  resetAccountPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResetPasswordDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdDto'];
+        };
+      };
+      /** @description Invalid input */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Missing, expired or revoked local session */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Constraint or concurrent change conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Identity, database or audit unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };

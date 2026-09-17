@@ -707,16 +707,18 @@ export async function individualIntegration(
       await api('sys', 'PATCH', `authorization/users/${users.reviewer2}`, {
         active: true,
       });
-      const saved = tokens.reviewer2,
+      const replacement = randomBytes(32).toString('base64url'),
         token = randomBytes(32).toString('base64url');
-      await sql.query(
-        'INSERT INTO "Session" (id,"tokenHash","userId","expiresAt") VALUES ($1,$2,$3,now()+interval \'1 hour\')',
-        [
-          randomUUID(),
-          createHash('sha256').update(token).digest('hex'),
-          users.reviewer2,
-        ],
-      );
+      for (const value of [replacement, token])
+        await sql.query(
+          'INSERT INTO "Session" (id,"tokenHash","userId","expiresAt") VALUES ($1,$2,$3,now()+interval \'1 hour\')',
+          [
+            randomUUID(),
+            createHash('sha256').update(value).digest('hex'),
+            users.reviewer2,
+          ],
+        );
+      const saved = replacement;
       tokens.reviewer2 = token;
       try {
         await api('reviewer2', 'POST', 'authorization/logout');

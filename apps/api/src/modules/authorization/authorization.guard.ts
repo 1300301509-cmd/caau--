@@ -22,10 +22,14 @@ export class AuthorizationGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     if (this.reflector.get<boolean>('caau.public', context.getHandler()))
       return true;
-    if (!this.reflector.get<string>('caau.action', context.getHandler()))
-      throw new ForbiddenException('No permission policy');
+    const action = this.reflector.get<string>(
+      'caau.action',
+      context.getHandler(),
+    );
+    if (!action) throw new ForbiddenException('No permission policy');
     await this.service.authenticate(
       context.switchToHttp().getRequest<AuthRequest>(),
+      action,
     );
     return true;
   }

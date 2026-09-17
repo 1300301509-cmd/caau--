@@ -7,10 +7,20 @@ export function createOpenApiDocument(app: INestApplication) {
     new DocumentBuilder()
       .setTitle('CAAU API')
       .addBearerAuth()
-      .setDescription(
-        'Local identity, events, private material files, drafts, immutable submissions, whole-package reviews, extensions and same-organization handover. No WeChat or production identity integration.',
+      .addCookieAuth(
+        'caau_session',
+        {
+          type: 'apiKey',
+          in: 'cookie',
+          description:
+            'HttpOnly Web session cookie. Unsafe requests also require X-CSRF-Token.',
+        },
+        'webSession',
       )
-      .setVersion('0.4.0')
+      .setDescription(
+        'Internal password/Cookie and local Bearer identity, events, private files, immutable submissions and reviews. No public registration or production deployment claim.',
+      )
+      .setVersion('0.5.0')
       .build(),
   );
 }

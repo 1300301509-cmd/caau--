@@ -40,6 +40,64 @@ export class LocalSessionDto {
   @ApiProperty() token!: string;
   @ApiProperty({ format: 'date-time' }) expiresAt!: string;
 }
+export class LoginRequestDto {
+  @ApiProperty({ minLength: 3, maxLength: 64 }) loginName!: string;
+  @ApiProperty({ minLength: 12, maxLength: 128, writeOnly: true })
+  password!: string;
+}
+export class AuthenticationSessionDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() displayName!: string;
+  @ApiProperty({ enum: roles, isArray: true })
+  roles!: Array<(typeof roles)[number]>;
+  @ApiProperty() mustChangePassword!: boolean;
+  @ApiProperty({ format: 'date-time' }) expiresAt!: string;
+  @ApiProperty({ writeOnly: true }) csrfToken!: string;
+}
+export class ChangePasswordDto {
+  @ApiProperty({ minLength: 12, maxLength: 128, writeOnly: true })
+  currentPassword!: string;
+  @ApiProperty({ minLength: 12, maxLength: 128, writeOnly: true })
+  newPassword!: string;
+}
+export class AccountMembershipInputDto {
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({ enum: roles }) role!: (typeof roles)[number];
+}
+export class CreateAccountDto {
+  @ApiProperty({ minLength: 3, maxLength: 64 }) loginName!: string;
+  @ApiProperty({ maxLength: 80 }) displayName!: string;
+  @ApiProperty({ minLength: 12, maxLength: 128, writeOnly: true })
+  temporaryPassword!: string;
+  @ApiProperty({ type: [AccountMembershipInputDto] })
+  memberships!: AccountMembershipInputDto[];
+}
+export class ResetPasswordDto {
+  @ApiProperty({ minLength: 12, maxLength: 128, writeOnly: true })
+  temporaryPassword!: string;
+}
+export class AccountMembershipDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty() organizationName!: string;
+  @ApiProperty({ enum: roles }) role!: (typeof roles)[number];
+  @ApiProperty() active!: boolean;
+}
+export class AccountSummaryDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() displayName!: string;
+  @ApiProperty({ nullable: true, type: String }) loginName!: string | null;
+  @ApiProperty() active!: boolean;
+  @ApiProperty() passwordConfigured!: boolean;
+  @ApiProperty() mustChangePassword!: boolean;
+  @ApiProperty({ type: [AccountMembershipDto] })
+  memberships!: AccountMembershipDto[];
+  @ApiProperty({ type: [String], format: 'uuid' }) eventGrantIds!: string[];
+  @ApiProperty({ nullable: true, type: String, format: 'uuid' })
+  hostingHandlerGrantId!: string | null;
+  @ApiProperty({ nullable: true, type: String, format: 'uuid' })
+  hostingReviewGrantId!: string | null;
+}
 export class UserDto {
   @ApiProperty({ maxLength: 80 }) displayName!: string;
 }
