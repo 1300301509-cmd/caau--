@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Card, Modal, Spin, Tag } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Button, Card, Modal, Tag } from 'antd';
+import { createPortal } from 'react-dom';
+import { ReviewOverview } from './ReviewOverview';
 import { ApiError, type components } from '@caau/api-client';
 import { client } from '../materials/client';
 import './hosting.css';
@@ -99,6 +101,11 @@ const formOf = (submission?: Submission) =>
   (submission?.form ?? {}) as FormSnapshot;
 
 export function HostingReviewPage() {
+  const [accountSlot, setAccountSlot] = useState<HTMLElement | null>(null);
+  useEffect(
+    () => setAccountSlot(document.getElementById('hq-account-slot')),
+    [],
+  );
   const [choices, setChoices] = useState<S['LocalIdentityChoiceDto'][]>([]);
   const [identityKey, setIdentityKey] = useState('');
   const [identity, setIdentity] = useState<S['WorkspaceIdentityDto']>();
@@ -110,7 +117,9 @@ export function HostingReviewPage() {
   const [selectedId, setSelectedId] = useState(
     () => new URLSearchParams(location.search).get('application') ?? '',
   );
-  const [filter, setFilter] = useState<Status>('PENDING_REVIEW');
+  const [detailOpen, setDetailOpen] = useState(() =>
+    new URLSearchParams(location.search).has('application'),
+  );
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -129,6 +138,7 @@ export function HostingReviewPage() {
     setIdentity(undefined);
     setDetails([]);
     setSelectedId('');
+    setDetailOpen(false);
   }, []);
 
   const load = useCallback(
@@ -156,6 +166,7 @@ export function HostingReviewPage() {
         if (requestEpoch !== epoch.current || activeToken.current !== session)
           return;
         setIdentity(nextIdentity);
+        if (!nextIdentity.canReviewHostingApplications) setDetailOpen(false);
         setToken(session);
         setDetails(nextDetails);
         setError(
@@ -166,7 +177,8 @@ export function HostingReviewPage() {
         setSelectedId((current) =>
           nextDetails.some((item) => item.id === current)
             ? current
-            : (nextDetails.find((item) => item.status === filter)?.id ??
+            : (nextDetails.find((item) => item.status === 'PENDING_REVIEW')
+                ?.id ??
               nextDetails[0]?.id ??
               ''),
         );
@@ -191,7 +203,7 @@ export function HostingReviewPage() {
         if (requestEpoch === epoch.current) setLoading(false);
       }
     },
-    [clearProtected, filter],
+    [clearProtected],
   );
 
   useEffect(() => {
@@ -201,7 +213,12 @@ export function HostingReviewPage() {
       .then(async (next) => {
         if (!mounted) return;
         setChoices(next);
-        setIdentityKey(next[0]?.key ?? '');
+        setIdentityKey(
+          next.find((choice) => choice.displayName.includes('总部审核员甲'))
+            ?.key ??
+            next[0]?.key ??
+            '',
+        );
         setEntryState('enabled');
         const saved = sessionStorage.getItem(sessionKey);
         if (saved) {
@@ -229,10 +246,6 @@ export function HostingReviewPage() {
     return () => window.clearInterval(timer);
   }, [load, token]);
 
-  const filtered = useMemo(
-    () => details.filter((item) => item.status === filter),
-    [details, filter],
-  );
   const selected = details.find((item) => item.id === selectedId);
   const currentSubmission =
     selected?.submissions.find(
@@ -245,6 +258,7 @@ export function HostingReviewPage() {
 
   const select = (id: string) => {
     setSelectedId(id);
+    setDetailOpen(true);
     setResult('');
     setError('');
     history.replaceState(null, '', `/hosting-applications?application=${id}`);
@@ -362,16 +376,22 @@ export function HostingReviewPage() {
     }
   };
 
-  return (
-    <div className="hosting-workspace">
-      {entryState === 'loading' && <Card loading title="本地测试身份" />}
-      {entryState === 'disabled' && (
-        <Alert type="info" showIcon title="本地测试身份入口未启用" />
-      )}
-      {entryState === 'unavailable' && (
-        <Alert type="warning" showIcon title="暂时无法连接本地 API" />
-      )}
-      {entryState === 'enabled' && (
+  const identityEntry =
+    entryState === 'enabled' ? (
+      <details className="review-identity-disclosure" open={!identity}>
+        <summary>
+          <span className="review-identity-avatar" aria-hidden="true">
+            {identity?.displayName.slice(0, 1) ?? '总'}
+          </span>
+          <span>
+            {identity ? identity.displayName : '选择总部测试身份'}
+            <small>仅限本地测试</small>
+          </span>
+          <span className="review-identity-switch">
+            {identity ? '切换身份' : '展开身份选择'}{' '}
+            <span aria-hidden="true">⌄</span>
+          </span>
+        </summary>
         <Card
           className="hosting-identity"
           title={identity ? identity.displayName : '选择本地测试身份'}
@@ -429,8 +449,22 @@ export function HostingReviewPage() {
             )}
           </div>
         </Card>
+      </details>
+    ) : null;
+
+  return (
+    <div className="hosting-workspace">
+      {entryState === 'loading' && <Card loading title="本地测试身份" />}
+      {entryState === 'disabled' && (
+        <Alert type="info" showIcon title="本地测试身份入口未启用" />
       )}
-      {error && (
+      {entryState === 'unavailable' && (
+        <Alert type="warning" showIcon title="暂时无法连接本地 API" />
+      )}
+      {identity && accountSlot
+        ? createPortal(identityEntry, accountSlot)
+        : identityEntry}
+      {error && !detailOpen && (
         <Alert
           className="hosting-alert"
           type="error"
@@ -446,7 +480,7 @@ export function HostingReviewPage() {
           }
         />
       )}
-      {result && (
+      {result && !detailOpen && (
         <Alert
           className="hosting-alert"
           type="success"
@@ -456,438 +490,442 @@ export function HostingReviewPage() {
           onClose={() => setResult('')}
         />
       )}
+      <ReviewOverview
+        items={identity?.canReviewHostingApplications ? details : []}
+        available={!!identity?.canReviewHostingApplications}
+        loading={loading}
+        onSelect={select}
+      />
       {identity?.canReviewHostingApplications && (
         <>
-          <Card
-            className="hosting-queue"
-            title="承办申请队列"
-            extra={<span className="muted">共 {details.length} 项</span>}
-          >
-            <div
-              className="hosting-status-tabs"
-              role="group"
-              aria-label="申请状态筛选"
-            >
-              {statuses.map((item) => (
-                <button
-                  type="button"
-                  key={item.value}
-                  className={filter === item.value ? 'active' : ''}
-                  aria-pressed={filter === item.value}
-                  onClick={() => {
-                    setFilter(item.value);
-                    const first = details.find(
-                      (detail) => detail.status === item.value,
-                    );
-                    if (first) select(first.id);
-                  }}
-                >
-                  {item.label}
-                  <span>
-                    {
-                      details.filter((detail) => detail.status === item.value)
-                        .length
-                    }
-                  </span>
-                </button>
-              ))}
-            </div>
-            {loading && !details.length ? (
-              <div className="hosting-loading">
-                <Spin />
-                <span>正在读取申请</span>
-              </div>
-            ) : (
-              <div className="hosting-list">
-                {filtered.map((item) => {
-                  const submission =
-                    item.submissions.find(
-                      (value) => value.id === item.currentSubmissionId,
-                    ) ?? item.submissions.at(-1);
-                  const form = formOf(submission);
-                  return (
-                    <button
-                      type="button"
-                      key={item.id}
-                      className={`hosting-list-row ${selectedId === item.id ? 'selected' : ''}`}
-                      aria-pressed={selectedId === item.id}
-                      onClick={() => select(item.id)}
-                    >
-                      <span>
-                        <strong>{form.eventName ?? '未命名赛事'}</strong>
-                        <small>{item.applicantOrganizationName}</small>
-                      </span>
-                      <span>
-                        <small>赛事日期</small>
-                        {text(form.startDate)} — {text(form.endDate)}
-                      </span>
-                      <span>
-                        <small>提交时间</small>
-                        {submission ? when(submission.submittedAt) : '尚未提交'}
-                      </span>
-                      <Tag color={statusMap[item.status]?.color}>
-                        {statusMap[item.status]?.label ?? item.status}
-                      </Tag>
-                    </button>
-                  );
-                })}
-                {!filtered.length && (
-                  <p className="hosting-empty">当前筛选下暂无申请。</p>
-                )}
-              </div>
-            )}
-          </Card>
           {selected && currentSubmission && (
-            <div className="hosting-detail-grid">
-              <main className="hosting-detail-main">
-                <Card
-                  title={
-                    <div className="hosting-card-title">
-                      <span>申请详情</span>
-                      <Tag color={statusMap[selected.status]?.color}>
-                        {statusMap[selected.status]?.label}
-                      </Tag>
-                    </div>
-                  }
-                >
-                  <div className="hosting-summary">
-                    <div>
-                      <span>赛事名称</span>
-                      <strong>{text(currentForm.eventName)}</strong>
-                    </div>
-                    <div>
-                      <span>申请机构</span>
-                      <strong>{selected.applicantOrganizationName}</strong>
-                    </div>
-                    <div>
-                      <span>赛事日期</span>
-                      <strong>
-                        {text(currentForm.startDate)} 至{' '}
-                        {text(currentForm.endDate)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>当前版本</span>
-                      <strong>V{currentSubmission.version}</strong>
-                    </div>
-                  </div>
-                  <section className="hosting-section">
-                    <h3>赛事地点</h3>
-                    <dl className="hosting-definition">
+            <Modal
+              className="hosting-detail-dialog"
+              title="申请审核"
+              open={detailOpen}
+              width="min(1120px, calc(100vw - 32px))"
+              footer={null}
+              onCancel={() => {
+                if (!busy && !reviewAction) {
+                  setDetailOpen(false);
+                  history.replaceState(null, '', '/hosting-applications');
+                }
+              }}
+            >
+              {error && (
+                <Alert type="error" showIcon title={error} role="alert" />
+              )}
+              {result && <Alert type="success" showIcon title={result} />}
+              <div className="hosting-detail-grid">
+                <div className="hosting-detail-main">
+                  <Card
+                    title={
+                      <div className="hosting-card-title">
+                        <span>申请详情</span>
+                        <Tag color={statusMap[selected.status]?.color}>
+                          {statusMap[selected.status]?.label}
+                        </Tag>
+                      </div>
+                    }
+                  >
+                    <div className="hosting-summary">
                       <div>
-                        <dt>省 / 市 / 区县</dt>
-                        <dd>
-                          {[
-                            currentForm.location?.administrativeArea?.province,
-                            currentForm.location?.administrativeArea?.city,
-                            currentForm.location?.administrativeArea?.district,
-                          ]
-                            .filter(Boolean)
-                            .join(' / ') || '未填写'}
-                        </dd>
+                        <span>赛事名称</span>
+                        <strong>{text(currentForm.eventName)}</strong>
                       </div>
                       <div>
-                        <dt>详细地址</dt>
-                        <dd>{text(currentForm.location?.detailedAddress)}</dd>
+                        <span>申请机构</span>
+                        <strong>{selected.applicantOrganizationName}</strong>
                       </div>
                       <div>
-                        <dt>场馆名称</dt>
-                        <dd>{text(currentForm.location?.venueName)}</dd>
+                        <span>赛事日期</span>
+                        <strong>
+                          {text(currentForm.startDate)} 至{' '}
+                          {text(currentForm.endDate)}
+                        </strong>
                       </div>
-                    </dl>
-                  </section>
-                  <section className="hosting-section">
-                    <h3>办赛经验简介</h3>
-                    <p className="hosting-long-text">
-                      {text(currentForm.eventExperienceIntroduction)}
-                    </p>
-                  </section>
-                  <section className="hosting-section">
-                    <h3>申请资料</h3>
-                    {Object.keys(requirementNames).map((code) => {
-                      const files = currentSubmission.attachments.filter(
-                        (file) => file.requirementCode === code,
-                      );
-                      return (
-                        <div className="hosting-file-group" key={code}>
-                          <div>
-                            <strong>{requirementNames[code]}</strong>
-                            <span>
-                              {files.length
-                                ? `${files.length} 个文件`
-                                : code === 'OTHER_DOCUMENT'
-                                  ? '未提交（选交）'
-                                  : '未提交'}
-                            </span>
-                          </div>
-                          {files.map((file) => (
-                            <div className="hosting-file" key={file.id}>
-                              <span>
-                                <strong>{file.originalName}</strong>
-                                <small>
-                                  {file.extension.toUpperCase()} ·{' '}
-                                  {size(file.expectedBytes)}
-                                </small>
-                              </span>
-                              <Button
-                                data-testid={`hosting-download-${file.id}`}
-                                onClick={() => void download(file)}
-                              >
-                                下载
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </section>
-                </Card>
-                <Card title="提交版本与相邻版本对比">
-                  <div className="hosting-version-tabs">
-                    {selected.submissions.map((submission) => (
-                      <a
-                        key={submission.id}
-                        href={`#submission-${submission.id}`}
-                      >
-                        V{submission.version} · {when(submission.submittedAt)}
-                      </a>
-                    ))}
-                  </div>
-                  {selected.diffs.length ? (
-                    selected.diffs.map((diff, index) => (
-                      <section
-                        className="hosting-diff"
-                        key={diff.toSubmissionId}
-                      >
-                        <h3>
-                          V{index + 1} → V{index + 2}
-                        </h3>
-                        <div className="hosting-change-list">
-                          {(diff.fieldChanges as FieldChange[])
-                            .filter((change) => change.status === 'CHANGED')
-                            .map((change) => (
-                              <div key={change.field}>
-                                <strong>
-                                  {fieldNames[change.field ?? ''] ??
-                                    change.field}
-                                </strong>
-                                <span>
-                                  <del>{text(change.before)}</del>
-                                  <b aria-hidden="true">→</b>
-                                  <ins>{text(change.after)}</ins>
-                                </span>
-                              </div>
-                            ))}
-                        </div>
-                        <div className="hosting-attachment-changes">
-                          {(diff.attachmentChanges as AttachmentChange[])
-                            .filter((change) => change.action !== 'UNCHANGED')
-                            .map((change) => (
-                              <div key={change.requirementCode}>
-                                <strong>
-                                  {requirementNames[
-                                    change.requirementCode ?? ''
-                                  ] ?? change.requirementCode}
-                                </strong>
-                                <span>
-                                  {change.action === 'REPLACED'
-                                    ? '替换'
-                                    : change.action === 'ADDED'
-                                      ? '新增'
-                                      : '移除'}
-                                  ：
-                                  {[
-                                    ...(change.files ?? []),
-                                    ...(change.removed ?? []),
-                                    ...(change.added ?? []),
-                                  ]
-                                    .map((file) => file.originalName)
-                                    .join('、')}
-                                </span>
-                              </div>
-                            ))}
-                        </div>
-                      </section>
-                    ))
-                  ) : (
-                    <p className="muted">当前只有 V1，暂无相邻版本变化。</p>
-                  )}
-                </Card>
-                <Card title="审核历史">
-                  <ol className="hosting-history">
-                    {selected.actions.map((action) => (
-                      <li key={action.id}>
-                        <span
-                          className="hosting-history-dot"
-                          aria-hidden="true"
-                        />
+                      <div>
+                        <span>当前版本</span>
+                        <strong>V{currentSubmission.version}</strong>
+                      </div>
+                    </div>
+                    <section className="hosting-section">
+                      <h3>赛事地点</h3>
+                      <dl className="hosting-definition">
                         <div>
-                          <strong>
-                            {actionNames[action.action] ?? action.action}
-                          </strong>
-                          <span>
-                            {statusMap[action.fromState as Status]?.label ??
-                              action.fromState}{' '}
-                            →{' '}
-                            {statusMap[action.toState as Status]?.label ??
-                              action.toState}
-                          </span>
-                          <small>
-                            操作人 {action.actorId} ·{' '}
-                            <time dateTime={action.occurredAt}>
-                              {when(action.occurredAt)}
-                            </time>
-                          </small>
-                          {typeof action.detail === 'object' &&
-                            action.detail &&
-                            'reason' in action.detail && (
-                              <p>
-                                {text(
-                                  (action.detail as { reason?: unknown })
-                                    .reason,
-                                )}
-                              </p>
-                            )}
+                          <dt>省 / 市 / 区县</dt>
+                          <dd>
+                            {[
+                              currentForm.location?.administrativeArea
+                                ?.province,
+                              currentForm.location?.administrativeArea?.city,
+                              currentForm.location?.administrativeArea
+                                ?.district,
+                            ]
+                              .filter(Boolean)
+                              .join(' / ') || '未填写'}
+                          </dd>
                         </div>
-                      </li>
-                    ))}
-                  </ol>
-                </Card>
-              </main>
-              <aside className="hosting-review-panel">
-                <Card title="审核操作">
-                  {selfReview && (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      title="您提交过此申请，不能参与审核"
-                    />
-                  )}
-                  {!selfReview && selected.status === 'PENDING_REVIEW' && (
-                    <>
-                      <p>
-                        打开详情不会改变状态。明确开始后，其他有权审核员仍可接续处理。
+                        <div>
+                          <dt>详细地址</dt>
+                          <dd>{text(currentForm.location?.detailedAddress)}</dd>
+                        </div>
+                        <div>
+                          <dt>场馆名称</dt>
+                          <dd>{text(currentForm.location?.venueName)}</dd>
+                        </div>
+                      </dl>
+                    </section>
+                    <section className="hosting-section">
+                      <h3>办赛经验简介</h3>
+                      <p className="hosting-long-text">
+                        {text(currentForm.eventExperienceIntroduction)}
                       </p>
-                      <Button
-                        data-testid="hosting-start-review"
-                        type="primary"
-                        block
-                        loading={busy}
-                        onClick={() =>
-                          Modal.confirm({
-                            title: '开始审核当前版本？',
-                            content: `将记录您开始审核 V${currentSubmission.version}，但不会独占申请。`,
-                            okText: '开始审核',
-                            cancelText: '取消',
-                            onOk: () =>
-                              runCommand(
-                                'HostingController_startReview',
-                                '已开始审核，其他有权审核员仍可接续。',
-                              ),
-                          })
-                        }
-                      >
-                        开始审核
-                      </Button>
-                    </>
-                  )}
-                  {!selfReview && selected.status === 'IN_REVIEW' && (
-                    <>
-                      <p>
-                        结论将固定到 V{currentSubmission.version}
-                        。通过会原子创建唯一筹备赛事；补充和驳回均不会创建赛事。
-                      </p>
-                      <div className="hosting-review-actions">
-                        <Button
-                          data-testid="hosting-request-supplement"
-                          onClick={() => {
-                            setReviewAction('supplement');
-                            setReasonError('');
-                          }}
+                    </section>
+                    <section className="hosting-section">
+                      <h3>申请资料</h3>
+                      {Object.keys(requirementNames).map((code) => {
+                        const files = currentSubmission.attachments.filter(
+                          (file) => file.requirementCode === code,
+                        );
+                        return (
+                          <div className="hosting-file-group" key={code}>
+                            <div>
+                              <strong>{requirementNames[code]}</strong>
+                              <span>
+                                {files.length
+                                  ? `${files.length} 个文件`
+                                  : code === 'OTHER_DOCUMENT'
+                                    ? '未提交（选交）'
+                                    : '未提交'}
+                              </span>
+                            </div>
+                            {files.map((file) => (
+                              <div className="hosting-file" key={file.id}>
+                                <span>
+                                  <strong>{file.originalName}</strong>
+                                  <small>
+                                    {file.extension.toUpperCase()} ·{' '}
+                                    {size(file.expectedBytes)}
+                                  </small>
+                                </span>
+                                <Button
+                                  data-testid={`hosting-download-${file.id}`}
+                                  onClick={() => void download(file)}
+                                >
+                                  下载
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </section>
+                  </Card>
+                  <Card title="提交版本与相邻版本对比">
+                    <div className="hosting-version-list">
+                      {selected.submissions.map((submission) => {
+                        const form = formOf(submission);
+                        return (
+                          <details
+                            key={submission.id}
+                            className="hosting-version-record"
+                          >
+                            <summary>
+                              V{submission.version}
+                              <span>{when(submission.submittedAt)}</span>
+                              <span>查看提交快照</span>
+                            </summary>
+                            <dl className="hosting-definition">
+                              <div>
+                                <dt>赛事名称</dt>
+                                <dd>{text(form.eventName)}</dd>
+                              </div>
+                              <div>
+                                <dt>赛事日期</dt>
+                                <dd>
+                                  {text(form.startDate)} 至 {text(form.endDate)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>赛事地点</dt>
+                                <dd>
+                                  {[
+                                    form.location?.administrativeArea?.province,
+                                    form.location?.administrativeArea?.city,
+                                    form.location?.administrativeArea?.district,
+                                    form.location?.detailedAddress,
+                                    form.location?.venueName,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>办赛经验</dt>
+                                <dd>
+                                  {text(form.eventExperienceIntroduction)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>提交人 ID</dt>
+                                <dd>{submission.submittedBy}</dd>
+                              </div>
+                            </dl>
+                            {submission.attachments.map((file) => (
+                              <div className="hosting-file" key={file.id}>
+                                <span>
+                                  <strong>{file.originalName}</strong>
+                                  <small>
+                                    {requirementNames[file.requirementCode]} ·{' '}
+                                    {size(file.expectedBytes)}
+                                  </small>
+                                </span>
+                                <Button onClick={() => void download(file)}>
+                                  下载 V{submission.version} 附件
+                                </Button>
+                              </div>
+                            ))}
+                          </details>
+                        );
+                      })}
+                    </div>
+                    {selected.diffs.length ? (
+                      selected.diffs.map((diff, index) => (
+                        <section
+                          className="hosting-diff"
+                          key={diff.toSubmissionId}
                         >
-                          要求补充
-                        </Button>
+                          <h3>
+                            V{index + 1} → V{index + 2}
+                          </h3>
+                          <div className="hosting-change-list">
+                            {(diff.fieldChanges as FieldChange[])
+                              .filter((change) => change.status === 'CHANGED')
+                              .map((change) => (
+                                <div key={change.field}>
+                                  <strong>
+                                    {fieldNames[change.field ?? ''] ??
+                                      change.field}
+                                  </strong>
+                                  <span>
+                                    <del>{text(change.before)}</del>
+                                    <b aria-hidden="true">→</b>
+                                    <ins>{text(change.after)}</ins>
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                          <div className="hosting-attachment-changes">
+                            {(diff.attachmentChanges as AttachmentChange[])
+                              .filter((change) => change.action !== 'UNCHANGED')
+                              .map((change) => (
+                                <div key={change.requirementCode}>
+                                  <strong>
+                                    {requirementNames[
+                                      change.requirementCode ?? ''
+                                    ] ?? change.requirementCode}
+                                  </strong>
+                                  <span>
+                                    {change.action === 'REPLACED'
+                                      ? '替换'
+                                      : change.action === 'ADDED'
+                                        ? '新增'
+                                        : '移除'}
+                                    ：
+                                    {[
+                                      ...(change.files ?? []),
+                                      ...(change.removed ?? []),
+                                      ...(change.added ?? []),
+                                    ]
+                                      .map((file) => file.originalName)
+                                      .join('、')}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        </section>
+                      ))
+                    ) : (
+                      <p className="muted">当前只有 V1，暂无相邻版本变化。</p>
+                    )}
+                  </Card>
+                  <Card title="审核历史">
+                    <ol className="hosting-history">
+                      {selected.actions.map((action) => (
+                        <li key={action.id}>
+                          <span
+                            className="hosting-history-dot"
+                            aria-hidden="true"
+                          />
+                          <div>
+                            <strong>
+                              {actionNames[action.action] ?? action.action}
+                            </strong>
+                            <span>
+                              {statusMap[action.fromState as Status]?.label ??
+                                action.fromState}{' '}
+                              →{' '}
+                              {statusMap[action.toState as Status]?.label ??
+                                action.toState}
+                            </span>
+                            <small>
+                              操作人 {action.actorId} ·{' '}
+                              <time dateTime={action.occurredAt}>
+                                {when(action.occurredAt)}
+                              </time>
+                            </small>
+                            {typeof action.detail === 'object' &&
+                              action.detail &&
+                              'reason' in action.detail && (
+                                <p>
+                                  {text(
+                                    (action.detail as { reason?: unknown })
+                                      .reason,
+                                  )}
+                                </p>
+                              )}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </Card>
+                </div>
+                <aside className="hosting-review-panel">
+                  <Card title="审核操作">
+                    {selfReview && (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        title="您提交过此申请，不能参与审核"
+                      />
+                    )}
+                    {!selfReview && selected.status === 'PENDING_REVIEW' && (
+                      <>
+                        <p>
+                          打开详情不会改变状态。明确开始后，其他有权审核员仍可接续处理。
+                        </p>
                         <Button
-                          data-testid="hosting-reject"
-                          danger
-                          onClick={() => {
-                            setReviewAction('reject');
-                            setReasonError('');
-                          }}
-                        >
-                          驳回
-                        </Button>
-                        <Button
-                          data-testid="hosting-approve"
+                          data-testid="hosting-start-review"
                           type="primary"
+                          block
                           loading={busy}
                           onClick={() =>
                             Modal.confirm({
-                              title: '确认通过申请？',
-                              content:
-                                '通过后将创建唯一正式赛事、申请来源和承办机构关系，不能在本页撤销。',
-                              okText: '确认通过',
+                              title: '开始审核当前版本？',
+                              content: `将记录您开始审核 V${currentSubmission.version}，但不会独占申请。`,
+                              okText: '开始审核',
                               cancelText: '取消',
                               onOk: () =>
                                 runCommand(
-                                  'HostingController_approve',
-                                  '申请已通过，唯一筹备赛事已创建。',
+                                  'HostingController_startReview',
+                                  '已开始审核，其他有权审核员仍可接续。',
                                 ),
                             })
                           }
                         >
-                          通过
+                          开始审核
                         </Button>
+                      </>
+                    )}
+                    {!selfReview && selected.status === 'IN_REVIEW' && (
+                      <>
+                        <p>
+                          结论将固定到 V{currentSubmission.version}
+                          。通过后会创建一场筹备赛事；要求补充或驳回时不创建赛事。
+                        </p>
+                        <div className="hosting-review-actions">
+                          <Button
+                            data-testid="hosting-request-supplement"
+                            onClick={() => {
+                              setReviewAction('supplement');
+                              setReasonError('');
+                            }}
+                          >
+                            要求补充
+                          </Button>
+                          <Button
+                            data-testid="hosting-reject"
+                            danger
+                            onClick={() => {
+                              setReviewAction('reject');
+                              setReasonError('');
+                            }}
+                          >
+                            驳回
+                          </Button>
+                          <Button
+                            data-testid="hosting-approve"
+                            type="primary"
+                            loading={busy}
+                            onClick={() =>
+                              Modal.confirm({
+                                title: '确认通过申请？',
+                                content:
+                                  '通过后将创建唯一正式赛事、申请来源和承办机构关系，不能在本页撤销。',
+                                okText: '确认通过',
+                                cancelText: '取消',
+                                onOk: () =>
+                                  runCommand(
+                                    'HostingController_approve',
+                                    '申请已通过，唯一筹备赛事已创建。',
+                                  ),
+                              })
+                            }
+                          >
+                            通过
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                    {selected.status === 'NEEDS_SUPPLEMENT' && (
+                      <Alert
+                        type="info"
+                        showIcon
+                        title="已要求承办方补充"
+                        description="等待承办方在同一申请提交下一版本。"
+                      />
+                    )}
+                    {selected.status === 'REJECTED' && (
+                      <Alert
+                        type="error"
+                        showIcon
+                        title="申请已驳回"
+                        description="该申请只读保留，且未创建赛事。"
+                      />
+                    )}
+                    {selected.status === 'APPROVED' && (
+                      <div className="hosting-approved">
+                        <Tag color="green">审核已通过</Tag>
+                        <h3>正式赛事已创建</h3>
+                        <dl>
+                          <div>
+                            <dt>赛事</dt>
+                            <dd>{currentForm.eventName}</dd>
+                          </div>
+                          <div>
+                            <dt>承办机构</dt>
+                            <dd>{selected.applicantOrganizationName}</dd>
+                          </div>
+                          <div>
+                            <dt>申请来源</dt>
+                            <dd>本申请 · V{currentSubmission.version}</dd>
+                          </div>
+                        </dl>
+                        {selected.approvedEventId && (
+                          <Button
+                            type="primary"
+                            href={`/events?event=${selected.approvedEventId}`}
+                          >
+                            进入正式赛事
+                          </Button>
+                        )}
                       </div>
-                    </>
-                  )}
-                  {selected.status === 'NEEDS_SUPPLEMENT' && (
-                    <Alert
-                      type="info"
-                      showIcon
-                      title="已要求承办方补充"
-                      description="等待承办方在同一申请提交下一版本。"
-                    />
-                  )}
-                  {selected.status === 'REJECTED' && (
-                    <Alert
-                      type="error"
-                      showIcon
-                      title="申请已驳回"
-                      description="该申请只读保留，且未创建赛事。"
-                    />
-                  )}
-                  {selected.status === 'APPROVED' && (
-                    <div className="hosting-approved">
-                      <Tag color="green">原子获批完成</Tag>
-                      <h3>正式赛事已创建</h3>
-                      <dl>
-                        <div>
-                          <dt>赛事</dt>
-                          <dd>{currentForm.eventName}</dd>
-                        </div>
-                        <div>
-                          <dt>承办机构</dt>
-                          <dd>{selected.applicantOrganizationName}</dd>
-                        </div>
-                        <div>
-                          <dt>申请来源</dt>
-                          <dd>本申请 · V{currentSubmission.version}</dd>
-                        </div>
-                      </dl>
-                      {selected.approvedEventId && (
-                        <Button
-                          type="primary"
-                          href={`/events?event=${selected.approvedEventId}`}
-                        >
-                          进入正式赛事
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </Card>
-              </aside>
-            </div>
+                    )}
+                  </Card>
+                </aside>
+              </div>
+            </Modal>
           )}
         </>
       )}
