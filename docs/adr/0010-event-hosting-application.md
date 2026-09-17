@@ -1,6 +1,6 @@
 # ADR-0010：赛事承办申请、原子获批与来源追溯
 
-状态：CAAU-027 已确认；B 后端与 C 总部 Web 已按本 ADR 实施并完成本地验收，D 承办方小程序未实施。业务依据见[赛事承办申请产品规格](../product/event-hosting-application-spec.md)。
+状态：CAAU-027已确认；B后端、C总部Web与D承办方小程序已按本ADR实施并完成本地验收；小程序开发者工具文件闭环和真机仍未通过。业务依据见[赛事承办申请产品规格](../product/event-hosting-application-spec.md)。
 
 ## 1. 决策背景
 

@@ -1,6 +1,8 @@
 export default {
   pages: [
     'pages/home/index',
+    'pages/hosting/index',
+    'pages/event-info/index',
     'pages/materials/index',
     'pages/progress/index',
     'pages/profile/index',

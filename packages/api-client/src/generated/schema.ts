@@ -1466,6 +1466,11 @@ export interface components {
       district: string | null;
       province: string;
     };
+    HostingApplicantOrganizationDto: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+    };
     HostingApplicationDetailDto: {
       actions: components['schemas']['HostingActionViewDto'][];
       /** Format: uuid */
@@ -2014,6 +2019,8 @@ export interface components {
       /** @description Active headquarters hosting application review access */
       canReviewHostingApplications: boolean;
       displayName: string;
+      /** @description Organizations where the current actor has active hosting application handling access */
+      hostingApplicantOrganizations: components['schemas']['HostingApplicantOrganizationDto'][];
       /** Format: uuid */
       id: string;
       roles: string[];

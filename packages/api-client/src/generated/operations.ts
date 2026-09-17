@@ -5400,6 +5400,19 @@ export const operations = {
             type: 'boolean',
           },
           displayName: { type: 'string' },
+          hostingApplicantOrganizations: {
+            description:
+              'Organizations where the current actor has active hosting application handling access',
+            items: {
+              properties: {
+                id: { format: 'uuid', type: 'string' },
+                name: { type: 'string' },
+              },
+              required: ['id', 'name'],
+              type: 'object',
+            },
+            type: 'array',
+          },
           id: { format: 'uuid', type: 'string' },
           roles: { items: { type: 'string' }, type: 'array' },
         },
@@ -5408,6 +5421,7 @@ export const operations = {
           'displayName',
           'roles',
           'canReviewHostingApplications',
+          'hostingApplicantOrganizations',
         ],
         type: 'object',
       },

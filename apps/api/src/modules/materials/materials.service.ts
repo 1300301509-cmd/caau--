@@ -265,6 +265,23 @@ export class MaterialsService {
                   },
                 },
               })) > 0,
+            hostingApplicantOrganizations:
+              await tx.hostingApplicationHandlerGrant
+                .findMany({
+                  where: {
+                    active: true,
+                    member: {
+                      userId: actor.id,
+                      active: true,
+                      user: { active: true },
+                    },
+                  },
+                  select: {
+                    organization: { select: { id: true, name: true } },
+                  },
+                  orderBy: { organization: { name: 'asc' } },
+                })
+                .then((grants) => grants.map((grant) => grant.organization)),
           };
         if (action === 'workspace.directory')
           return this.auth.directory(tx, actor);

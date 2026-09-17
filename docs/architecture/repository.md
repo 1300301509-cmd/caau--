@@ -45,6 +45,8 @@ CAAU-005 `materials` 负责赛事/任务业务用例与发布事务，通过授�
 
 CAAU-012 新增 `individual-materials` 模块：独立五态、草稿/动作历史、版本/文件、幂等/CAS及分页快照。通过 authorization 的 `individualPolicy`/授权事务/经办历史 helper、materials 的公开任务创建与配置发布服务、workflow 的任务控制 helper 协作；不复制赛事、机构或有效截止。EventGrant.active 的撤权由 authorization 管理，旧策略同步检查，不将新共享审核权限用于读取旧整包。实现细化见 [ADR-0008](../adr/0008-individual-material-review.md)，操作见 [单份材料后端](../runbooks/individual-materials.md)。C阶段新增 `apps/admin/src/features/individuals` 与 `/materials`；仅消费 `@caau/api-client` 的生成请求和平台无关 `IndividualWorkspace`。协调器管理权威快照/独立编辑缓冲、分页、epoch、顺序轮询/退避、幂等重试和权限清理；React与浏览器生命周期/文件选择只在Web适配。每批先显示已鉴权快照，目录/身份并行、历史按版本补读，不让历史读取阻塞状态展示。真实多会话测试由 `scripts/individual-browser.integration.mjs` 编排，和旧浏览器回归分开；演示见 [Web手册](../runbooks/individual-material-web.md)。D阶段新增 `apps/miniapp/src/features/individuals` 并复用同一协调器；Taro层只负责页面生命周期、网络监听、安全随机数、文件选择/沙箱写入与预览。旧整包组件移至 `features/materials/LegacyTaskPage.tsx` 并按任务通道分流，底部三入口不变。构建/传输测试已通过，但当前开发者工具和真机受AppID/HTTPS/成员及工具服务端口阻塞，不将源码或Web结果冒充平台通过；见 [Taro手册](../runbooks/individual-material-miniapp.md)。
 
+CAAU-027新增`event-hosting-applications`后端聚合及两端feature。总部Web与Taro小程序均只消费生成客户端；小程序`features/hosting`负责表单缓冲、前后台轮询、CAS冲突协调和平台文件适配，`pages/hosting`及`pages/event-info`分别承载申请办理和获批赛事基本信息只读页。身份契约显式返回当前actor具有active申请办理grant的机构，前端不通过赛事或历史申请推导机构。获批赛事基本查看权、宽泛EventGrant和TaskScope仍分离；小程序入口不改变服务端逐请求授权。
+
 CAAU-015 的固定本地身份定义和幂等准备位于仅服务端可用的 `@caau/database`，API authorization 模块只在显式 local 模式列出固定身份并签发原 Session；生成契约由 Web 消费。Web 的 token 只进入标签页 sessionStorage，恢复后仍通过 API 重新鉴权；角色与业务数据不写入前端存储。该入口不新增数据库模型或生产认证模块，边界见 [ADR-0009](../adr/0009-local-test-identity-switching.md)。
 
 基础域规划：auth 管理身份与会话；organizations 管理组织和成员关系；permissions 管理操作及数据范围；events 管理赛事；tasks 管理交付与审核；files 管理附件授权。报名、财务、AI 等在对应需求确认后加入。

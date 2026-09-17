@@ -17,6 +17,7 @@ import approvalIcon from '../../assets/material-approval.png';
 
 type S = components['schemas'];
 const materialApproval = 'material-approval';
+const hostingApplication = 'hosting-application';
 
 export default function Home() {
   const [identity, setIdentity] = useState(session.identity?.displayName ?? '');
@@ -178,7 +179,7 @@ export default function Home() {
         <View className="business-grid">
           <Button
             className={`business-tile ${selected === materialApproval ? 'selected' : ''}`}
-            ariaLabel="材料审批，当前选中"
+            ariaLabel={`材料审批${selected === materialApproval ? '，当前选中' : ''}`}
             onClick={() => setSelected(materialApproval)}
           >
             <Image
@@ -188,6 +189,18 @@ export default function Home() {
               ariaLabel=""
             />
             <Text>材料审批</Text>
+          </Button>
+          <Button
+            className={`business-tile ${selected === hostingApplication ? 'selected' : ''}`}
+            ariaLabel={`赛事承办申请${selected === hostingApplication ? '，当前选中' : ''}`}
+            onClick={() => setSelected(hostingApplication)}
+          >
+            <View className="business-icon application-business-icon">
+              <View className="application-icon-line" />
+              <View className="application-icon-line short" />
+              <View className="application-icon-mark" />
+            </View>
+            <Text>承办申请</Text>
           </Button>
         </View>
       </View>
@@ -219,6 +232,28 @@ export default function Home() {
               <Text className="submodule-title">审核进度</Text>
               <Text className="submodule-description">
                 查看材料状态、退回原因与版本历史
+              </Text>
+            </Button>
+          </View>
+        </View>
+      )}
+
+      {selected === hostingApplication && (
+        <View className="home-section home-submodules">
+          <Text className="home-section-title">赛事承办申请</Text>
+          <Text className="description">
+            无需先选择赛事；查看本机构申请，建立草稿并跟进总部审核。
+          </Text>
+          <View className="submodule-grid hosting-home-grid">
+            <Button
+              className="submodule-card"
+              onClick={() =>
+                void Taro.navigateTo({ url: '/pages/hosting/index' })
+              }
+            >
+              <Text className="submodule-title">申请办理</Text>
+              <Text className="submodule-description">
+                新建申请、上传资料、提交补充并查看获批结果
               </Text>
             </Button>
           </View>

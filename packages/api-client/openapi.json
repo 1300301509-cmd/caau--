@@ -604,6 +604,19 @@
         "required": ["province", "city", "district"],
         "type": "object"
       },
+      "HostingApplicantOrganizationDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
       "HostingApplicationDetailDto": {
         "properties": {
           "actions": {
@@ -2273,6 +2286,13 @@
           "displayName": {
             "type": "string"
           },
+          "hostingApplicantOrganizations": {
+            "description": "Organizations where the current actor has active hosting application handling access",
+            "items": {
+              "$ref": "#/components/schemas/HostingApplicantOrganizationDto"
+            },
+            "type": "array"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -2288,7 +2308,8 @@
           "id",
           "displayName",
           "roles",
-          "canReviewHostingApplications"
+          "canReviewHostingApplications",
+          "hostingApplicantOrganizations"
         ],
         "type": "object"
       }

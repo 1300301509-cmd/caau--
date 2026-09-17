@@ -78,6 +78,12 @@ export async function hostingIntegration(t, context) {
       await call('super', 'POST', 'admin/hosting-application-review-grants', {
         memberId: members.reviewer2,
       });
+      const handlerIdentity = await call('a', 'GET', 'workspace/identity');
+      assert.deepEqual(handlerIdentity.hostingApplicantOrganizations, [
+        { id: orgA, name: 'Synthetic organizer A' },
+      ]);
+      const ungrantedIdentity = await call('b', 'GET', 'workspace/identity');
+      assert.deepEqual(ungrantedIdentity.hostingApplicantOrganizations, []);
       const application = await call('a', 'POST', 'hosting-applications', {
         applicantOrganizationId: orgA,
         key: randomUUID(),

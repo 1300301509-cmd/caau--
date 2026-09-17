@@ -15,11 +15,22 @@ import {
   eventScopedPageUrl,
   resolveEventId,
 } from '../src/features/materials/event-context';
+import {
+  allowedHostingExtension,
+  emptyHostingForm,
+  hostingFormBody,
+  hostingFormFrom,
+  hostingStatusLabel,
+  hostingUploadLimit,
+  validateHostingSubmission,
+} from '../src/features/hosting/platform';
 
 test('miniapp uses the business dashboard and two material submodules without a tab bar', () => {
   assert.equal(appConfig.pages[0], 'pages/home/index');
   assert.ok(appConfig.pages.includes('pages/materials/index'));
   assert.ok(appConfig.pages.includes('pages/progress/index'));
+  assert.ok(appConfig.pages.includes('pages/hosting/index'));
+  assert.ok(appConfig.pages.includes('pages/event-info/index'));
   assert.equal('tabBar' in appConfig, false);
   assert.ok(
     !appConfig.pages.some((page) => /pages\/(todo|events)\//.test(page)),
@@ -56,6 +67,58 @@ test('miniapp individual labels and private file constraints are explicit', () =
   assert.equal(safeLocalName('   '), '材料附件');
 });
 
+test('hosting application form keeps partial drafts and validates confirmed submission data', () => {
+  const form = {
+    ...emptyHostingForm,
+    eventName: '合成测试赛',
+    startDate: '2027-05-01',
+    endDate: '2027-05-01',
+    province: '北京市',
+    city: '北京市',
+    detailedAddress: '合成测试地址',
+    venueName: '合成测试场馆',
+    eventExperienceIntroduction: '仅用于自动测试',
+  };
+  assert.deepEqual(hostingFormFrom(hostingFormBody(form)), form);
+  assert.match(validateHostingSubmission(form, []), /营业执照、现场照片/);
+  const uploads = [
+    {
+      id: '10000000-0000-4000-8000-000000000001',
+      requirementCode: 'BUSINESS_LICENSE' as const,
+      originalName: 'license.pdf',
+      extension: 'pdf',
+      expectedBytes: 10,
+      state: 'CONFIRMED' as const,
+      bound: true,
+      expiresAt: '2027-01-01T00:00:00.000Z',
+    },
+    {
+      id: '10000000-0000-4000-8000-000000000002',
+      requirementCode: 'VENUE_PHOTO' as const,
+      originalName: 'venue.jpg',
+      extension: 'jpg',
+      expectedBytes: 10,
+      state: 'CONFIRMED' as const,
+      bound: true,
+      expiresAt: '2027-01-01T00:00:00.000Z',
+    },
+  ];
+  assert.equal(validateHostingSubmission(form, uploads), '');
+  assert.equal(
+    validateHostingSubmission({ ...form, endDate: '2027-04-30' }, uploads),
+    '结束日期不能早于开始日期。',
+  );
+  assert.equal(
+    allowedHostingExtension('license.PDF', 'BUSINESS_LICENSE'),
+    true,
+  );
+  assert.equal(allowedHostingExtension('venue.pdf', 'VENUE_PHOTO'), false);
+  assert.equal(hostingUploadLimit('BUSINESS_LICENSE'), 1);
+  assert.equal(hostingUploadLimit('VENUE_PHOTO'), 10);
+  assert.equal(hostingUploadLimit('OTHER_DOCUMENT'), 5);
+  assert.equal(hostingStatusLabel('NEEDS_SUPPLEMENT'), '待补充');
+});
+
 test('Taro transport keeps bearer out of URL and carries upload/download bytes', async () => {
   const calls: RequestOptions[] = [];
   const bytes = new Uint8Array([1, 2, 3]).buffer;
@@ -76,6 +139,11 @@ test('Taro transport keeps bearer out of URL and carries upload/download bytes',
             confirmed: false,
           },
         };
+      if (options.url.endsWith('/content') && options.method === 'PUT')
+        return {
+          statusCode: 200,
+          data: { id: '10000000-0000-4000-8000-000000000002' },
+        };
       throw new Error(`Unexpected ${options.method} ${options.url}`);
     }),
   );
@@ -91,7 +159,19 @@ test('Taro transport keeps bearer out of URL and carries upload/download bytes',
     }),
     bytes,
   );
-  assert.equal(calls.length, 2);
+  await client.request('HostingController_uploadContent', {
+    token: 'x'.repeat(43),
+    path: { id: '10000000-0000-4000-8000-000000000002' },
+    body: bytes,
+  });
+  assert.deepEqual(
+    await client.request('HostingController_download', {
+      token: 'x'.repeat(43),
+      path: { id: '10000000-0000-4000-8000-000000000002' },
+    }),
+    bytes,
+  );
+  assert.equal(calls.length, 4);
   assert.ok(calls.every((call) => !call.url.includes('x'.repeat(43))));
   assert.ok(
     calls.every(

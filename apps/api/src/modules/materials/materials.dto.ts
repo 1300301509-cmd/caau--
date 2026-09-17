@@ -109,10 +109,20 @@ export class DirectoryDto {
   organizations!: OrganizationChoiceDto[];
   @ApiProperty({ type: [MemberChoiceDto] }) members!: MemberChoiceDto[];
 }
+export class HostingApplicantOrganizationDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() name!: string;
+}
 export class WorkspaceIdentityDto extends PersonDto {
   @ApiProperty({ type: [String] }) roles!: string[];
   @ApiProperty({
     description: 'Active headquarters hosting application review access',
   })
   canReviewHostingApplications!: boolean;
+  @ApiProperty({
+    type: [HostingApplicantOrganizationDto],
+    description:
+      'Organizations where the current actor has active hosting application handling access',
+  })
+  hostingApplicantOrganizations!: HostingApplicantOrganizationDto[];
 }
