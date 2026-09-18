@@ -1,8 +1,10 @@
+import { WorkflowHeading, WorkflowEmptyIcon } from './WorkflowHeading';
 import { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Input,
   Picker,
+  ScrollView,
   Text,
   Textarea,
   View,
@@ -95,6 +97,7 @@ export function HostingApplicationPage({
   const [pendingSubmit, setPendingSubmit] = useState<PendingSubmit>();
   const [organizationId, setOrganizationId] = useState('');
   const [reading, setReading] = useState(false);
+  const [recordsExpanded, setRecordsExpanded] = useState(false);
 
   const foreground = useRef(false);
   const running = useRef(false);
@@ -703,22 +706,22 @@ export function HostingApplicationPage({
 
   if (!session.token) return <View className="page" />;
   return (
-    <View className="page hosting-page">
-      <View className="page-top-actions">
-        <Text className="eyebrow">CAAU · 承办方</Text>
-        <Button
-          className="text-button compact-button"
-          onClick={() => void Taro.reLaunch({ url: '/pages/home/index' })}
-        >
-          返回首页
-        </Button>
-      </View>
-      <Text className="title">{materials ? '材料提交' : '申请比赛'}</Text>
-      <Text className="description">
-        {materials
-          ? '承办申请获批后，完成7项必填资料，整套提交总部审核。'
-          : '申请不依赖已选赛事；本机构有权经办人可共同保存、提交和补充。'}
-      </Text>
+    <View className="page hosting-page workflow-page">
+      <WorkflowHeading
+        title={materials ? '材料提交' : '申请比赛'}
+        tone={materials ? 'mint' : 'apricot'}
+        note={
+          materials
+            ? '备齐办赛资料，让筹备有序向前。'
+            : '完善比赛信息，继续办理申请。'
+        }
+      />
+      {materials && (
+        <View className="workflow-tip">
+          <Text>7 项必填资料</Text>
+          <Text>整套提交 · 总部统一审核</Text>
+        </View>
+      )}
       {error && <Text className="error">{error}</Text>}
       {notice && <Text className="result">{notice}</Text>}
 
@@ -734,12 +737,14 @@ export function HostingApplicationPage({
           </Text>
         </View>
       ) : materials && !loading && !eligibleEvents.length ? (
-        <View className="card">
+        <View className="card workflow-empty">
+          <WorkflowEmptyIcon />
           <Text className="subtitle">暂无可提交材料的比赛</Text>
           <Text className="description">
             当前没有通过申请的比赛，请联系相关工作人员哦
           </Text>
           <Button
+            type="primary"
             onClick={() =>
               void Taro.navigateTo({ url: '/pages/hosting/index' })
             }
@@ -751,85 +756,78 @@ export function HostingApplicationPage({
         <>
           {materials && (
             <View className="card hosting-create-card">
-              <Text className="subtitle">
-                {materials ? '选择已获批赛事' : '新建申请'}
-              </Text>
-              <Text className="description">
-                {materials
-                  ? '每场赛事一套材料；可保存草稿、提交及退回后补充。'
-                  : '申请机构在建立后不可更改。'}
-              </Text>
-              {materials && !eligibleEvents.length && (
-                <Text className="warning">
-                  暂无获批赛事，请先完成承办申请。
-                </Text>
-              )}
-              {materials &&
-                eligibleEvents.map((event) => (
-                  <Button
-                    key={event.id}
-                    className={
-                      materialEventId === event.id ? 'choice-active' : ''
-                    }
-                    onClick={() => setMaterialEventId(event.id)}
-                  >
-                    {event.name}
-                  </Button>
-                ))}
-              {!materials &&
-                identity.hostingApplicantOrganizations.map((organization) => (
-                  <Button
-                    key={organization.id}
-                    className={
-                      organizationId === organization.id ? 'choice-active' : ''
-                    }
-                    ariaLabel={`${organization.name}${organizationId === organization.id ? '，当前申请机构' : ''}`}
-                    onClick={() => setOrganizationId(organization.id)}
-                  >
-                    {organizationId === organization.id ? '当前：' : ''}
-                    {organization.name}
-                  </Button>
-                ))}
-              <Button
-                type="primary"
-                disabled={
-                  blocked || (materials ? !materialEventId : !organizationId)
+              <Text className="field-label">选择获批赛事</Text>
+              <Picker
+                mode="selector"
+                range={eligibleEvents.map((event) => event.name)}
+                value={Math.max(
+                  0,
+                  eligibleEvents.findIndex(
+                    (event) => event.id === materialEventId,
+                  ),
+                )}
+                disabled={blocked}
+                onChange={(event) =>
+                  setMaterialEventId(
+                    eligibleEvents[Number(event.detail.value)]?.id ?? '',
+                  )
                 }
-                onClick={() => void createApplication()}
               >
-                {materials ? '进入办赛材料' : '建立新申请草稿'}
+                <View className="field picker-field">
+                  {eligibleEvents.find((event) => event.id === materialEventId)
+                    ?.name || '选择赛事'}
+                </View>
+              </Picker>
+              {detail?.materialEventId !== materialEventId && (
+                <Button
+                  type="primary"
+                  disabled={blocked || !materialEventId}
+                  onClick={() => void createApplication()}
+                >
+                  打开办赛材料
+                </Button>
+              )}
+              <Button
+                className="workflow-text-action"
+                onClick={() => setRecordsExpanded((value) => !value)}
+              >
+                {recordsExpanded
+                  ? '收起材料记录'
+                  : `查看材料记录 · ${details.length}`}
               </Button>
             </View>
           )}
 
-          {materials && (
+          {materials && recordsExpanded && (
             <View className="card">
               <Text className="subtitle">
                 {materials ? '本机构办赛材料' : '本机构申请'}
               </Text>
-              <View
-                className="hosting-filter"
-                ariaRole="group"
-                ariaLabel="申请状态筛选"
-              >
-                <Button
-                  className={filter === 'ALL' ? 'active' : ''}
-                  onClick={() => setFilter('ALL')}
+              <ScrollView scrollX className="workflow-filter-scroll">
+                <View
+                  className="hosting-filter"
+                  ariaRole="group"
+                  ariaLabel="申请状态筛选"
                 >
-                  全部
-                </Button>
-                {hostingStatuses
-                  .filter((row) => !materials || row.value !== 'REJECTED')
-                  .map((status) => (
-                    <Button
-                      key={status.value}
-                      className={filter === status.value ? 'active' : ''}
-                      onClick={() => setFilter(status.value)}
-                    >
-                      {status.label}
-                    </Button>
-                  ))}
-              </View>
+                  <Button
+                    className={filter === 'ALL' ? 'active' : ''}
+                    onClick={() => setFilter('ALL')}
+                  >
+                    全部
+                  </Button>
+                  {hostingStatuses
+                    .filter((row) => !materials || row.value !== 'REJECTED')
+                    .map((status) => (
+                      <Button
+                        key={status.value}
+                        className={filter === status.value ? 'active' : ''}
+                        onClick={() => setFilter(status.value)}
+                      >
+                        {status.label}
+                      </Button>
+                    ))}
+                </View>
+              </ScrollView>
               {!visible.length && (
                 <Text className="description">当前筛选下暂无申请。</Text>
               )}
@@ -864,18 +862,23 @@ export function HostingApplicationPage({
             <>
               <View className="card hosting-summary">
                 <View className="hosting-summary-heading">
-                  <Text className="subtitle">申请详情</Text>
+                  <Text className="subtitle">
+                    {materials ? '当前材料' : '申请详情'}
+                  </Text>
                   <Text
                     className={`hosting-state state-${detail.status.toLowerCase()}`}
                   >
                     {hostingStatusLabel(detail.status)}
                   </Text>
                 </View>
-                <Text>申请机构：{detail.applicantOrganizationName}</Text>
-                <Text className="description">申请编号：{detail.id}</Text>
+                <Text>{hostingFormFrom(detail.draft).eventName}</Text>
                 <Text className="description">
-                  当前版本：V{currentSubmission?.version ?? 0} · 修订{' '}
-                  {detail.revision}
+                  {detail.applicantOrganizationName}
+                </Text>
+                <Text className="description">
+                  {currentSubmission
+                    ? `已提交第 ${currentSubmission.version} 版`
+                    : '尚未提交，可继续完善资料'}
                 </Text>
                 {detail.status === 'NEEDS_SUPPLEMENT' && (
                   <Text className="warning">
@@ -902,11 +905,13 @@ export function HostingApplicationPage({
                 <View className="card hosting-form-card">
                   <Text className="subtitle">
                     {detail.status === 'NEEDS_SUPPLEMENT'
-                      ? '补充申请资料'
-                      : '申请资料草稿'}
+                      ? '补充资料'
+                      : materials
+                        ? '办赛信息'
+                        : '比赛信息'}
                   </Text>
                   <Text className="description">
-                    草稿可暂不完整；正式提交时全部必填内容和附件会重新校验。
+                    请完善必填信息，未填完可先保存。
                   </Text>
                   {conflict && (
                     <View className="hosting-conflict">
@@ -1045,10 +1050,13 @@ export function HostingApplicationPage({
                     <>
                       {' '}
                       <Text className="field-label">
-                        {materials
-                          ? '办赛公司/机构简介（3～4句话，介绍地点、办赛经验等）*'
-                          : '办赛经验简介 *'}
+                        {materials ? '办赛公司 / 机构简介 *' : '办赛经验简介 *'}
                       </Text>
+                      {materials && (
+                        <Text className="description">
+                          用 3～4 句话介绍所在地点、办赛经验等。
+                        </Text>
+                      )}
                       <Textarea
                         className="hosting-textarea"
                         ariaLabel="办赛经验简介"
@@ -1100,7 +1108,9 @@ export function HostingApplicationPage({
                   )}
                   {materials && (
                     <>
-                      <Text className="subtitle">公司银行账户</Text>
+                      <Text className="subtitle workflow-inner-section">
+                        公司银行账户
+                      </Text>
                       {(
                         [
                           'bankAccountName',
@@ -1110,6 +1120,11 @@ export function HostingApplicationPage({
                         ] as const
                       ).map((key) => (
                         <View key={key}>
+                          {key === 'contactPhone' && (
+                            <Text className="subtitle workflow-inner-section">
+                              报名与联系
+                            </Text>
+                          )}
                           <Text className="field-label">
                             {hostingFieldLabel(key)} *
                           </Text>
@@ -1185,7 +1200,7 @@ export function HostingApplicationPage({
                 <View className="card">
                   {(materials || detail.formVersion === 1) && (
                     <>
-                      <Text className="subtitle">申请附件</Text>
+                      <Text className="subtitle">上传材料</Text>
                       <Text className="description">
                         营业执照1个；现场照片1～10个；其他文档选交且最多5个。单个不超过10
                         MiB。
@@ -1250,7 +1265,9 @@ export function HostingApplicationPage({
                   >
                     {detail.status === 'NEEDS_SUPPLEMENT'
                       ? '提交补充版本'
-                      : '正式提交申请'}
+                      : materials
+                        ? '提交办赛材料'
+                        : '提交申请'}
                   </Button>
                   {dirty && (
                     <Text className="warning">
@@ -1404,7 +1421,7 @@ export function HostingApplicationPage({
                 {detail.submissions.map((submission) => (
                   <View className="hosting-version-block" key={submission.id}>
                     <Text className="field-label">
-                      不可变 V{submission.version}
+                      第 {submission.version} 版
                     </Text>
                     <Text className="description">
                       提交人 {submission.submittedBy} ·{' '}

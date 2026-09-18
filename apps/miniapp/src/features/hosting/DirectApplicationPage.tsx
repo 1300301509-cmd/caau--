@@ -1,3 +1,8 @@
+import {
+  WorkflowHeading,
+  WorkflowSection,
+  WorkflowEmptyIcon,
+} from './WorkflowHeading';
 import { useRef, useState, useEffect } from 'react';
 import {
   Button,
@@ -231,126 +236,169 @@ export function DirectApplicationPage() {
   }
   const disabled = busy || !!draft.command;
   return (
-    <View className="page hosting-page">
-      <Text className="eyebrow">CAAU · 我要办赛</Text>
-      <Text className="title">申请比赛</Text>
-      <Text className="description">
-        填写比赛信息后提交。中途退出会保留在本机，下次进入可恢复。
-      </Text>
+    <View className="page hosting-page workflow-page">
+      <WorkflowHeading
+        title="申请比赛"
+        note="填写一份申请，开启你的赛事筹备。"
+      />
+      <View className="workflow-tip">
+        <Text>自动保留草稿</Text>
+        <Text>中途退出，下次可继续填写</Text>
+      </View>
       {error && <Text className="error">{error}</Text>}
       {done ? (
-        <View className="card">
+        <View className="card workflow-empty">
+          <WorkflowEmptyIcon />
           <Text className="subtitle">申请已提交</Text>
           <Text className="description">请在办赛进度中查看总部审核情况。</Text>
         </View>
       ) : (
         ready && (
-          <View className="card">
-            <Text className="field-label">申请机构</Text>
-            <Picker
-              mode="selector"
-              disabled={disabled || !!draft.createKey}
-              range={identity!.hostingApplicantOrganizations.map((x) => x.name)}
-              value={identity!.hostingApplicantOrganizations.findIndex(
-                (x) => x.id === org,
-              )}
-              onChange={(e) =>
-                void openOrganization(
-                  identity!,
-                  identity!.hostingApplicantOrganizations[
-                    Number(e.detail.value)
-                  ]!.id,
-                )
-              }
-            >
-              <View className="field picker-field">
-                {
-                  identity!.hostingApplicantOrganizations.find(
-                    (x) => x.id === org,
-                  )?.name
+          <View>
+            <View className="card workflow-form-section">
+              <WorkflowSection number="01" title="比赛信息" />
+              <Text className="field-label">申请机构</Text>
+              <Picker
+                mode="selector"
+                disabled={disabled || !!draft.createKey}
+                range={identity!.hostingApplicantOrganizations.map(
+                  (x) => x.name,
+                )}
+                value={identity!.hostingApplicantOrganizations.findIndex(
+                  (x) => x.id === org,
+                )}
+                onChange={(e) =>
+                  void openOrganization(
+                    identity!,
+                    identity!.hostingApplicantOrganizations[
+                      Number(e.detail.value)
+                    ]!.id,
+                  )
                 }
-              </View>
-            </Picker>
-            <Text className="field-label">比赛名称 *</Text>
-            <Input
-              className="field"
-              ariaLabel="比赛名称"
-              value={draft.form.eventName}
-              disabled={disabled}
-              onInput={(e) => edit({ eventName: e.detail.value })}
-            />
-            <Text className="field-label">比赛日期 *</Text>
-            <Picker
-              mode="date"
-              disabled={disabled}
-              value={draft.form.startDate}
-              onChange={(e) => edit({ startDate: String(e.detail.value) })}
-            >
-              <View className="field picker-field">
-                {draft.form.startDate || '选择比赛日期'}
-              </View>
-            </Picker>
-            <Text className="field-label">省 / 市 / 区县 *</Text>
-            <Picker
-              mode="region"
-              disabled={disabled}
-              value={[
-                draft.form.province,
-                draft.form.city,
-                draft.form.district,
-              ]}
-              onChange={(e) => {
-                const [province, city, district] = e.detail.value;
-                edit({ province, city, district });
-              }}
-            >
-              <View className="field picker-field">
-                {[draft.form.province, draft.form.city, draft.form.district]
-                  .filter(Boolean)
-                  .join(' / ') || '选择省市区'}
-              </View>
-            </Picker>
-            {(
-              [
-                ['detailedAddress', '详细地址'],
-                ['venueName', '场馆名称'],
-                ['contactName', '联系人'],
-                ['contactPhone', '联系手机号'],
-              ] as const
-            ).map(([key, label]) => (
-              <View key={key}>
-                <Text className="field-label">{label} *</Text>
-                <Input
-                  className="field"
-                  ariaLabel={label}
-                  type={key === 'contactPhone' ? 'number' : 'text'}
-                  maxlength={key === 'contactPhone' ? 11 : 200}
-                  value={draft.form[key]}
-                  disabled={disabled}
-                  onInput={(e) => edit({ [key]: e.detail.value })}
-                />
-              </View>
-            ))}
-            <Text className="field-label">补充说明（选填）</Text>
-            <Textarea
-              className="field textarea"
-              maxlength={2000}
-              value={draft.form.additionalNotes}
-              disabled={disabled}
-              onInput={(e) => edit({ additionalNotes: e.detail.value })}
-            />
-            <Button
-              type="primary"
-              loading={busy}
-              disabled={busy}
-              onClick={() => void submit()}
-            >
-              {draft.createKey ? '重试提交' : '提交申请'}
-            </Button>
+              >
+                <View className="field picker-field">
+                  {
+                    identity!.hostingApplicantOrganizations.find(
+                      (x) => x.id === org,
+                    )?.name
+                  }
+                </View>
+              </Picker>
+              <Text className="field-label">比赛名称 *</Text>
+              <Input
+                className="field"
+                ariaLabel="比赛名称"
+                placeholder="请输入比赛名称"
+                value={draft.form.eventName}
+                disabled={disabled}
+                onInput={(e) => edit({ eventName: e.detail.value })}
+              />
+              <Text className="field-label">比赛日期 *</Text>
+              <Picker
+                mode="date"
+                disabled={disabled}
+                value={draft.form.startDate}
+                onChange={(e) => edit({ startDate: String(e.detail.value) })}
+              >
+                <View className="field picker-field">
+                  {draft.form.startDate || '选择比赛日期'}
+                </View>
+              </Picker>
+            </View>
+            <View className="card workflow-form-section">
+              <WorkflowSection number="02" title="比赛场地" />
+              <Text className="field-label">省 / 市 / 区县 *</Text>
+              <Picker
+                mode="region"
+                disabled={disabled}
+                value={[
+                  draft.form.province,
+                  draft.form.city,
+                  draft.form.district,
+                ]}
+                onChange={(e) => {
+                  const [province, city, district] = e.detail.value;
+                  edit({ province, city, district });
+                }}
+              >
+                <View className="field picker-field">
+                  {[draft.form.province, draft.form.city, draft.form.district]
+                    .filter(Boolean)
+                    .join(' / ') || '选择省市区'}
+                </View>
+              </Picker>
+              {(
+                [
+                  ['detailedAddress', '详细地址'],
+                  ['venueName', '场馆名称'],
+                ] as const
+              ).map(([key, label]) => (
+                <View key={key}>
+                  <Text className="field-label">{label} *</Text>
+                  <Input
+                    className="field"
+                    ariaLabel={label}
+                    placeholder={`请输入${label}`}
+                    type="text"
+                    maxlength={200}
+                    value={draft.form[key]}
+                    disabled={disabled}
+                    onInput={(e) => edit({ [key]: e.detail.value })}
+                  />
+                </View>
+              ))}
+            </View>
+            <View className="card workflow-form-section">
+              <WorkflowSection number="03" title="联系与补充" />
+              {(
+                [
+                  ['contactName', '联系人'],
+                  ['contactPhone', '联系手机号'],
+                ] as const
+              ).map(([key, label]) => (
+                <View key={key}>
+                  <Text className="field-label">{label} *</Text>
+                  <Input
+                    className="field"
+                    ariaLabel={label}
+                    placeholder={
+                      key === 'contactPhone'
+                        ? '请输入手机号'
+                        : '请输入联系人姓名'
+                    }
+                    type={key === 'contactPhone' ? 'number' : 'text'}
+                    maxlength={key === 'contactPhone' ? 11 : 200}
+                    value={draft.form[key]}
+                    disabled={disabled}
+                    onInput={(e) => edit({ [key]: e.detail.value })}
+                  />
+                </View>
+              ))}
+              <Text className="field-label">补充说明（选填）</Text>
+              <Textarea
+                className="field textarea"
+                placeholder="其他需要说明的事项"
+                maxlength={2000}
+                value={draft.form.additionalNotes}
+                disabled={disabled}
+                onInput={(e) => edit({ additionalNotes: e.detail.value })}
+              />
+            </View>
+            <View className="workflow-submit">
+              <Button
+                type="primary"
+                loading={busy}
+                disabled={busy}
+                onClick={() => void submit()}
+              >
+                {draft.createKey ? '重试提交' : '提交申请'}
+              </Button>
+            </View>
           </View>
         )
       )}
       <Button
+        className="workflow-text-action"
         onClick={() =>
           void Taro.navigateTo({ url: '/pages/hosting-progress/index' })
         }

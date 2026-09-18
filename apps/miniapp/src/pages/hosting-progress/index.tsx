@@ -1,5 +1,9 @@
+import {
+  WorkflowHeading,
+  WorkflowEmptyIcon,
+} from '../../features/hosting/WorkflowHeading';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Text, View } from '@tarojs/components';
+import { Button, ScrollView, Text, View } from '@tarojs/components';
 import Taro, { useDidHide, useDidShow } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
 import {
@@ -132,29 +136,39 @@ export default function HostingProgress() {
     }
   }
   return (
-    <View className="page">
-      <Text className="eyebrow">CAAU · 办赛全流程</Text>
-      <Text className="title">办赛进度</Text>
-      <Text className="description">
-        页面打开时每3秒自动同步。
-        {updated ? `最近同步 ${updated}` : '正在读取进度…'}
-      </Text>
+    <View className="page workflow-page workflow-progress">
+      <WorkflowHeading
+        title="办赛进度"
+        tone="blue"
+        note="从申请到批准，每一步都在这里。"
+      />
+      <View className="workflow-sync">
+        <View>
+          <Text className="workflow-sync-title">办理动态</Text>
+          <Text className="workflow-sync-time">
+            {updated ? `最近更新 ${updated}` : '正在读取进度…'}
+          </Text>
+        </View>
+        <Button
+          className="workflow-refresh"
+          onClick={() => {
+            clearTimeout(timer.current);
+            void refresh();
+          }}
+        >
+          刷新
+        </Button>
+      </View>
       {error && <Text className="error">{error}</Text>}
-      <Button
-        onClick={() => {
-          clearTimeout(timer.current);
-          void refresh();
-        }}
-      >
-        刷新进度
-      </Button>
       {!rows.length && updated && (
-        <View className="card">
-          <Text>暂无办赛申请</Text>
+        <View className="card workflow-empty">
+          <WorkflowEmptyIcon />
+          <Text className="subtitle">暂无办赛申请</Text>
           <Text className="description">
             从“申请比赛”开始办理，提交后可在此查看各阶段进展。
           </Text>
           <Button
+            type="primary"
             onClick={() =>
               void Taro.navigateTo({ url: '/pages/hosting/index' })
             }
@@ -164,23 +178,25 @@ export default function HostingProgress() {
         </View>
       )}
       <Text className="subtitle">本机构申请</Text>
-      <View className="hosting-filter">
-        <Button
-          className={filter === 'ALL' ? 'active' : ''}
-          onClick={() => setFilter('ALL')}
-        >
-          全部
-        </Button>
-        {hostingStatuses.map((status) => (
+      <ScrollView scrollX className="workflow-filter-scroll">
+        <View className="hosting-filter">
           <Button
-            key={status.value}
-            className={filter === status.value ? 'active' : ''}
-            onClick={() => setFilter(status.value)}
+            className={filter === 'ALL' ? 'active' : ''}
+            onClick={() => setFilter('ALL')}
           >
-            {status.label}
+            全部
           </Button>
-        ))}
-      </View>
+          {hostingStatuses.map((status) => (
+            <Button
+              key={status.value}
+              className={filter === status.value ? 'active' : ''}
+              onClick={() => setFilter(status.value)}
+            >
+              {status.label}
+            </Button>
+          ))}
+        </View>
+      </ScrollView>
       {!!rows.length &&
         !rows.some(
           (row) => filter === 'ALL' || row.applicationStatus === filter,
@@ -188,10 +204,16 @@ export default function HostingProgress() {
       {rows
         .filter((row) => filter === 'ALL' || row.applicationStatus === filter)
         .map((row) => (
-          <View className="card" key={row.applicationId}>
+          <View className="card workflow-journey-card" key={row.applicationId}>
+            <Text
+              className={`workflow-status state-${row.applicationStatus.toLowerCase()}`}
+            >
+              {hostingStatusLabel(row.applicationStatus)}
+            </Text>
             <Text className="subtitle">{row.eventName}</Text>
             <Text className="description">{row.organizationName}</Text>
             <Button
+              className="workflow-open-application"
               onClick={() =>
                 void Taro.navigateTo({
                   url: `/pages/hosting/index?applicationId=${row.applicationId}`,
