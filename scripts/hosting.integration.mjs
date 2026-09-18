@@ -363,6 +363,299 @@ export async function hostingIntegration(t, context) {
     },
   );
 
+  let materialsId = '';
+  await t.test(
+    'CAAU-033 seven required fields, bundle return/resubmit, isolation and no duplicate event',
+    async () => {
+      const source = await call(
+        'a',
+        'GET',
+        `hosting-applications/${approvedId}`,
+      );
+      const eventId = source.approvedEventId;
+      const eventCount = (
+        await sql.query('SELECT count(*)::int n FROM "Event"')
+      ).rows[0].n;
+      await call(
+        'a',
+        'POST',
+        'event-materials',
+        { eventId: randomUUID(), key: randomUUID() },
+        400,
+      );
+      await call(
+        'b',
+        'POST',
+        'event-materials',
+        { eventId, key: randomUUID() },
+        403,
+      );
+      const created = await call('a', 'POST', 'event-materials', {
+        eventId,
+        key: randomUUID(),
+      });
+      materialsId = created.id;
+      assert.equal(created.materialEventId, eventId);
+      assert.equal(
+        (
+          await call('a', 'POST', 'event-materials', {
+            eventId,
+            key: randomUUID(),
+          })
+        ).id,
+        created.id,
+      );
+      assert.ok(
+        !(await call('reviewer', 'GET', 'hosting-applications')).some(
+          (row) => row.id === created.id,
+        ),
+      );
+      const list = await call('reviewer', 'GET', 'event-materials');
+      assert.ok(list.some((row) => row.id === created.id));
+      assert.ok(list.every((row) => !('draft' in row)));
+      await call(
+        'b',
+        'GET',
+        `hosting-applications/${created.id}`,
+        undefined,
+        403,
+      );
+      let d = await call('a', 'GET', `hosting-applications/${created.id}`);
+      const form = {
+        ...d.draft,
+        eventExperienceIntroduction:
+          '本机构位于北京。曾组织青少年赛事。设有专职执行团队。',
+        bankAccountName: '合成办赛机构',
+        bankName: '测试银行',
+        bankAccountNumber: '6222000000000000',
+        registrationStart: '2027-04-01T09:00+08:00',
+        registrationEnd: '2027-04-20T18:00+08:00',
+        contactPhone: '13800000000',
+      };
+      for (const [key, value] of [
+        ['registrationEnd', '2027-03-01T09:00+08:00'],
+        ['contactPhone', '123'],
+        ['bankAccountNumber', 'invalid'],
+      ]) {
+        await call(
+          'a',
+          'PUT',
+          `hosting-applications/${created.id}/draft`,
+          {
+            expectedDraftRevision: d.draftRevision,
+            form: { ...form, [key]: value },
+          },
+          400,
+        );
+      }
+      for (const key of [
+        'eventExperienceIntroduction',
+        'bankAccountName',
+        'bankName',
+        'bankAccountNumber',
+        'registrationStart',
+        'registrationEnd',
+        'contactPhone',
+        'startDate',
+        'endDate',
+      ]) {
+        d = await call('a', 'PUT', `hosting-applications/${created.id}/draft`, {
+          expectedDraftRevision: d.draftRevision,
+          form: { ...form, [key]: null },
+        });
+        const missing = await call(
+          'a',
+          'POST',
+          `hosting-applications/${created.id}/submit`,
+          {
+            expectedDraftRevision: d.draftRevision,
+            expectedRevision: d.revision,
+            key: randomUUID(),
+          },
+          400,
+        );
+        assert.match(missing.message, /请完成机构简介/);
+      }
+      d = await call('a', 'PUT', `hosting-applications/${created.id}/draft`, {
+        expectedDraftRevision: d.draftRevision,
+        form,
+      });
+      await call(
+        'a',
+        'PUT',
+        `hosting-applications/${created.id}/draft`,
+        { expectedDraftRevision: d.draftRevision - 1, form },
+        409,
+      );
+      await call(
+        'a',
+        'POST',
+        `hosting-applications/${created.id}/submit`,
+        {
+          expectedDraftRevision: d.draftRevision,
+          expectedRevision: d.revision,
+          key: randomUUID(),
+        },
+        400,
+      );
+      let licenseId;
+      for (const [requirementCode, extension, bytes] of [
+        [
+          'BUSINESS_LICENSE',
+          'pdf',
+          Buffer.from('%PDF-1.7\nmaterials fixture\n%%EOF'),
+        ],
+        ['VENUE_PHOTO', 'jpg', Buffer.from([255, 216, 1, 2, 255, 217])],
+      ]) {
+        const upload = await call(
+          'a',
+          'POST',
+          `hosting-applications/${created.id}/uploads`,
+          {
+            requirementCode,
+            extension,
+            originalName: `required.${extension}`,
+            expectedBytes: bytes.length,
+            sha256: createHash('sha256').update(bytes).digest('hex'),
+          },
+        );
+        await sendFile('a', upload.id, bytes);
+        await call('a', 'POST', `hosting-uploads/${upload.id}/confirm`, {
+          expectedDraftRevision: d.draftRevision,
+        });
+        d = await call('a', 'GET', `hosting-applications/${created.id}`);
+        if (requirementCode === 'BUSINESS_LICENSE') licenseId = upload.id;
+      }
+      const forbidden = await fetch(
+        `${base}/api/v1/hosting-uploads/${licenseId}/content`,
+        { headers: headers('b', false) },
+      );
+      assert.equal(forbidden.status, 403);
+      const submit = {
+        expectedDraftRevision: d.draftRevision,
+        expectedRevision: d.revision,
+        key: randomUUID(),
+      };
+      const v1 = await call(
+        'a',
+        'POST',
+        `hosting-applications/${created.id}/submit`,
+        submit,
+      );
+      assert.deepEqual(
+        await call(
+          'a',
+          'POST',
+          `hosting-applications/${created.id}/submit`,
+          submit,
+        ),
+        v1,
+      );
+      d = await call('reviewer', 'GET', `hosting-applications/${created.id}`);
+      assert.equal(d.draft, null);
+      await call(
+        'reviewer',
+        'POST',
+        `hosting-applications/${created.id}/start-review`,
+        {
+          submissionId: d.currentSubmissionId,
+          expectedRevision: d.revision,
+          key: randomUUID(),
+        },
+      );
+      d = await call('reviewer', 'GET', `hosting-applications/${created.id}`);
+      await call(
+        'reviewer',
+        'POST',
+        `hosting-applications/${created.id}/request-supplement`,
+        {
+          submissionId: d.currentSubmissionId,
+          expectedRevision: d.revision,
+          key: randomUUID(),
+          reason: '请补充机构简介',
+        },
+      );
+      d = await call('a', 'GET', `hosting-applications/${created.id}`);
+      d = await call('a', 'PUT', `hosting-applications/${created.id}/draft`, {
+        expectedDraftRevision: d.draftRevision,
+        form: {
+          ...form,
+          eventExperienceIntroduction:
+            '补充后的公司简介。位于北京。已完成多场赛事。',
+        },
+      });
+      await call('a', 'POST', `hosting-applications/${created.id}/submit`, {
+        expectedDraftRevision: d.draftRevision,
+        expectedRevision: d.revision,
+        key: randomUUID(),
+      });
+      d = await call('reviewer2', 'GET', `hosting-applications/${created.id}`);
+      await call(
+        'reviewer2',
+        'POST',
+        `hosting-applications/${created.id}/start-review`,
+        {
+          submissionId: d.currentSubmissionId,
+          expectedRevision: d.revision,
+          key: randomUUID(),
+        },
+      );
+      d = await call('reviewer2', 'GET', `hosting-applications/${created.id}`);
+      await call(
+        'reviewer2',
+        'POST',
+        `hosting-applications/${created.id}/reject`,
+        {
+          submissionId: d.currentSubmissionId,
+          expectedRevision: d.revision,
+          key: randomUUID(),
+          reason: 'not supported',
+        },
+        400,
+      );
+      const approve = {
+        submissionId: d.currentSubmissionId,
+        expectedRevision: d.revision,
+        key: randomUUID(),
+      };
+      const approved = await call(
+        'reviewer2',
+        'POST',
+        `hosting-applications/${created.id}/approve`,
+        approve,
+      );
+      assert.equal(approved.eventId, eventId);
+      assert.deepEqual(
+        await call(
+          'reviewer2',
+          'POST',
+          `hosting-applications/${created.id}/approve`,
+          approve,
+        ),
+        approved,
+      );
+      d = await call('a', 'GET', `hosting-applications/${created.id}`);
+      assert.equal(d.submissions.length, 2);
+      assert.equal(
+        d.submissions[0].form.eventExperienceIntroduction,
+        form.eventExperienceIntroduction,
+      );
+      assert.equal(d.status, 'APPROVED');
+      assert.equal(d.approvedEventId, null);
+      await call(
+        'a',
+        'PUT',
+        `hosting-applications/${created.id}/draft`,
+        { expectedDraftRevision: d.draftRevision, form },
+        409,
+      );
+      assert.equal(
+        (await sql.query('SELECT count(*)::int n FROM "Event"')).rows[0].n,
+        eventCount,
+      );
+    },
+  );
+
   async function browserCandidate(label) {
     const application = await call('a', 'POST', 'hosting-applications', {
       applicantOrganizationId: orgA,
@@ -448,6 +741,7 @@ export async function hostingIntegration(t, context) {
         config,
         tokens,
         approvedId,
+        materialsId,
         licenseName: approvedLicenseName,
         continuationId,
         concurrentId,

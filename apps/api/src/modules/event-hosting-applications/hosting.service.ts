@@ -32,6 +32,13 @@ type Status =
   | 'APPROVED';
 type Requirement = 'BUSINESS_LICENSE' | 'VENUE_PHOTO' | 'OTHER_DOCUMENT';
 type DraftForm = {
+  bankAccountName?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  registrationStart?: string | null;
+  registrationEnd?: string | null;
+  contactPhone?: string | null;
+
   eventName: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -127,13 +134,23 @@ const dateValue = (value: unknown) => {
     throw new BadRequestException('Invalid calendar date');
   return normalized;
 };
-function formValue(input: unknown): DraftForm {
+function formValue(input: unknown, materials = false): DraftForm {
   const form = bodyObject(input, [
     'eventName',
     'startDate',
     'endDate',
     'location',
     'eventExperienceIntroduction',
+    ...(materials
+      ? [
+          'bankAccountName',
+          'bankName',
+          'bankAccountNumber',
+          'registrationStart',
+          'registrationEnd',
+          'contactPhone',
+        ]
+      : []),
   ]);
   let location: DraftForm['location'] = null;
   if (form.location !== undefined && form.location !== null) {
@@ -169,10 +186,70 @@ function formValue(input: unknown): DraftForm {
   };
   if (result.startDate && result.endDate && result.endDate < result.startDate)
     throw new BadRequestException('End date cannot be before start date');
+  if (materials) {
+    for (const key of [
+      'bankAccountName',
+      'bankName',
+      'bankAccountNumber',
+      'registrationStart',
+      'registrationEnd',
+      'contactPhone',
+    ] as const)
+      result[key] = optionalText(form[key], 200);
+    for (const key of ['registrationStart', 'registrationEnd'] as const) {
+      const value = result[key];
+      if (value) {
+        dateValue(value.slice(0, 10));
+        if (
+          Number(value.slice(11, 13)) > 23 ||
+          Number(value.slice(14, 16)) > 59
+        )
+          throw new BadRequestException('报名时间格式不正确');
+      }
+      if (
+        value &&
+        (!/^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d)?(?:Z|[+-]\d\d:\d\d)$/.test(
+          value,
+        ) ||
+          !Number.isFinite(Date.parse(value)))
+      )
+        throw new BadRequestException('报名时间格式不正确');
+    }
+    if (
+      result.registrationStart &&
+      result.registrationEnd &&
+      Date.parse(result.registrationEnd) < Date.parse(result.registrationStart)
+    )
+      throw new BadRequestException('报名截止时间不能早于开始时间');
+    if (result.contactPhone && !/^1[3-9]\d{9}$/.test(result.contactPhone))
+      throw new BadRequestException('请输入有效的11位报名联系人手机号');
+    if (
+      result.bankAccountNumber &&
+      !/^\d{6,40}$/.test(result.bankAccountNumber)
+    )
+      throw new BadRequestException('银行账号需为6至40位数字');
+  }
   return result;
 }
-function completeForm(value: unknown): DraftForm {
-  const form = formValue(value);
+function completeForm(value: unknown, materials = false): DraftForm {
+  const form = formValue(value, materials);
+  if (materials) {
+    if (
+      !form.eventExperienceIntroduction ||
+      !form.startDate ||
+      !form.endDate ||
+      !form.bankAccountName ||
+      !form.bankName ||
+      !form.bankAccountNumber ||
+      !form.registrationStart ||
+      !form.registrationEnd ||
+      !form.contactPhone
+    )
+      throw new BadRequestException(
+        '请完成机构简介、银行账户、报名时间、比赛日期及联系人手机号',
+      );
+    return form;
+  }
   const area = form.location?.administrativeArea;
   if (
     !form.eventName ||
@@ -239,6 +316,12 @@ const fieldPaths = [
   ['location', 'detailedAddress'],
   ['location', 'venueName'],
   ['eventExperienceIntroduction'],
+  ['bankAccountName'],
+  ['bankName'],
+  ['bankAccountNumber'],
+  ['registrationStart'],
+  ['registrationEnd'],
+  ['contactPhone'],
 ];
 
 const applicationInclude = {
@@ -400,6 +483,7 @@ export class HostingService {
       draftRevision: application.draftRevision,
       currentSubmissionId: application.currentSubmissionId,
       approvedEventId: application.approvedEventId,
+      materialEventId: application.materialEventId,
       canReview: scope !== 'handler',
       createdAt: application.createdAt.toISOString(),
       draft: scope === 'reviewer' ? null : application.draft,
@@ -441,13 +525,21 @@ export class HostingService {
       draftRevision: number;
       currentSubmissionId: string | null;
       approvedEventId: string | null;
+      materialEventId: string | null;
       createdAt: Date;
       applicantOrganization: { name: string };
     },
     canReview: boolean,
   ) {
     return {
-      ...application,
+      id: application.id,
+      applicantOrganizationId: application.applicantOrganizationId,
+      status: application.status,
+      revision: application.revision,
+      draftRevision: application.draftRevision,
+      currentSubmissionId: application.currentSubmissionId,
+      approvedEventId: application.approvedEventId,
+      materialEventId: application.materialEventId,
       applicantOrganizationName: application.applicantOrganization.name,
       canReview,
       createdAt: application.createdAt.toISOString(),
@@ -653,18 +745,36 @@ export class HostingService {
       { retries: 3, retryUnique: true },
     );
   }
-  create(token: string, input: unknown) {
+  create(token: string, input: unknown, materials = false) {
     return this.auth.run(
       token,
       'hosting.application.create',
       undefined,
       input,
       async (tx, actor) => {
-        const body = bodyObject(input, ['applicantOrganizationId', 'key']);
-        const organizationId = uuid(body.applicantOrganizationId);
+        const body = bodyObject(
+          input,
+          materials ? ['eventId', 'key'] : ['applicantOrganizationId', 'key'],
+        );
+        const materialEventId = materials ? uuid(body.eventId) : null;
+        const source = materialEventId
+          ? await tx.eventHostingApplication.findFirst({
+              where: {
+                approvedEventId: materialEventId,
+                materialEventId: null,
+                status: 'APPROVED',
+              },
+            })
+          : null;
+        if (materials && !source)
+          throw new BadRequestException('仅承办申请已获批的赛事可办理材料');
+        const organizationId =
+          source?.applicantOrganizationId ?? uuid(body.applicantOrganizationId);
         const key = uuid(body.key);
         await this.handler(tx, actor, organizationId);
-        const hash = requestHash({ organizationId });
+        const hash = requestHash(
+          materials ? { organizationId, materialEventId } : { organizationId },
+        );
         const prior = await tx.hostingApplicationCommand.findFirst({
           where: { actorId: actor.id, key },
         });
@@ -675,11 +785,27 @@ export class HostingService {
             );
           return prior.result;
         }
+        if (materialEventId) {
+          const existing = await tx.eventHostingApplication.findUnique({
+            where: { materialEventId },
+            include: { applicantOrganization: true },
+          });
+          if (existing) return this.listView(existing, false);
+        }
         const application = await tx.eventHostingApplication.create({
           data: {
             applicantOrganizationId: organizationId,
+            materialEventId,
             createdBy: actor.id,
-            draft: json(emptyDraft()),
+            draft: json(
+              source
+                ? {
+                    ...emptyDraft(),
+                    ...formValue(source.draft),
+                    eventExperienceIntroduction: null,
+                  }
+                : emptyDraft(),
+            ),
           },
           include: { applicantOrganization: true },
         });
@@ -700,7 +826,7 @@ export class HostingService {
       { retries: 3, retryUnique: true },
     );
   }
-  list(token: string) {
+  list(token: string, materials = false) {
     return this.auth.run(
       token,
       'hosting.application.list',
@@ -744,7 +870,10 @@ export class HostingService {
         }
         return (
           await tx.eventHostingApplication.findMany({
-            where,
+            where: {
+              ...where,
+              materialEventId: materials ? { not: null } : null,
+            },
             include: { applicantOrganization: true },
             orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
           })
@@ -776,10 +905,16 @@ export class HostingService {
       async (tx, actor, applicationId) => {
         const body = bodyObject(input, ['expectedDraftRevision', 'form']);
         const expected = positive(body.expectedDraftRevision, 'draft revision');
-        const form = formValue(body.form);
         await this.lock(tx, applicationId!);
         actor = await this.auth.reloadActor(tx, token);
         let application = await this.load(tx, applicationId!);
+        const form = formValue(body.form, !!application.materialEventId);
+        if (application.materialEventId) {
+          const event = await tx.event.findUniqueOrThrow({
+            where: { id: application.materialEventId },
+          });
+          form.eventName = event.name;
+        }
         await this.handler(tx, actor, application.applicantOrganizationId);
         if (
           !['DRAFT', 'NEEDS_SUPPLEMENT'].includes(application.status) ||
@@ -1048,7 +1183,10 @@ export class HostingService {
           application.draftRevision !== expectedDraft
         )
           throw new ConflictException('Application changed or is not editable');
-        const form = completeForm(application.draft);
+        const form = completeForm(
+          application.draft,
+          !!application.materialEventId,
+        );
         const files = application.uploads.filter(
           (file) => file.state === 'CONFIRMED' && file.bound,
         );
@@ -1152,6 +1290,8 @@ export class HostingService {
         actor = await this.auth.reloadActor(tx, token);
         const application = await this.load(tx, applicationId!);
         await this.reviewer(tx, actor);
+        if (application.materialEventId && operation === 'reject')
+          throw new BadRequestException('办赛材料请使用退回补充');
         await this.selfReviewDenied(tx, actor, application.id);
         const prior = await this.command(
           tx,
@@ -1218,6 +1358,43 @@ export class HostingService {
             },
           });
           const result = { id: application.id, status };
+          await this.saveCommand(
+            tx,
+            application.id,
+            actor.id,
+            key,
+            hash,
+            result,
+          );
+          return result;
+        }
+        if (application.materialEventId) {
+          const submission = application.submissions.find(
+            (item) => item.id === submissionId,
+          );
+          if (!submission) deny();
+          completeForm(submission.form, true);
+          await tx.eventHostingApplication.update({
+            where: { id: application.id },
+            data: { status: 'APPROVED', revision },
+          });
+          await tx.hostingApplicationAction.create({
+            data: {
+              applicationId: application.id,
+              submissionId,
+              revision,
+              action: 'APPROVE',
+              fromState: 'IN_REVIEW',
+              toState: 'APPROVED',
+              actorId: actor.id,
+              detail: json({ eventId: application.materialEventId }),
+            },
+          });
+          const result = {
+            id: application.id,
+            status: 'APPROVED',
+            eventId: application.materialEventId,
+          };
           await this.saveCommand(
             tx,
             application.id,

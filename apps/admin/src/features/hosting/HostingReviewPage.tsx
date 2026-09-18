@@ -12,6 +12,13 @@ type Submission = S['HostingSubmissionViewDto'];
 type Status = Detail['status'];
 type ReviewAction = 'supplement' | 'reject';
 type FormSnapshot = {
+  bankAccountName?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  registrationStart?: string;
+  registrationEnd?: string;
+  contactPhone?: string;
+
   eventName?: string;
   startDate?: string;
   endDate?: string;
@@ -75,6 +82,13 @@ const actionNames: Record<string, string> = {
   APPROVE: '通过',
 };
 const fieldNames: Record<string, string> = {
+  bankAccountName: '账户户名',
+  bankName: '开户银行',
+  bankAccountNumber: '银行账号',
+  registrationStart: '报名开始时间',
+  registrationEnd: '报名截止时间',
+  contactPhone: '报名联系人手机号',
+
   eventName: '赛事名称',
   startDate: '开始日期',
   endDate: '结束日期',
@@ -100,7 +114,11 @@ const text = (value: unknown) =>
 const formOf = (submission?: Submission) =>
   (submission?.form ?? {}) as FormSnapshot;
 
-export function HostingReviewPage() {
+export function HostingReviewPage({
+  materials = false,
+}: {
+  materials?: boolean;
+}) {
   const auth = useAuth();
   const [choices, setChoices] = useState<S['LocalIdentityChoiceDto'][]>([]);
   const [identityKey, setIdentityKey] = useState('');
@@ -144,7 +162,12 @@ export function HostingReviewPage() {
       try {
         const [nextIdentity, items] = await Promise.all([
           client.request('getWorkspaceIdentity', { token: session }),
-          client.request('HostingController_list', { token: session }),
+          client.request(
+            materials
+              ? 'HostingController_listMaterials'
+              : 'HostingController_list',
+            { token: session },
+          ),
         ]);
         const reviewItems = nextIdentity.canReviewHostingApplications
           ? items.filter((item) => item.canReview)
@@ -199,7 +222,7 @@ export function HostingReviewPage() {
         if (requestEpoch === epoch.current) setLoading(false);
       }
     },
-    [clearProtected],
+    [clearProtected, materials],
   );
 
   useEffect(() => {
@@ -497,6 +520,7 @@ export function HostingReviewPage() {
         />
       )}
       <ReviewOverview
+        materials={materials}
         items={identity?.canReviewHostingApplications ? details : []}
         available={!!identity?.canReviewHostingApplications}
         loading={loading}
@@ -507,7 +531,7 @@ export function HostingReviewPage() {
           {selected && currentSubmission && (
             <Modal
               className="hosting-detail-dialog"
-              title="申请审核"
+              title={materials ? '办赛材料审核' : '申请审核'}
               open={detailOpen}
               width="min(1120px, calc(100vw - 32px))"
               footer={null}
@@ -527,7 +551,7 @@ export function HostingReviewPage() {
                   <Card
                     title={
                       <div className="hosting-card-title">
-                        <span>申请详情</span>
+                        <span>{materials ? '办赛材料详情' : '申请详情'}</span>
                         <Tag color={statusMap[selected.status]?.color}>
                           {statusMap[selected.status]?.label}
                         </Tag>
@@ -588,8 +612,30 @@ export function HostingReviewPage() {
                         {text(currentForm.eventExperienceIntroduction)}
                       </p>
                     </section>
+                    {materials && (
+                      <section className="hosting-section">
+                        <h3>报名与收款信息</h3>
+                        <dl className="hosting-definition">
+                          {(
+                            [
+                              'bankAccountName',
+                              'bankName',
+                              'bankAccountNumber',
+                              'registrationStart',
+                              'registrationEnd',
+                              'contactPhone',
+                            ] as const
+                          ).map((key) => (
+                            <div key={key}>
+                              <dt>{fieldNames[key]}</dt>
+                              <dd>{text(formOf(currentSubmission)[key])}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </section>
+                    )}
                     <section className="hosting-section">
-                      <h3>申请资料</h3>
+                      <h3>{materials ? '必填附件' : '申请资料'}</h3>
                       {Object.keys(requirementNames).map((code) => {
                         const files = currentSubmission.attachments.filter(
                           (file) => file.requirementCode === code,
@@ -643,6 +689,22 @@ export function HostingReviewPage() {
                               <span>查看提交快照</span>
                             </summary>
                             <dl className="hosting-definition">
+                              {materials &&
+                                (
+                                  [
+                                    'bankAccountName',
+                                    'bankName',
+                                    'bankAccountNumber',
+                                    'registrationStart',
+                                    'registrationEnd',
+                                    'contactPhone',
+                                  ] as const
+                                ).map((key) => (
+                                  <div key={key}>
+                                    <dt>{fieldNames[key]}</dt>
+                                    <dd>{text(form[key])}</dd>
+                                  </div>
+                                ))}
                               <div>
                                 <dt>赛事名称</dt>
                                 <dd>{text(form.eventName)}</dd>
@@ -668,7 +730,9 @@ export function HostingReviewPage() {
                                 </dd>
                               </div>
                               <div>
-                                <dt>办赛经验</dt>
+                                <dt>
+                                  {materials ? '公司/机构简介' : '办赛经验'}
+                                </dt>
                                 <dd>
                                   {text(form.eventExperienceIntroduction)}
                                 </dd>
@@ -848,33 +912,40 @@ export function HostingReviewPage() {
                               setReasonError('');
                             }}
                           >
-                            要求补充
+                            {materials ? '退回补充' : '要求补充'}
                           </Button>
-                          <Button
-                            data-testid="hosting-reject"
-                            danger
-                            onClick={() => {
-                              setReviewAction('reject');
-                              setReasonError('');
-                            }}
-                          >
-                            驳回
-                          </Button>
+                          {!materials && (
+                            <Button
+                              data-testid="hosting-reject"
+                              danger
+                              onClick={() => {
+                                setReviewAction('reject');
+                                setReasonError('');
+                              }}
+                            >
+                              驳回
+                            </Button>
+                          )}
                           <Button
                             data-testid="hosting-approve"
                             type="primary"
                             loading={busy}
                             onClick={() =>
                               Modal.confirm({
-                                title: '确认通过申请？',
-                                content:
-                                  '通过后将创建唯一正式赛事、申请来源和承办机构关系，不能在本页撤销。',
+                                title: materials
+                                  ? '确认通过办赛材料？'
+                                  : '确认通过申请？',
+                                content: materials
+                                  ? '确认本套7项办赛材料审核通过，结论与当前版本将保留。不会再次创建赛事。'
+                                  : '通过后将创建唯一正式赛事、申请来源和承办机构关系，不能在本页撤销。',
                                 okText: '确认通过',
                                 cancelText: '取消',
                                 onOk: () =>
                                   runCommand(
                                     'HostingController_approve',
-                                    '申请已通过，唯一筹备赛事已创建。',
+                                    materials
+                                      ? '办赛材料整套审核通过。'
+                                      : '申请已通过，唯一筹备赛事已创建。',
                                   ),
                               })
                             }
@@ -903,7 +974,9 @@ export function HostingReviewPage() {
                     {selected.status === 'APPROVED' && (
                       <div className="hosting-approved">
                         <Tag color="green">审核已通过</Tag>
-                        <h3>正式赛事已创建</h3>
+                        <h3>
+                          {materials ? '办赛材料已整套通过' : '正式赛事已创建'}
+                        </h3>
                         <dl>
                           <div>
                             <dt>赛事</dt>

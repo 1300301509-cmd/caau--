@@ -1017,6 +1017,130 @@ export const operations = {
     },
     authenticated: true,
   },
+  HostingController_listMaterials: {
+    path: '/api/v1/event-materials',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            applicantOrganizationId: { format: 'uuid', type: 'string' },
+            applicantOrganizationName: { type: 'string' },
+            approvedEventId: { format: 'uuid', nullable: true, type: 'string' },
+            canReview: {
+              description: 'Current actor has active application review access',
+              type: 'boolean',
+            },
+            createdAt: { format: 'date-time', type: 'string' },
+            currentSubmissionId: {
+              format: 'uuid',
+              nullable: true,
+              type: 'string',
+            },
+            draftRevision: { type: 'integer' },
+            id: { format: 'uuid', type: 'string' },
+            materialEventId: { format: 'uuid', nullable: true, type: 'string' },
+            revision: { type: 'integer' },
+            status: {
+              enum: [
+                'DRAFT',
+                'PENDING_REVIEW',
+                'IN_REVIEW',
+                'NEEDS_SUPPLEMENT',
+                'REJECTED',
+                'APPROVED',
+              ],
+              type: 'string',
+            },
+          },
+          required: [
+            'materialEventId',
+            'id',
+            'applicantOrganizationId',
+            'applicantOrganizationName',
+            'status',
+            'revision',
+            'draftRevision',
+            'currentSubmissionId',
+            'approvedEventId',
+            'canReview',
+            'createdAt',
+          ],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  HostingController_createMaterials: {
+    path: '/api/v1/event-materials',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          applicantOrganizationId: { format: 'uuid', type: 'string' },
+          applicantOrganizationName: { type: 'string' },
+          approvedEventId: { format: 'uuid', nullable: true, type: 'string' },
+          canReview: {
+            description: 'Current actor has active application review access',
+            type: 'boolean',
+          },
+          createdAt: { format: 'date-time', type: 'string' },
+          currentSubmissionId: {
+            format: 'uuid',
+            nullable: true,
+            type: 'string',
+          },
+          draftRevision: { type: 'integer' },
+          id: { format: 'uuid', type: 'string' },
+          materialEventId: { format: 'uuid', nullable: true, type: 'string' },
+          revision: { type: 'integer' },
+          status: {
+            enum: [
+              'DRAFT',
+              'PENDING_REVIEW',
+              'IN_REVIEW',
+              'NEEDS_SUPPLEMENT',
+              'REJECTED',
+              'APPROVED',
+            ],
+            type: 'string',
+          },
+        },
+        required: [
+          'materialEventId',
+          'id',
+          'applicantOrganizationId',
+          'applicantOrganizationName',
+          'status',
+          'revision',
+          'draftRevision',
+          'currentSubmissionId',
+          'approvedEventId',
+          'canReview',
+          'createdAt',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        eventId: { format: 'uuid', type: 'string' },
+        key: { format: 'uuid', type: 'string' },
+      },
+      required: ['eventId', 'key'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
   listEvents: {
     path: '/api/v1/events',
     method: 'GET',
@@ -1151,6 +1275,7 @@ export const operations = {
             },
             draftRevision: { type: 'integer' },
             id: { format: 'uuid', type: 'string' },
+            materialEventId: { format: 'uuid', nullable: true, type: 'string' },
             revision: { type: 'integer' },
             status: {
               enum: [
@@ -1165,6 +1290,7 @@ export const operations = {
             },
           },
           required: [
+            'materialEventId',
             'id',
             'applicantOrganizationId',
             'applicantOrganizationName',
@@ -1208,6 +1334,7 @@ export const operations = {
           },
           draftRevision: { type: 'integer' },
           id: { format: 'uuid', type: 'string' },
+          materialEventId: { format: 'uuid', nullable: true, type: 'string' },
           revision: { type: 'integer' },
           status: {
             enum: [
@@ -1222,6 +1349,7 @@ export const operations = {
           },
         },
         required: [
+          'materialEventId',
           'id',
           'applicantOrganizationId',
           'applicantOrganizationName',
@@ -1356,6 +1484,7 @@ export const operations = {
           },
           draftRevision: { type: 'integer' },
           id: { format: 'uuid', type: 'string' },
+          materialEventId: { format: 'uuid', nullable: true, type: 'string' },
           revision: { type: 'integer' },
           status: {
             enum: [
@@ -1457,6 +1586,7 @@ export const operations = {
           },
         },
         required: [
+          'materialEventId',
           'id',
           'applicantOrganizationId',
           'applicantOrganizationName',
@@ -1623,6 +1753,7 @@ export const operations = {
           },
           draftRevision: { type: 'integer' },
           id: { format: 'uuid', type: 'string' },
+          materialEventId: { format: 'uuid', nullable: true, type: 'string' },
           revision: { type: 'integer' },
           status: {
             enum: [
@@ -1724,6 +1855,7 @@ export const operations = {
           },
         },
         required: [
+          'materialEventId',
           'id',
           'applicantOrganizationId',
           'applicantOrganizationName',
@@ -1758,6 +1890,14 @@ export const operations = {
         expectedDraftRevision: { minimum: 1, type: 'integer' },
         form: {
           properties: {
+            bankAccountName: { maxLength: 200, nullable: true, type: 'string' },
+            bankAccountNumber: {
+              maxLength: 200,
+              nullable: true,
+              type: 'string',
+            },
+            bankName: { maxLength: 200, nullable: true, type: 'string' },
+            contactPhone: { maxLength: 200, nullable: true, type: 'string' },
             endDate: { format: 'date', nullable: true, type: 'string' },
             eventExperienceIntroduction: {
               maxLength: 20000,
@@ -1770,6 +1910,12 @@ export const operations = {
               nullable: true,
               type: 'object',
               properties: {},
+            },
+            registrationEnd: { maxLength: 200, nullable: true, type: 'string' },
+            registrationStart: {
+              maxLength: 200,
+              nullable: true,
+              type: 'string',
             },
             startDate: { format: 'date', nullable: true, type: 'string' },
           },

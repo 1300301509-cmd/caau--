@@ -27,6 +27,9 @@ test.beforeEach(async ({ page }) => {
       body: JSON.stringify(identity),
     }),
   );
+  await page.route('**/api/v1/event-materials', (route) =>
+    route.fulfill({ contentType: 'application/json', body: '[]' }),
+  );
   await page.route('**/api/v1/hosting-applications', (route) =>
     route.fulfill({ contentType: 'application/json', body: '[]' }),
   );

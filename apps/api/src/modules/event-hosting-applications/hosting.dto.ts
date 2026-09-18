@@ -27,6 +27,10 @@ export class HostingGrantViewDto {
 export class HostingGrantActiveDto {
   @ApiProperty() active!: boolean;
 }
+export class CreateEventMaterialsDto {
+  @ApiProperty({ format: 'uuid' }) eventId!: string;
+  @ApiProperty({ format: 'uuid' }) key!: string;
+}
 export class CreateHostingApplicationDto {
   @ApiProperty({ format: 'uuid' }) applicantOrganizationId!: string;
   @ApiProperty({ format: 'uuid' }) key!: string;
@@ -44,6 +48,49 @@ export class HostingLocationDto {
   @ApiProperty({ maxLength: 120 }) venueName!: string;
 }
 export class HostingDraftFormDto {
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    required: false,
+    maxLength: 200,
+  })
+  bankAccountName?: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    required: false,
+    maxLength: 200,
+  })
+  bankName?: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    required: false,
+    maxLength: 200,
+  })
+  bankAccountNumber?: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    required: false,
+    maxLength: 200,
+  })
+  registrationStart?: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    required: false,
+    maxLength: 200,
+  })
+  registrationEnd?: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    required: false,
+    maxLength: 200,
+  })
+  contactPhone?: string | null;
+
   @ApiProperty({ type: String, maxLength: 120, nullable: true })
   eventName!: string | null;
   @ApiProperty({ type: String, format: 'date', nullable: true })
@@ -127,6 +174,8 @@ export class HostingDiffViewDto {
   attachmentChanges!: object[];
 }
 export class HostingApplicationListItemDto {
+  @ApiProperty({ type: String, format: 'uuid', nullable: true })
+  materialEventId!: string | null;
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) applicantOrganizationId!: string;
   @ApiProperty() applicantOrganizationName!: string;

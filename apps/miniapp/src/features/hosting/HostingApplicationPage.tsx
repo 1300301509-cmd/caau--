@@ -68,7 +68,15 @@ const editableStatus = (status?: string) =>
   status === 'DRAFT' || status === 'NEEDS_SUPPLEMENT';
 const when = (value: string) => new Date(value).toLocaleString();
 
-export function HostingApplicationPage() {
+export function HostingApplicationPage({
+  materials = false,
+}: {
+  materials?: boolean;
+}) {
+  const [eligibleEvents, setEligibleEvents] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [materialEventId, setMaterialEventId] = useState(session.eventId);
   const [identity, setIdentity] = useState<S['WorkspaceIdentityDto']>();
   const [details, setDetails] = useState<HostingDetail[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -158,8 +166,30 @@ export function HostingApplicationPage() {
     try {
       const [nextIdentity, rows] = await Promise.all([
         client.request('getWorkspaceIdentity', { token }),
-        client.request('HostingController_list', { token }),
+        client.request(
+          materials
+            ? 'HostingController_listMaterials'
+            : 'HostingController_list',
+          { token },
+        ),
       ]);
+      const sources = materials
+        ? await client.request('HostingController_list', { token })
+        : [];
+      const approved = await Promise.all(
+        sources
+          .filter((row) => row.status === 'APPROVED' && row.approvedEventId)
+          .map(async (row) => {
+            const source = await client.request('HostingController_detail', {
+              token,
+              path: { id: row.id },
+            });
+            return {
+              id: row.approvedEventId!,
+              name: hostingFormFrom(source.submissions.at(-1)?.form).eventName,
+            };
+          }),
+      );
       const nextDetails = await Promise.all(
         rows.map((row) =>
           client.request('HostingController_detail', {
@@ -175,6 +205,12 @@ export function HostingApplicationPage() {
       )
         return;
       failures.current = 0;
+      setEligibleEvents(approved);
+      setMaterialEventId((current) =>
+        approved.some((row) => row.id === current)
+          ? current
+          : (approved[0]?.id ?? ''),
+      );
       setIdentity(nextIdentity);
       setDetails(nextDetails);
       const organizations = nextIdentity.hostingApplicantOrganizations;
@@ -315,25 +351,50 @@ export function HostingApplicationPage() {
     applyDetail(next, true);
   }
   async function createApplication() {
-    if (!organizationId || blocked) return;
+    if ((materials ? !materialEventId : !organizationId) || blocked) return;
+    if (
+      dirtyRef.current &&
+      !(
+        await Taro.showModal({
+          title: '切换材料',
+          content: '有未保存内容，是否继续？',
+        })
+      ).confirm
+    )
+      return;
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      const created = await client.request('HostingController_create', {
-        token: session.token,
-        body: { applicantOrganizationId: organizationId, key: await newKey() },
-      });
+      const created = materials
+        ? await client.request('HostingController_createMaterials', {
+            token: session.token,
+            body: { eventId: materialEventId, key: await newKey() },
+          })
+        : await client.request('HostingController_create', {
+            token: session.token,
+            body: {
+              applicantOrganizationId: organizationId,
+              key: await newKey(),
+            },
+          });
       const next = await client.request('HostingController_detail', {
         token: session.token,
         path: { id: created.id },
       });
-      setDetails((current) => [next, ...current]);
+      setDetails((current) => [
+        next,
+        ...current.filter((row) => row.id !== next.id),
+      ]);
       setSelectedId(next.id);
       selectedIdRef.current = next.id;
       applyDetail(next, true);
       setFilter('ALL');
-      setNotice('新申请草稿已建立，请填写并保存。');
+      setNotice(
+        materials
+          ? '已打开赛事办赛材料，请填写并保存。'
+          : '新申请草稿已建立，请填写并保存。',
+      );
     } catch (cause) {
       if (
         cause instanceof ApiError &&
@@ -357,7 +418,7 @@ export function HostingApplicationPage() {
         path: { id: current.id },
         body: {
           expectedDraftRevision: baseRevisionRef.current,
-          form: hostingFormBody(form),
+          form: hostingFormBody(form, materials),
         },
       });
       applyDetail(next, true);
@@ -571,7 +632,11 @@ export function HostingApplicationPage() {
     const current = detailRef.current;
     if (!current || dirty || conflict || !editableStatus(current.status))
       return;
-    const validation = validateHostingSubmission(form, current.uploads);
+    const validation = validateHostingSubmission(
+      form,
+      current.uploads,
+      materials,
+    );
     if (validation) {
       setError(validation);
       return;
@@ -642,9 +707,11 @@ export function HostingApplicationPage() {
           返回首页
         </Button>
       </View>
-      <Text className="title">赛事承办申请</Text>
+      <Text className="title">{materials ? '办赛材料' : '赛事承办申请'}</Text>
       <Text className="description">
-        申请不依赖已选赛事；本机构有权经办人可共同保存、提交和补充。
+        {materials
+          ? '承办申请获批后，完成7项必填资料，整套提交总部审核。'
+          : '申请不依赖已选赛事；本机构有权经办人可共同保存、提交和补充。'}
       </Text>
       {error && <Text className="error">{error}</Text>}
       {notice && <Text className="result">{notice}</Text>}
@@ -663,32 +730,58 @@ export function HostingApplicationPage() {
       ) : (
         <>
           <View className="card hosting-create-card">
-            <Text className="subtitle">新建申请</Text>
-            <Text className="description">申请机构在建立后不可更改。</Text>
-            {identity.hostingApplicantOrganizations.map((organization) => (
-              <Button
-                key={organization.id}
-                className={
-                  organizationId === organization.id ? 'choice-active' : ''
-                }
-                ariaLabel={`${organization.name}${organizationId === organization.id ? '，当前申请机构' : ''}`}
-                onClick={() => setOrganizationId(organization.id)}
-              >
-                {organizationId === organization.id ? '当前：' : ''}
-                {organization.name}
-              </Button>
-            ))}
+            <Text className="subtitle">
+              {materials ? '选择已获批赛事' : '新建申请'}
+            </Text>
+            <Text className="description">
+              {materials
+                ? '每场赛事一套材料；可保存草稿、提交及退回后补充。'
+                : '申请机构在建立后不可更改。'}
+            </Text>
+            {materials && !eligibleEvents.length && (
+              <Text className="warning">暂无获批赛事，请先完成承办申请。</Text>
+            )}
+            {materials &&
+              eligibleEvents.map((event) => (
+                <Button
+                  key={event.id}
+                  className={
+                    materialEventId === event.id ? 'choice-active' : ''
+                  }
+                  onClick={() => setMaterialEventId(event.id)}
+                >
+                  {event.name}
+                </Button>
+              ))}
+            {!materials &&
+              identity.hostingApplicantOrganizations.map((organization) => (
+                <Button
+                  key={organization.id}
+                  className={
+                    organizationId === organization.id ? 'choice-active' : ''
+                  }
+                  ariaLabel={`${organization.name}${organizationId === organization.id ? '，当前申请机构' : ''}`}
+                  onClick={() => setOrganizationId(organization.id)}
+                >
+                  {organizationId === organization.id ? '当前：' : ''}
+                  {organization.name}
+                </Button>
+              ))}
             <Button
               type="primary"
-              disabled={blocked || !organizationId}
+              disabled={
+                blocked || (materials ? !materialEventId : !organizationId)
+              }
               onClick={() => void createApplication()}
             >
-              建立新申请草稿
+              {materials ? '进入办赛材料' : '建立新申请草稿'}
             </Button>
           </View>
 
           <View className="card">
-            <Text className="subtitle">本机构申请</Text>
+            <Text className="subtitle">
+              {materials ? '本机构办赛材料' : '本机构申请'}
+            </Text>
             <View
               className="hosting-filter"
               ariaRole="group"
@@ -700,15 +793,17 @@ export function HostingApplicationPage() {
               >
                 全部
               </Button>
-              {hostingStatuses.map((status) => (
-                <Button
-                  key={status.value}
-                  className={filter === status.value ? 'active' : ''}
-                  onClick={() => setFilter(status.value)}
-                >
-                  {status.label}
-                </Button>
-              ))}
+              {hostingStatuses
+                .filter((row) => !materials || row.value !== 'REJECTED')
+                .map((status) => (
+                  <Button
+                    key={status.value}
+                    className={filter === status.value ? 'active' : ''}
+                    onClick={() => setFilter(status.value)}
+                  >
+                    {status.label}
+                  </Button>
+                ))}
             </View>
             {!visible.length && (
               <Text className="description">当前筛选下暂无申请。</Text>
@@ -829,13 +924,15 @@ export function HostingApplicationPage() {
                     className="field"
                     ariaLabel="赛事名称"
                     maxlength={120}
-                    disabled={blocked || conflict}
+                    disabled={blocked || conflict || materials}
                     value={form.eventName}
                     onInput={(event) => edit({ eventName: event.detail.value })}
                   />
                   <View className="hosting-date-grid">
                     <View>
-                      <Text className="field-label">开始日期 *</Text>
+                      <Text className="field-label">
+                        {materials ? '比赛开始日期 *' : '开始日期 *'}
+                      </Text>
                       <Picker
                         mode="date"
                         value={form.startDate}
@@ -850,7 +947,9 @@ export function HostingApplicationPage() {
                       </Picker>
                     </View>
                     <View>
-                      <Text className="field-label">结束日期 *</Text>
+                      <Text className="field-label">
+                        {materials ? '比赛结束日期 *' : '结束日期 *'}
+                      </Text>
                       <Picker
                         mode="date"
                         value={form.endDate}
@@ -865,49 +964,59 @@ export function HostingApplicationPage() {
                       </Picker>
                     </View>
                   </View>
-                  <Text className="field-label">省 / 市 / 区县 *</Text>
-                  <Picker
-                    mode="region"
-                    value={[form.province, form.city, form.district]}
-                    disabled={blocked || conflict}
-                    onChange={(event) => {
-                      const values = event.detail.value as string[];
-                      edit({
-                        province: values[0] ?? '',
-                        city: values[1] ?? '',
-                        district: values[2] ?? '',
-                      });
-                    }}
-                  >
-                    <View className="field picker-field">
-                      {form.province && form.city
-                        ? [form.province, form.city, form.district]
-                            .filter(Boolean)
-                            .join(' / ')
-                        : '选择省市区'}
-                    </View>
-                  </Picker>
-                  <Text className="field-label">详细地址 *</Text>
-                  <Input
-                    className="field"
-                    ariaLabel="详细地址"
-                    maxlength={240}
-                    disabled={blocked || conflict}
-                    value={form.detailedAddress}
-                    onInput={(event) =>
-                      edit({ detailedAddress: event.detail.value })
-                    }
-                  />
-                  <Text className="field-label">场馆名称 *</Text>
-                  <Input
-                    className="field"
-                    ariaLabel="场馆名称"
-                    maxlength={160}
-                    disabled={blocked || conflict}
-                    value={form.venueName}
-                    onInput={(event) => edit({ venueName: event.detail.value })}
-                  />
-                  <Text className="field-label">办赛经验简介 *</Text>
+                  {!materials && (
+                    <>
+                      <Text className="field-label">省 / 市 / 区县 *</Text>
+                      <Picker
+                        mode="region"
+                        value={[form.province, form.city, form.district]}
+                        disabled={blocked || conflict}
+                        onChange={(event) => {
+                          const values = event.detail.value as string[];
+                          edit({
+                            province: values[0] ?? '',
+                            city: values[1] ?? '',
+                            district: values[2] ?? '',
+                          });
+                        }}
+                      >
+                        <View className="field picker-field">
+                          {form.province && form.city
+                            ? [form.province, form.city, form.district]
+                                .filter(Boolean)
+                                .join(' / ')
+                            : '选择省市区'}
+                        </View>
+                      </Picker>
+                      <Text className="field-label">详细地址 *</Text>
+                      <Input
+                        className="field"
+                        ariaLabel="详细地址"
+                        maxlength={240}
+                        disabled={blocked || conflict}
+                        value={form.detailedAddress}
+                        onInput={(event) =>
+                          edit({ detailedAddress: event.detail.value })
+                        }
+                      />
+                      <Text className="field-label">场馆名称 *</Text>
+                      <Input
+                        className="field"
+                        ariaLabel="场馆名称"
+                        maxlength={160}
+                        disabled={blocked || conflict}
+                        value={form.venueName}
+                        onInput={(event) =>
+                          edit({ venueName: event.detail.value })
+                        }
+                      />
+                    </>
+                  )}
+                  <Text className="field-label">
+                    {materials
+                      ? '办赛公司/机构简介（3～4句话，介绍地点、办赛经验等）*'
+                      : '办赛经验简介 *'}
+                  </Text>
                   <Textarea
                     className="hosting-textarea"
                     ariaLabel="办赛经验简介"
@@ -919,6 +1028,80 @@ export function HostingApplicationPage() {
                       edit({ eventExperienceIntroduction: event.detail.value })
                     }
                   />
+                  {materials && (
+                    <>
+                      <Text className="subtitle">公司银行账户</Text>
+                      {(
+                        [
+                          'bankAccountName',
+                          'bankName',
+                          'bankAccountNumber',
+                          'contactPhone',
+                        ] as const
+                      ).map((key) => (
+                        <View key={key}>
+                          <Text className="field-label">
+                            {hostingFieldLabel(key)} *
+                          </Text>
+                          <Input
+                            className="field"
+                            ariaLabel={hostingFieldLabel(key)}
+                            maxlength={key === 'contactPhone' ? 11 : 200}
+                            type={
+                              key === 'contactPhone' ||
+                              key === 'bankAccountNumber'
+                                ? 'number'
+                                : 'text'
+                            }
+                            disabled={blocked || conflict}
+                            value={form[key]}
+                            onInput={(event) =>
+                              edit({ [key]: event.detail.value })
+                            }
+                          />
+                        </View>
+                      ))}
+                      {(['registrationStart', 'registrationEnd'] as const).map(
+                        (key) => (
+                          <View key={key}>
+                            <Text className="field-label">
+                              {hostingFieldLabel(key)} *（北京时间）
+                            </Text>
+                            <View className="hosting-date-grid">
+                              <Picker
+                                mode="date"
+                                value={form[key].slice(0, 10)}
+                                disabled={blocked || conflict}
+                                onChange={(event) =>
+                                  edit({
+                                    [key]: `${event.detail.value}T${form[key].slice(11, 16) || '09:00'}+08:00`,
+                                  })
+                                }
+                              >
+                                <View className="field picker-field">
+                                  {form[key].slice(0, 10) || '选择日期'}
+                                </View>
+                              </Picker>
+                              <Picker
+                                mode="time"
+                                value={form[key].slice(11, 16)}
+                                disabled={blocked || conflict || !form[key]}
+                                onChange={(event) =>
+                                  edit({
+                                    [key]: `${form[key].slice(0, 10)}T${event.detail.value}+08:00`,
+                                  })
+                                }
+                              >
+                                <View className="field picker-field">
+                                  {form[key].slice(11, 16) || '先选日期'}
+                                </View>
+                              </Picker>
+                            </View>
+                          </View>
+                        ),
+                      )}
+                    </>
+                  )}
                   <Button
                     disabled={blocked || conflict || !dirty}
                     onClick={() => void saveDraft()}
@@ -1019,8 +1202,20 @@ export function HostingApplicationPage() {
                   <Text className="subtitle">
                     当前提交 V{currentSubmission.version}
                   </Text>
-                  {Object.entries(hostingFormFrom(currentSubmission.form)).map(
-                    ([key, value]) => (
+                  {Object.entries(hostingFormFrom(currentSubmission.form))
+                    .filter(
+                      ([key]) =>
+                        materials ||
+                        ![
+                          'bankAccountName',
+                          'bankName',
+                          'bankAccountNumber',
+                          'registrationStart',
+                          'registrationEnd',
+                          'contactPhone',
+                        ].includes(key),
+                    )
+                    .map(([key, value]) => (
                       <View className="hosting-data-row" key={key}>
                         <Text>
                           {hostingFieldLabel(
@@ -1039,8 +1234,7 @@ export function HostingApplicationPage() {
                         </Text>
                         <Text>{displayHostingValue(value)}</Text>
                       </View>
-                    ),
-                  )}
+                    ))}
                   {currentSubmission.attachments.map((file) => (
                     <Button
                       key={file.id}

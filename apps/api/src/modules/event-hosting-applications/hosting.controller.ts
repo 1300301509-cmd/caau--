@@ -31,6 +31,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Permission } from '../authorization/authorization.guard.js';
 import {
   CreateHostingApplicationDto,
+  CreateEventMaterialsDto,
   HostingApplicationDetailDto,
   HostingApplicationListItemDto,
   HostingGrantActiveDto,
@@ -109,6 +110,22 @@ export class HostingController {
     @Body() body: HostingGrantActiveDto,
   ) {
     return this.hosting.manageGrant(token(identity), 'review', id, body);
+  }
+  @Post('event-materials')
+  @Permission('hosting')
+  @HttpCode(200)
+  @ApiOkResponse({ type: HostingApplicationListItemDto })
+  createMaterials(
+    @SessionToken() identity: string | undefined,
+    @Body() body: CreateEventMaterialsDto,
+  ) {
+    return this.hosting.create(token(identity), body, true);
+  }
+  @Get('event-materials')
+  @Permission('hosting')
+  @ApiOkResponse({ type: HostingApplicationListItemDto, isArray: true })
+  listMaterials(@SessionToken() identity: string | undefined) {
+    return this.hosting.list(token(identity), true);
   }
   @Post('hosting-applications')
   @Permission('hosting')

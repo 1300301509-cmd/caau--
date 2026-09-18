@@ -24,6 +24,7 @@ export async function hostingBrowserTest({
   config,
   tokens,
   approvedId,
+  materialsId,
   licenseName,
   continuationId,
   concurrentId,
@@ -74,6 +75,21 @@ export async function hostingBrowserTest({
     await expect(approvedPage.getByText('正式赛事已创建')).toBeVisible();
     await expect(approvedPage.getByText('V1 → V2')).toBeVisible();
     await expect(approvedPage.getByText('本申请 · V2')).toBeVisible();
+    if (materialsId) {
+      const materialsPage = await approved.newPage();
+      await enter(
+        materialsPage,
+        tokens.reviewer,
+        `http://127.0.0.1:4173/materials?application=${materialsId}`,
+      );
+      await expect(materialsPage.getByText('报名与收款信息')).toBeVisible();
+      await expect(
+        materialsPage.getByText('6222000000000000').first(),
+      ).toBeVisible();
+      await expect(materialsPage.getByText('正式赛事已创建')).toHaveCount(0);
+      await expect(materialsPage.getByTestId('hosting-reject')).toHaveCount(0);
+      await materialsPage.close();
+    }
     const licenseRow = approvedPage.locator('.hosting-file').first();
     await expect(licenseRow).toContainText(licenseName);
     await licenseRow.getByTestId(/^hosting-download-/).click();

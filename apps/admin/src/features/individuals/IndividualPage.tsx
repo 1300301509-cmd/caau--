@@ -477,7 +477,7 @@ export function IndividualPage() {
                 <a
                   key={event.id}
                   className={selectedEvent ? 'selected' : ''}
-                  href={`/materials?event=${event.id}`}
+                  href={`/materials/legacy?event=${event.id}`}
                   aria-current={selectedEvent ? 'true' : undefined}
                 >
                   <strong>{event.name}</strong>

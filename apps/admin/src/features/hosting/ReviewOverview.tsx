@@ -41,11 +41,13 @@ const submitDate = (date?: string) =>
 
 export function ReviewOverview({
   items,
+  materials = false,
   available,
   loading,
   onSelect,
 }: {
   items: Detail[];
+  materials?: boolean;
   available: boolean;
   loading: boolean;
   onSelect: (id: string) => void;
@@ -114,7 +116,7 @@ export function ReviewOverview({
     {
       state: 'APPROVED' as const,
       title: '审核通过',
-      detail: '已获批并创建正式赛事',
+      detail: materials ? '整套办赛材料已审核通过' : '已获批并创建正式赛事',
       theme: 'blue',
       icon: 'calendar' as const,
     },
@@ -156,12 +158,19 @@ export function ReviewOverview({
           <header className="review-queue-heading">
             <div>
               <h2 id="review-queue-title">
-                承办申请<span>APPLICATIONS</span>
+                {materials ? '办赛材料' : '承办申请'}
+                <span>{materials ? 'MATERIALS' : 'APPLICATIONS'}</span>
               </h2>
-              <p>查看申请资料，推进赛事筹备</p>
+              <p>
+                {materials
+                  ? '核对7项必填信息，整套通过或退回补充'
+                  : '查看申请资料，推进赛事筹备'}
+              </p>
             </div>
             <span className="review-total">
-              {available ? `${items.length} 项申请` : '等待载入'}
+              {available
+                ? `${items.length} 套${materials ? '材料' : '申请'}`
+                : '等待载入'}
             </span>
           </header>
           <div className="review-queue-tools">
@@ -207,18 +216,22 @@ export function ReviewOverview({
             role="group"
             aria-label="申请状态筛选"
           >
-            {states.map((state) => (
-              <button
-                type="button"
-                key={state.value}
-                aria-pressed={filter === state.value}
-                className={filter === state.value ? 'active' : ''}
-                onClick={() => chooseFilter(state.value)}
-              >
-                {state.label}
-                <span>{available ? counts[state.value] : '—'}</span>
-              </button>
-            ))}
+            {states
+              .filter((state) => !materials || state.value !== 'REJECTED')
+              .map((state) => (
+                <button
+                  type="button"
+                  key={state.value}
+                  aria-pressed={filter === state.value}
+                  className={filter === state.value ? 'active' : ''}
+                  onClick={() => chooseFilter(state.value)}
+                >
+                  {materials && state.value === 'ALL'
+                    ? '全部材料'
+                    : state.label}
+                  <span>{available ? counts[state.value] : '—'}</span>
+                </button>
+              ))}
           </div>
           <div className="review-table" role="table" aria-label="承办申请队列">
             <div className="review-table-header" role="row">

@@ -2,10 +2,7 @@ import { useState } from 'react';
 import { Button, Image, ScrollView, Text, View } from '@tarojs/components';
 import Taro, { useDidShow } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
-import {
-  eventScopedPageUrl,
-  resolveEventId,
-} from '../../features/materials/event-context';
+import { resolveEventId } from '../../features/materials/event-context';
 import {
   clearSession,
   client,
@@ -66,14 +63,6 @@ export default function Home() {
     void loadEventContext();
   });
   if (!session.token) return <View className="page" />;
-
-  const openModule = (page: 'materials' | 'progress') => {
-    if (!currentEvent) return;
-    session.eventId = currentEvent.id;
-    void Taro.navigateTo({
-      url: eventScopedPageUrl(page, currentEvent.id),
-    });
-  };
 
   return (
     <View className="page home-page">
@@ -182,7 +171,7 @@ export default function Home() {
         <View className="business-grid">
           <Button
             className={`business-tile material-tile ${selected === materialApproval ? 'selected' : ''}`}
-            ariaLabel={`材料审批${selected === materialApproval ? '，当前选中' : ''}`}
+            ariaLabel={`我要办赛${selected === materialApproval ? '，当前选中' : ''}`}
             onClick={() => setSelected(materialApproval)}
           >
             <View className="business-icon application-business-icon">
@@ -190,8 +179,8 @@ export default function Home() {
               <View className="application-icon-line short" />
               <View className="application-icon-mark" />
             </View>
-            <Text className="business-title">材料审批</Text>
-            <Text className="business-description">提交资料 · 跟进审核</Text>
+            <Text className="business-title">我要办赛</Text>
+            <Text className="business-description">备齐资料 · 统一审核</Text>
             <Text className="business-selection">
               {selected === materialApproval ? '当前板块' : '选择板块'}
             </Text>
@@ -217,7 +206,7 @@ export default function Home() {
 
       {selected === materialApproval && (
         <View className="home-section home-submodules">
-          <Text className="home-section-title">材料办理</Text>
+          <Text className="home-section-title">办赛材料</Text>
           <Text className="description">
             {currentEvent
               ? `办理${currentEvent.name}的材料业务`
@@ -227,26 +216,30 @@ export default function Home() {
             <Button
               className="submodule-card"
               disabled={!currentEvent}
-              onClick={() => openModule('materials')}
+              onClick={() =>
+                void Taro.navigateTo({ url: '/pages/event-materials/index' })
+              }
             >
               <Text className="submodule-index">01</Text>
               <View className="submodule-copy">
-                <Text className="submodule-title">材料提交</Text>
+                <Text className="submodule-title">办赛材料</Text>
                 <Text className="submodule-description">
-                  查看任务，新增或继续提交材料
+                  营业执照、场地照片、银行账户等7项必填
                 </Text>
               </View>
             </Button>
             <Button
               className="submodule-card"
               disabled={!currentEvent}
-              onClick={() => openModule('progress')}
+              onClick={() =>
+                void Taro.navigateTo({ url: '/pages/event-materials/index' })
+              }
             >
               <Text className="submodule-index mint">02</Text>
               <View className="submodule-copy">
                 <Text className="submodule-title">审核进度</Text>
                 <Text className="submodule-description">
-                  查看材料状态、退回原因与版本历史
+                  查看整套材料审核状态、补充要求与历史
                 </Text>
               </View>
             </Button>

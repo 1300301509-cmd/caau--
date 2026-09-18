@@ -400,6 +400,20 @@
         ],
         "type": "object"
       },
+      "CreateEventMaterialsDto": {
+        "properties": {
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["eventId", "key"],
+        "type": "object"
+      },
       "CreateHostingApplicationDto": {
         "properties": {
           "applicantOrganizationId": {
@@ -964,6 +978,11 @@
             "format": "uuid",
             "type": "string"
           },
+          "materialEventId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "revision": {
             "type": "integer"
           },
@@ -992,6 +1011,7 @@
           }
         },
         "required": [
+          "materialEventId",
           "id",
           "applicantOrganizationId",
           "applicantOrganizationName",
@@ -1044,6 +1064,11 @@
             "format": "uuid",
             "type": "string"
           },
+          "materialEventId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "revision": {
             "type": "integer"
           },
@@ -1060,6 +1085,7 @@
           }
         },
         "required": [
+          "materialEventId",
           "id",
           "applicantOrganizationId",
           "applicantOrganizationName",
@@ -1108,6 +1134,26 @@
       },
       "HostingDraftFormDto": {
         "properties": {
+          "bankAccountName": {
+            "maxLength": 200,
+            "nullable": true,
+            "type": "string"
+          },
+          "bankAccountNumber": {
+            "maxLength": 200,
+            "nullable": true,
+            "type": "string"
+          },
+          "bankName": {
+            "maxLength": 200,
+            "nullable": true,
+            "type": "string"
+          },
+          "contactPhone": {
+            "maxLength": 200,
+            "nullable": true,
+            "type": "string"
+          },
           "endDate": {
             "format": "date",
             "nullable": true,
@@ -1131,6 +1177,16 @@
             ],
             "nullable": true,
             "type": "object"
+          },
+          "registrationEnd": {
+            "maxLength": 200,
+            "nullable": true,
+            "type": "string"
+          },
+          "registrationStart": {
+            "maxLength": 200,
+            "nullable": true,
+            "type": "string"
           },
           "startDate": {
             "format": "date",
@@ -4328,6 +4384,83 @@
         ],
         "summary": "",
         "tags": ["Individual"]
+      }
+    },
+    "/api/v1/event-materials": {
+      "get": {
+        "operationId": "HostingController_listMaterials",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HostingApplicationListItemDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      },
+      "post": {
+        "operationId": "HostingController_createMaterials",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventMaterialsDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingApplicationListItemDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
       }
     },
     "/api/v1/events": {

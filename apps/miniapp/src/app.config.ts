@@ -3,6 +3,7 @@ export default {
     'pages/login/index',
     'pages/home/index',
     'pages/hosting/index',
+    'pages/event-materials/index',
     'pages/event-info/index',
     'pages/materials/index',
     'pages/progress/index',

@@ -7,6 +7,13 @@ export type HostingRequirement = S['HostingUploadInputDto']['requirementCode'];
 export type HostingUpload = S['HostingUploadViewDto'];
 
 export type HostingForm = {
+  bankAccountName: string;
+  bankName: string;
+  bankAccountNumber: string;
+  registrationStart: string;
+  registrationEnd: string;
+  contactPhone: string;
+
   eventName: string;
   startDate: string;
   endDate: string;
@@ -19,6 +26,13 @@ export type HostingForm = {
 };
 
 type FormSnapshot = {
+  bankAccountName?: unknown;
+  bankName?: unknown;
+  bankAccountNumber?: unknown;
+  registrationStart?: unknown;
+  registrationEnd?: unknown;
+  contactPhone?: unknown;
+
   eventName?: unknown;
   startDate?: unknown;
   endDate?: unknown;
@@ -35,6 +49,13 @@ type FormSnapshot = {
 };
 
 export const emptyHostingForm: HostingForm = {
+  bankAccountName: '',
+  bankName: '',
+  bankAccountNumber: '',
+  registrationStart: '',
+  registrationEnd: '',
+  contactPhone: '',
+
   eventName: '',
   startDate: '',
   endDate: '',
@@ -54,6 +75,12 @@ export function hostingFormFrom(value: unknown): HostingForm {
     value && typeof value === 'object' ? value : {}
   ) as FormSnapshot;
   return {
+    bankAccountName: stringValue(form.bankAccountName),
+    bankName: stringValue(form.bankName),
+    bankAccountNumber: stringValue(form.bankAccountNumber),
+    registrationStart: stringValue(form.registrationStart),
+    registrationEnd: stringValue(form.registrationEnd),
+    contactPhone: stringValue(form.contactPhone),
     eventName: stringValue(form.eventName),
     startDate: stringValue(form.startDate),
     endDate: stringValue(form.endDate),
@@ -66,7 +93,7 @@ export function hostingFormFrom(value: unknown): HostingForm {
   };
 }
 
-export function hostingFormBody(form: HostingForm) {
+export function hostingFormBody(form: HostingForm, materials = false) {
   const hasLocation = [
     form.province,
     form.city,
@@ -75,6 +102,16 @@ export function hostingFormBody(form: HostingForm) {
     form.venueName,
   ].some((value) => value.trim());
   return {
+    ...(materials
+      ? {
+          bankAccountName: form.bankAccountName.trim() || null,
+          bankName: form.bankName.trim() || null,
+          bankAccountNumber: form.bankAccountNumber.trim() || null,
+          registrationStart: form.registrationStart.trim() || null,
+          registrationEnd: form.registrationEnd.trim() || null,
+          contactPhone: form.contactPhone.trim() || null,
+        }
+      : {}),
     eventName: form.eventName.trim() || null,
     startDate: form.startDate || null,
     endDate: form.endDate || null,
@@ -136,6 +173,12 @@ export function hostingActionLabel(action: string) {
 export function hostingFieldLabel(field: string) {
   return (
     {
+      bankAccountName: '账户户名',
+      bankName: '开户银行',
+      bankAccountNumber: '银行账号',
+      registrationStart: '报名开始时间',
+      registrationEnd: '报名截止时间',
+      contactPhone: '报名联系人手机号',
       eventName: '赛事名称',
       startDate: '开始日期',
       endDate: '结束日期',
@@ -152,15 +195,34 @@ export function hostingFieldLabel(field: string) {
 export function validateHostingSubmission(
   form: HostingForm,
   uploads: readonly HostingUpload[],
+  materials = false,
 ) {
   const missing: string[] = [];
+  if (materials) {
+    if (!form.bankAccountName.trim()) missing.push('账户户名');
+    if (!form.bankName.trim()) missing.push('开户银行');
+    if (!form.bankAccountNumber.trim()) missing.push('银行账号');
+    if (!form.registrationStart.trim()) missing.push('报名开始时间');
+    if (!form.registrationEnd.trim()) missing.push('报名截止时间');
+    if (!form.contactPhone.trim()) missing.push('报名联系人手机号');
+    if (form.contactPhone && !/^1[3-9]\d{9}$/.test(form.contactPhone))
+      missing.push('有效的11位手机号');
+    if (form.bankAccountNumber && !/^\d{6,40}$/.test(form.bankAccountNumber))
+      missing.push('6至40位数字银行账号');
+    if (
+      form.registrationStart &&
+      form.registrationEnd &&
+      Date.parse(form.registrationEnd) < Date.parse(form.registrationStart)
+    )
+      missing.push('报名截止不得早于开始时间');
+  }
   if (!form.eventName.trim()) missing.push('赛事名称');
   if (!form.startDate) missing.push('开始日期');
   if (!form.endDate) missing.push('结束日期');
-  if (!form.province.trim()) missing.push('省份');
-  if (!form.city.trim()) missing.push('城市');
-  if (!form.detailedAddress.trim()) missing.push('详细地址');
-  if (!form.venueName.trim()) missing.push('场馆名称');
+  if (!materials && !form.province.trim()) missing.push('省份');
+  if (!materials && !form.city.trim()) missing.push('城市');
+  if (!materials && !form.detailedAddress.trim()) missing.push('详细地址');
+  if (!materials && !form.venueName.trim()) missing.push('场馆名称');
   if (!form.eventExperienceIntroduction.trim()) missing.push('办赛经验简介');
   if (form.startDate && form.endDate && form.endDate < form.startDate)
     return '结束日期不能早于开始日期。';

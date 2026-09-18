@@ -498,6 +498,22 @@ export interface paths {
     patch: operations['setEventGrantActive'];
     trace?: never;
   };
+  '/api/v1/event-materials': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['HostingController_listMaterials'];
+    put?: never;
+    post: operations['HostingController_createMaterials'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events': {
     parameters: {
       query?: never;
@@ -1547,6 +1563,12 @@ export interface components {
       memberships: components['schemas']['AccountMembershipInputDto'][];
       temporaryPassword: string;
     };
+    CreateEventMaterialsDto: {
+      /** Format: uuid */
+      eventId: string;
+      /** Format: uuid */
+      key: string;
+    };
     CreateHostingApplicationDto: {
       /** Format: uuid */
       applicantOrganizationId: string;
@@ -1748,6 +1770,8 @@ export interface components {
       draftRevision: number;
       /** Format: uuid */
       id: string;
+      /** Format: uuid */
+      materialEventId: string | null;
       revision: number;
       /** @enum {string} */
       status:
@@ -1775,6 +1799,8 @@ export interface components {
       draftRevision: number;
       /** Format: uuid */
       id: string;
+      /** Format: uuid */
+      materialEventId: string | null;
       revision: number;
       /** @enum {string} */
       status:
@@ -1798,11 +1824,17 @@ export interface components {
       toSubmissionId: string;
     };
     HostingDraftFormDto: {
+      bankAccountName?: string | null;
+      bankAccountNumber?: string | null;
+      bankName?: string | null;
+      contactPhone?: string | null;
       /** Format: date */
       endDate: string | null;
       eventExperienceIntroduction: string | null;
       eventName: string | null;
       location: components['schemas']['HostingLocationDto'] | null;
+      registrationEnd?: string | null;
+      registrationStart?: string | null;
       /** Format: date */
       startDate: string | null;
     };
@@ -4058,6 +4090,76 @@ export interface operations {
       };
       /** @description Database, audit or storage unavailable */
       503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_listMaterials: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingApplicationListItemDto'][];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_createMaterials: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateEventMaterialsDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingApplicationListItemDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
         headers: {
           [name: string]: unknown;
         };

@@ -20,7 +20,7 @@ export function App() {
       ? '/hosting-applications'
       : location.pathname,
   );
-  const reviewPage = path === '/materials';
+  const reviewPage = path === '/materials' || path === '/materials/legacy';
   const eventPage = path === '/events';
   const hostingPage = path === '/hosting-applications';
 
@@ -43,7 +43,16 @@ export function App() {
   if (reviewPage) {
     return (
       <AppShell>
-        <IndividualPage />
+        {path === '/materials/legacy' ||
+        new URLSearchParams(location.search).has('task') ||
+        new URLSearchParams(location.search).has('material') ? (
+          <IndividualPage />
+        ) : (
+          <HostingReviewPage materials />
+        )}
+        <a className="hq-back-link" href="/materials/legacy">
+          历史单份材料
+        </a>
       </AppShell>
     );
   }

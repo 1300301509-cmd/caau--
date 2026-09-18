@@ -94,7 +94,7 @@ export async function individualBrowserTest({
     await snapshot;
     await expect(page.getByTestId('sync-status')).toHaveCount(0);
   }
-  async function newPage(key, url = '/materials') {
+  async function newPage(key, url = '/materials/legacy') {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 1000 },
       reducedMotion: 'reduce',
@@ -300,7 +300,7 @@ export async function individualBrowserTest({
     const managerTab = await identityContext.newPage();
     const organizerTab = await identityContext.newPage();
     for (const page of [managerTab, organizerTab])
-      await page.goto('http://127.0.0.1:4173/materials');
+      await page.goto('http://127.0.0.1:4173/materials/legacy');
     await managerTab.getByLabel('选择测试身份').selectOption('reviewer-a');
     await managerTab.getByTestId('local-identity-enter').click();
     await organizerTab.getByLabel('选择测试身份').selectOption('organizer-b');
@@ -687,7 +687,7 @@ export async function individualBrowserTest({
 
     // A previously authorized real response arrives AFTER explicit local logout.
     await issue('a');
-    const late = await newPage('a', `/materials?material=${draft}`);
+    const late = await newPage('a', `/materials/legacy?material=${draft}`);
     await expect(late.getByTestId('material-state')).toHaveText('待提交');
     let release;
     const held = new Promise((resolve) => {
@@ -738,7 +738,7 @@ export async function individualBrowserTest({
       path: fileURLToPath(new URL('revoked-cleared.png', evidence)),
       fullPage: true,
     });
-    const outsider = await newPage('b', `/materials?material=${first}`);
+    const outsider = await newPage('b', `/materials/legacy?material=${first}`);
     await expect(outsider.locator('body')).not.toContainText(
       '合成材料 V2 已补齐场地及时间',
     );
