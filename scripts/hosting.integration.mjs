@@ -668,9 +668,9 @@ export async function hostingIntegration(t, context) {
       const form = {
         eventName: '合成简表申请',
         startDate: '2027-07-01',
-        endDate: '2027-07-01',
+        endDate: null,
         startTime: '09:00',
-        endTime: '18:00',
+        endTime: null,
         contactName: '合成联系人',
         contactPhone: '13800000000',
         additionalNotes: '选填说明',

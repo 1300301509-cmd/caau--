@@ -287,7 +287,7 @@ function completeForm(
   if (
     !form.eventName ||
     !form.startDate ||
-    !form.endDate ||
+    (formVersion === 1 && !form.endDate) ||
     !area?.province ||
     !area.city ||
     !form.location?.detailedAddress ||
@@ -297,10 +297,7 @@ function completeForm(
     throw new BadRequestException('Required application fields are missing');
   if (
     formVersion === 2 &&
-    (!form.contactName ||
-      !form.contactPhone ||
-      !form.startTime ||
-      !form.endTime)
+    (!form.contactName || !form.contactPhone || !form.startTime)
   )
     throw new BadRequestException('请填写比赛时间、联系人姓名和手机号');
   if (!mainlandProvinces.has(area.province))

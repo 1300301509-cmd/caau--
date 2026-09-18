@@ -93,7 +93,8 @@ test('hosting application form keeps partial drafts and validates confirmed subm
     contactName: '合成联系人',
     contactPhone: '13800000000',
     startTime: '09:00',
-    endTime: '18:00',
+    endTime: '',
+    endDate: '',
     additionalNotes: '',
   };
   assert.deepEqual(hostingFormFrom(hostingFormBody(simple, false, 2)), simple);
@@ -103,8 +104,8 @@ test('hosting application form keeps partial drafts and validates confirmed subm
     /手机号/,
   );
   assert.match(
-    validateHostingSubmission({ ...simple, endTime: '08:00' }, [], false, 2),
-    /结束时间/,
+    validateHostingSubmission({ ...simple, startTime: '' }, [], false, 2),
+    /开始时间/,
   );
 
   assert.match(validateHostingSubmission(form, []), /营业执照、现场照片/);

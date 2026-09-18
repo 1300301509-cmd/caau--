@@ -944,7 +944,9 @@ export function HostingApplicationPage({
                     value={form.eventName}
                     onInput={(event) => edit({ eventName: event.detail.value })}
                   />
-                  <View className="hosting-date-grid">
+                  <View
+                    className={`hosting-date-grid ${!materials && detail.formVersion === 2 ? 'single-date' : ''}`}
+                  >
                     <View>
                       <Text className="field-label">
                         {materials ? '比赛开始日期 *' : '开始日期 *'}
@@ -962,23 +964,25 @@ export function HostingApplicationPage({
                         </View>
                       </Picker>
                     </View>
-                    <View>
-                      <Text className="field-label">
-                        {materials ? '比赛结束日期 *' : '结束日期 *'}
-                      </Text>
-                      <Picker
-                        mode="date"
-                        value={form.endDate}
-                        disabled={blocked || conflict}
-                        onChange={(event) =>
-                          edit({ endDate: String(event.detail.value) })
-                        }
-                      >
-                        <View className="field picker-field">
-                          {form.endDate || '选择结束日期'}
-                        </View>
-                      </Picker>
-                    </View>
+                    {(materials || detail.formVersion === 1) && (
+                      <View>
+                        <Text className="field-label">
+                          {materials ? '比赛结束日期 *' : '结束日期 *'}
+                        </Text>
+                        <Picker
+                          mode="date"
+                          value={form.endDate}
+                          disabled={blocked || conflict}
+                          onChange={(event) =>
+                            edit({ endDate: String(event.detail.value) })
+                          }
+                        >
+                          <View className="field picker-field">
+                            {form.endDate || '选择结束日期'}
+                          </View>
+                        </Picker>
+                      </View>
+                    )}
                   </View>
                   {!materials && (
                     <>
@@ -1053,8 +1057,8 @@ export function HostingApplicationPage({
                   )}
                   {!materials && detail.formVersion === 2 && (
                     <>
-                      <View className="hosting-date-grid">
-                        {(['startTime', 'endTime'] as const).map((key) => (
+                      <View className="hosting-date-grid single-date">
+                        {(['startTime'] as const).map((key) => (
                           <View key={key}>
                             <Text className="field-label">
                               {hostingFieldLabel(key)} *（北京时间）

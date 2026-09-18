@@ -996,3 +996,7 @@ button[type='primary']::after {
   border-top: 1px solid #e2e7dc;
   padding: 20px 0;
 }
+
+.hosting-date-grid.single-date {
+  grid-template-columns: 1fr;
+}

@@ -130,7 +130,7 @@ export function hostingFormBody(
       ? {
           contactName: form.contactName.trim() || null,
           startTime: form.startTime.trim() || null,
-          endTime: form.endTime.trim() || null,
+          endTime: null,
           additionalNotes: form.additionalNotes.trim() || null,
           contactPhone: form.contactPhone.trim() || null,
         }
@@ -147,7 +147,7 @@ export function hostingFormBody(
       : {}),
     eventName: form.eventName.trim() || null,
     startDate: form.startDate || null,
-    endDate: form.endDate || null,
+    endDate: !materials && formVersion === 2 ? null : form.endDate || null,
     location: hasLocation
       ? {
           administrativeArea: {
@@ -256,7 +256,8 @@ export function validateHostingSubmission(
   }
   if (!form.eventName.trim()) missing.push('赛事名称');
   if (!form.startDate) missing.push('开始日期');
-  if (!form.endDate) missing.push('结束日期');
+  if ((materials || formVersion === 1) && !form.endDate)
+    missing.push('结束日期');
   if (!materials && !form.province.trim()) missing.push('省份');
   if (!materials && !form.city.trim()) missing.push('城市');
   if (!materials && !form.detailedAddress.trim()) missing.push('详细地址');
@@ -266,16 +267,18 @@ export function validateHostingSubmission(
     !form.eventExperienceIntroduction.trim()
   )
     missing.push('办赛经验简介');
-  if (form.startDate && form.endDate && form.endDate < form.startDate)
+  if (
+    (materials || formVersion === 1) &&
+    form.startDate &&
+    form.endDate &&
+    form.endDate < form.startDate
+  )
     return '结束日期不能早于开始日期。';
   if (!materials && formVersion === 2) {
     if (!form.contactName.trim()) missing.push('联系人姓名');
     if (!/^1[3-9]\d{9}$/.test(form.contactPhone))
       missing.push('有效的11位联系人手机号');
     if (!form.startTime) missing.push('比赛开始时间');
-    if (!form.endTime) missing.push('比赛结束时间');
-    if (form.startDate === form.endDate && form.startTime > form.endTime)
-      missing.push('结束时间不能早于开始时间');
     return missing.length ? `请补全：${missing.join('、')}。` : '';
   }
   const bound = uploads.filter(
