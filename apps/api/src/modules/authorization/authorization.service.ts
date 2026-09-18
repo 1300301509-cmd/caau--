@@ -44,6 +44,14 @@ export interface AuthorizationConfig {
   throttleSecret: string;
   sessionTtlMs: number;
   origins: string[];
+  wechatMiniapp?: {
+    appId: string;
+    appSecret: string;
+    exchange?: (code: string) => Promise<{
+      openId: string;
+      unionId?: string;
+    }>;
+  };
 }
 export interface AuthRequest {
   headers: {
@@ -159,6 +167,9 @@ export class AuthorizationService {
   get localIdentityEnabled() {
     return this.config.localIdentity;
   }
+  get wechatMiniappEnabled() {
+    return !!this.config.wechatMiniapp;
+  }
   async onModuleDestroy() {
     await this.database?.close();
   }
@@ -242,6 +253,7 @@ export class AuthorizationService {
             data: {
               userId: identity.userId,
               tokenHash: hashToken(token),
+              clientType: 'LOCAL_TEST',
               expiresAt,
             },
           });
@@ -538,7 +550,12 @@ export class AuthorizationService {
         )
           throw new UnauthorizedException('Unable to sign in');
         const created = await tx.session.create({
-          data: { userId: current.id, tokenHash: hashToken(token), expiresAt },
+          data: {
+            userId: current.id,
+            tokenHash: hashToken(token),
+            clientType: 'WEB_PASSWORD',
+            expiresAt,
+          },
           include: { user: { include: { memberships: true } } },
         });
         await tx.authenticationThrottle.deleteMany({
@@ -558,6 +575,375 @@ export class AuthorizationService {
       { isolationLevel: 'Serializable' },
     );
     return { token, response: this.authenticationResponse(session) };
+  }
+  private wechatCode(input: unknown, binding: boolean) {
+    const body = bodyObject(
+      input,
+      binding ? ['code', 'bindingToken'] : ['code'],
+    );
+    if (
+      typeof body.code !== 'string' ||
+      body.code.length < 1 ||
+      body.code.length > 256 ||
+      /\s/.test(body.code)
+    )
+      throw new BadRequestException('Invalid login code');
+    return { body, code: body.code };
+  }
+  private async exchangeWechatCode(code: string) {
+    const config = this.config.wechatMiniapp;
+    if (!config)
+      throw new ServiceUnavailableException('WeChat login unavailable');
+    if (config.exchange) return config.exchange(code);
+    const query = new URLSearchParams({
+      appid: config.appId,
+      secret: config.appSecret,
+      js_code: code,
+      grant_type: 'authorization_code',
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(
+        `https://api.weixin.qq.com/sns/jscode2session?${query.toString()}`,
+        { signal: controller.signal, cache: 'no-store' },
+      );
+      if (!response.ok)
+        throw new ServiceUnavailableException('WeChat login unavailable');
+      const result = (await response.json()) as {
+        errcode?: number;
+        openid?: unknown;
+        unionid?: unknown;
+      };
+      if (
+        (result.errcode !== undefined && result.errcode !== 0) ||
+        typeof result.openid !== 'string' ||
+        !/^[^\s]{1,128}$/.test(result.openid) ||
+        (result.unionid !== undefined &&
+          (typeof result.unionid !== 'string' ||
+            !/^[^\s]{1,128}$/.test(result.unionid)))
+      )
+        throw new UnauthorizedException('Unable to sign in');
+      return {
+        openId: result.openid,
+        ...(result.unionid ? { unionId: result.unionid } : {}),
+      };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new ServiceUnavailableException('WeChat login unavailable');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  private activeOrganizer(actor: Actor) {
+    return actor.memberships.some(
+      (membership) => membership.active && membership.role === 'ORGANIZER',
+    );
+  }
+  private async wechatClientSubject(request: AuthRequest, action: string) {
+    const subject = this.throttleSubject(
+      'client',
+      `wechat:${request.ip ?? 'unknown'}`,
+    );
+    if (await this.throttled([subject])) {
+      await this.db().auditRecord.create({
+        data: {
+          action,
+          outcome: 'DENIED',
+          requestId: randomUUID(),
+          context: { reason: 'THROTTLED' },
+        },
+      });
+      throw new HttpException(
+        'Unable to sign in',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    return subject;
+  }
+  private async recordWechatDenial(action: string, subject: string) {
+    const write = () =>
+      this.db().$transaction(
+        async (tx) => {
+          const now = new Date();
+          const windowStart = new Date(now.getTime() - 15 * 60 * 1000);
+          const current = await tx.authenticationThrottle.findUnique({
+            where: { subjectHash: subject },
+          });
+          const failures =
+            !current || current.windowStartedAt <= windowStart
+              ? 1
+              : current.failures + 1;
+          await tx.authenticationThrottle.upsert({
+            where: { subjectHash: subject },
+            create: {
+              subjectHash: subject,
+              failures,
+              windowStartedAt: now,
+              blockedUntil:
+                failures >= 20
+                  ? new Date(now.getTime() + 15 * 60 * 1000)
+                  : null,
+            },
+            update: {
+              failures,
+              ...(current?.windowStartedAt &&
+              current.windowStartedAt > windowStart
+                ? {}
+                : { windowStartedAt: now }),
+              blockedUntil:
+                failures >= 20
+                  ? new Date(now.getTime() + 15 * 60 * 1000)
+                  : current?.blockedUntil,
+            },
+          });
+          await tx.auditRecord.create({
+            data: { action, outcome: 'DENIED', requestId: randomUUID() },
+          });
+        },
+        { isolationLevel: 'Serializable' },
+      );
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await write();
+        return;
+      } catch (error) {
+        const code =
+          typeof error === 'object' && error && 'code' in error
+            ? String(error.code)
+            : '';
+        if (attempt >= 2 || !['P2002', 'P2034'].includes(code))
+          throw new ServiceUnavailableException('Authorization unavailable');
+      }
+    }
+  }
+  async createWechatBindingIntent(
+    token: string,
+    credential: AuthRequest['credential'],
+  ) {
+    if (!this.config.wechatMiniapp)
+      throw new ServiceUnavailableException('WeChat login unavailable');
+    const bindingToken = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    return this.run(
+      token,
+      'session.wechat.binding.create',
+      undefined,
+      undefined,
+      async (tx, actor) => {
+        if (credential !== 'cookie' || !this.activeOrganizer(actor)) deny();
+        const currentSession = await tx.session.findUnique({
+          where: { tokenHash: hashToken(token) },
+        });
+        if (
+          !currentSession ||
+          currentSession.clientType !== 'WEB_PASSWORD' ||
+          currentSession.revokedAt ||
+          currentSession.expiresAt <= new Date()
+        )
+          deny();
+        if (
+          await tx.wechatIdentity.findUnique({
+            where: {
+              appId_userId: {
+                appId: this.config.wechatMiniapp?.appId ?? '',
+                userId: actor.id,
+              },
+            },
+          })
+        )
+          throw new ConflictException('WeChat identity already bound');
+        const now = new Date();
+        await tx.identityBindingIntent.updateMany({
+          where: {
+            userId: actor.id,
+            consumedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { consumedAt: now },
+        });
+        await tx.identityBindingIntent.create({
+          data: {
+            tokenHash: hashToken(bindingToken),
+            userId: actor.id,
+            sessionId: currentSession.id,
+            expiresAt,
+          },
+        });
+        return { bindingToken, expiresAt: expiresAt.toISOString() };
+      },
+    );
+  }
+  async wechatLogin(input: unknown, request: AuthRequest) {
+    const { code } = this.wechatCode(input, false);
+    const clientSubject = await this.wechatClientSubject(
+      request,
+      'session.wechat.login',
+    );
+    const config = this.config.wechatMiniapp;
+    if (!config)
+      throw new ServiceUnavailableException('WeChat login unavailable');
+    let exchanged: { openId: string; unionId?: string };
+    try {
+      exchanged = await this.exchangeWechatCode(code);
+    } catch (error) {
+      if (error instanceof UnauthorizedException)
+        await this.recordWechatDenial('session.wechat.login', clientSubject);
+      throw error;
+    }
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + this.config.sessionTtlMs);
+    try {
+      await this.db().$transaction(
+        async (tx) => {
+          const identity = await tx.wechatIdentity.findUnique({
+            where: {
+              appId_openId: { appId: config.appId, openId: exchanged.openId },
+            },
+            include: { user: { include: { memberships: true } } },
+          });
+          if (!identity?.user.active || !this.activeOrganizer(identity.user))
+            throw new UnauthorizedException('Unable to sign in');
+          await tx.wechatIdentity.update({
+            where: { id: identity.id },
+            data: {
+              lastLoginAt: new Date(),
+              ...(exchanged.unionId && !identity.unionId
+                ? { unionId: exchanged.unionId }
+                : {}),
+            },
+          });
+          await tx.session.create({
+            data: {
+              userId: identity.userId,
+              tokenHash: hashToken(token),
+              clientType: 'WECHAT_MINIAPP',
+              expiresAt,
+            },
+          });
+          await tx.authenticationThrottle.deleteMany({
+            where: { subjectHash: clientSubject },
+          });
+          await tx.auditRecord.create({
+            data: {
+              actorId: identity.userId,
+              action: 'session.wechat.login',
+              resourceId: identity.userId,
+              outcome: 'ALLOWED',
+              requestId: randomUUID(),
+            },
+          });
+        },
+        { isolationLevel: 'Serializable' },
+      );
+      return { token, expiresAt: expiresAt.toISOString() };
+    } catch (error) {
+      await this.recordWechatDenial('session.wechat.login', clientSubject);
+      if (await this.throttled([clientSubject]))
+        throw new HttpException(
+          'Unable to sign in',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      if (error instanceof HttpException) throw error;
+      throw new ServiceUnavailableException('WeChat login unavailable');
+    }
+  }
+  async bindWechat(input: unknown, request: AuthRequest) {
+    const { body, code } = this.wechatCode(input, true);
+    if (
+      typeof body.bindingToken !== 'string' ||
+      !/^[A-Za-z0-9_-]{43}$/.test(body.bindingToken)
+    )
+      throw new BadRequestException('Invalid binding credential');
+    const clientSubject = await this.wechatClientSubject(
+      request,
+      'identity.wechat.bind',
+    );
+    const config = this.config.wechatMiniapp;
+    if (!config)
+      throw new ServiceUnavailableException('WeChat login unavailable');
+    let exchanged: { openId: string; unionId?: string };
+    try {
+      exchanged = await this.exchangeWechatCode(code);
+    } catch (error) {
+      if (error instanceof UnauthorizedException)
+        await this.recordWechatDenial('identity.wechat.bind', clientSubject);
+      throw error;
+    }
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + this.config.sessionTtlMs);
+    try {
+      await this.db().$transaction(
+        async (tx) => {
+          const intent = await tx.identityBindingIntent.findUnique({
+            where: { tokenHash: hashToken(body.bindingToken as string) },
+            include: {
+              session: true,
+              user: { include: { memberships: true } },
+            },
+          });
+          const now = new Date();
+          if (
+            !intent ||
+            intent.consumedAt ||
+            intent.expiresAt <= now ||
+            intent.session.revokedAt ||
+            intent.session.expiresAt <= now ||
+            intent.session.clientType !== 'WEB_PASSWORD' ||
+            intent.session.userId !== intent.userId ||
+            !intent.user.active ||
+            !this.activeOrganizer(intent.user)
+          )
+            throw new UnauthorizedException('Unable to bind identity');
+          await tx.wechatIdentity.create({
+            data: {
+              userId: intent.userId,
+              appId: config.appId,
+              openId: exchanged.openId,
+              unionId: exchanged.unionId,
+              lastLoginAt: now,
+            },
+          });
+          await tx.identityBindingIntent.update({
+            where: { id: intent.id },
+            data: { consumedAt: now },
+          });
+          await tx.session.create({
+            data: {
+              userId: intent.userId,
+              tokenHash: hashToken(token),
+              clientType: 'WECHAT_MINIAPP',
+              expiresAt,
+            },
+          });
+          await tx.authenticationThrottle.deleteMany({
+            where: { subjectHash: clientSubject },
+          });
+          await tx.auditRecord.create({
+            data: {
+              actorId: intent.userId,
+              action: 'identity.wechat.bind',
+              resourceId: intent.userId,
+              outcome: 'ALLOWED',
+              requestId: randomUUID(),
+            },
+          });
+        },
+        { isolationLevel: 'Serializable' },
+      );
+      return { token, expiresAt: expiresAt.toISOString() };
+    } catch (error) {
+      await this.recordWechatDenial('identity.wechat.bind', clientSubject);
+      if (await this.throttled([clientSubject]))
+        throw new HttpException(
+          'Unable to sign in',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      if (error instanceof HttpException) throw error;
+      if ((error as { code?: string }).code === 'P2002')
+        throw new ConflictException('WeChat identity already bound');
+      throw new ServiceUnavailableException('WeChat login unavailable');
+    }
   }
   async sessionStatus(token: string) {
     return this.authenticationResponse(await this.session(this.db(), token));
@@ -611,6 +997,7 @@ export class AuthorizationService {
           data: {
             userId: current.id,
             tokenHash: hashToken(nextToken),
+            clientType: 'WEB_PASSWORD',
             expiresAt,
           },
           include: { user: { include: { memberships: true } } },

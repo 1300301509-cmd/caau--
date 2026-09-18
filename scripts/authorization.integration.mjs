@@ -79,7 +79,7 @@ export async function authorizationIntegration(t) {
                 : table === 'InternalUser'
                   ? "to_jsonb(t)-'loginName'-'passwordHash'-'mustChangePassword'-'passwordChangedAt'"
                   : table === 'Session'
-                    ? "to_jsonb(t)-'createdAt'"
+                    ? "to_jsonb(t)-'createdAt'-'clientType'"
                     : 'to_jsonb(t)';
           const rows = (
             await sql.query(
@@ -101,6 +101,7 @@ export async function authorizationIntegration(t) {
                   '202609160001_individual_materials',
                   '202609170001_event_hosting_applications',
                   '202609180001_password_authentication',
+                  '202609190001_cross_client_identity',
                 ],
               ],
             )
@@ -812,7 +813,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          8,
+          9,
         );
       },
     );

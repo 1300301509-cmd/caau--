@@ -79,11 +79,14 @@ export async function authenticationBrowserTest({
       page.getByRole('heading', { level: 1, name: '账号与权限' }),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: '创建账号' })).toBeVisible();
-    await expect(page.getByText('正式账号').first()).toBeVisible();
+    await expect(
+      page.getByText('Synthetic browser super admin', { exact: true }),
+    ).toBeVisible();
     await page.reload();
     await expect(
       page.getByRole('heading', { level: 1, name: '账号与权限' }),
     ).toBeVisible();
+    await page.locator('.hq-brand-symbol').hover();
     await page.getByRole('link', { name: '赛事审核中心' }).click();
     await expect(page.getByLabel('搜索赛事或申请机构')).toBeVisible();
     await expect(page.getByLabel('选择测试身份')).toHaveCount(0);

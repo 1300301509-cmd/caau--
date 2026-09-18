@@ -109,7 +109,7 @@ export function AppShell({
             </span>
             {auth.mode === 'formal' && (
               <div className="hq-account-actions">
-                <a href="/account/password">修改密码</a>
+                <a href="/account/password">账号安全</a>
                 <Button
                   type="text"
                   size="small"

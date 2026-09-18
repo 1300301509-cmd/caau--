@@ -248,8 +248,11 @@ export const operations = {
     method: 'GET',
     responses: {
       '200': {
-        properties: { localIdentityEnabled: { type: 'boolean' } },
-        required: ['localIdentityEnabled'],
+        properties: {
+          localIdentityEnabled: { type: 'boolean' },
+          wechatMiniappEnabled: { type: 'boolean' },
+        },
+        required: ['localIdentityEnabled', 'wechatMiniappEnabled'],
         type: 'object',
       },
     },
@@ -300,6 +303,81 @@ export const operations = {
     responseMediaType: 'application/json',
     body: null,
     authenticated: true,
+  },
+  bindWechatMiniapp: {
+    path: '/api/v1/authentication/wechat/bind',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          expiresAt: { format: 'date-time', type: 'string' },
+          token: { type: 'string', writeOnly: true },
+        },
+        required: ['token', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        bindingToken: {
+          maxLength: 43,
+          minLength: 43,
+          type: 'string',
+          writeOnly: true,
+        },
+        code: { maxLength: 256, minLength: 1, type: 'string', writeOnly: true },
+      },
+      required: ['code', 'bindingToken'],
+      type: 'object',
+    },
+    authenticated: false,
+  },
+  createWechatBindingIntent: {
+    path: '/api/v1/authentication/wechat/binding-intents',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          bindingToken: { type: 'string', writeOnly: true },
+          expiresAt: { format: 'date-time', type: 'string' },
+        },
+        required: ['bindingToken', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  wechatMiniappLogin: {
+    path: '/api/v1/authentication/wechat/login',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          expiresAt: { format: 'date-time', type: 'string' },
+          token: { type: 'string', writeOnly: true },
+        },
+        required: ['token', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        code: { maxLength: 256, minLength: 1, type: 'string', writeOnly: true },
+      },
+      required: ['code'],
+      type: 'object',
+    },
+    authenticated: false,
   },
   listAccounts: {
     path: '/api/v1/authorization/accounts',

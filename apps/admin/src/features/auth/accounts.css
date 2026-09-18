@@ -2,7 +2,14 @@
   display: grid;
   gap: 16px;
 }
+.account-security-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  align-items: start;
+  gap: 20px;
+}
 .password-settings {
+  width: 100%;
   max-width: 620px;
 }
 .password-settings > .ant-card-body {

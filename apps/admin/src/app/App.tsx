@@ -34,7 +34,7 @@ export function App() {
           : path === '/accounts'
             ? '账号与权限 · CAAU'
             : path === '/account/password'
-              ? '修改密码 · CAAU'
+              ? '账号安全 · CAAU'
               : path === '/system/health'
                 ? '工程连接检查 · CAAU'
                 : '页面未找到 · CAAU';

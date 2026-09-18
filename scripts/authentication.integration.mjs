@@ -263,6 +263,167 @@ export async function authenticationIntegration(t, context) {
   );
 
   await t.test(
+    'one InternalUser binds Web password and WeChat sessions without duplicating business identity',
+    async () => {
+      const organizerLogin = `organizer.${randomBytes(5).toString('hex')}`;
+      const organizerTemporaryPassword = secret();
+      const organizerPassword = secret();
+      const rotatedOrganizerPassword = secret();
+      const organizer = await call('authorization/accounts', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${tokens.super}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          loginName: organizerLogin,
+          displayName: 'Synthetic cross-client organizer',
+          temporaryPassword: organizerTemporaryPassword,
+          memberships: [{ organizationId: hq, role: 'ORGANIZER' }],
+        }),
+      });
+      const wechat = await createApplication({
+        ...config,
+        localIdentity: false,
+        wechatMiniapp: {
+          appId: 'wx12345678',
+          appSecret: 'x'.repeat(32),
+          exchange: async (code) => ({
+            openId: `openid-${code}`,
+            unionId: 'union-synthetic-user',
+          }),
+        },
+      });
+      try {
+        await wechat.listen(0, '127.0.0.1');
+        const wechatBase = await wechat.getUrl();
+        const request = async (path, options = {}, expected = 200) => {
+          const response = await fetch(`${wechatBase}/api/v1/${path}`, options);
+          assert.equal(response.status, expected, path);
+          return {
+            response,
+            data: await response.json().catch(() => undefined),
+          };
+        };
+        const initial = await request('authentication/login', {
+          method: 'POST',
+          headers: { Origin: origin, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loginName: organizerLogin,
+            password: organizerTemporaryPassword,
+          }),
+        });
+        let cookie = cookieValue(initial.response);
+        const changed = await request('authentication/change-password', {
+          method: 'POST',
+          headers: {
+            Cookie: cookie,
+            Origin: origin,
+            'X-CSRF-Token': initial.data.csrfToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            currentPassword: organizerTemporaryPassword,
+            newPassword: organizerPassword,
+          }),
+        });
+        cookie = cookieValue(changed.response);
+        await request(
+          'authentication/wechat/binding-intents',
+          {
+            method: 'POST',
+            headers: { Cookie: cookie, Origin: origin },
+          },
+          403,
+        );
+        const intent = await request('authentication/wechat/binding-intents', {
+          method: 'POST',
+          headers: {
+            Cookie: cookie,
+            Origin: origin,
+            'X-CSRF-Token': changed.data.csrfToken,
+          },
+        });
+        assert.match(intent.data.bindingToken, /^[A-Za-z0-9_-]{43}$/);
+        await request(
+          'authentication/wechat/login',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: 'first-login' }),
+          },
+          401,
+        );
+        const bound = await request('authentication/wechat/bind', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: 'first-login',
+            bindingToken: intent.data.bindingToken,
+          }),
+        });
+        assert.match(bound.data.token, /^[A-Za-z0-9_-]{43}$/);
+        const miniIdentity = await request('workspace/identity', {
+          headers: { Authorization: `Bearer ${bound.data.token}` },
+        });
+        assert.equal(miniIdentity.data.id, organizer.data.id);
+        assert.deepEqual(miniIdentity.data.roles, ['ORGANIZER']);
+        const relogin = await request('authentication/wechat/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: 'first-login' }),
+        });
+        assert.match(relogin.data.token, /^[A-Za-z0-9_-]{43}$/);
+        await request(
+          'authentication/wechat/bind',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: 'first-login',
+              bindingToken: intent.data.bindingToken,
+            }),
+          },
+          401,
+        );
+        const rotated = await request('authentication/change-password', {
+          method: 'POST',
+          headers: {
+            Cookie: cookie,
+            Origin: origin,
+            'X-CSRF-Token': changed.data.csrfToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            currentPassword: organizerPassword,
+            newPassword: rotatedOrganizerPassword,
+          }),
+        });
+        assert.ok(rotated.response.headers.get('set-cookie'));
+        await request(
+          'workspace/identity',
+          { headers: { Authorization: `Bearer ${bound.data.token}` } },
+          401,
+        );
+        assert.deepEqual(
+          (
+            await sql.query(
+              'SELECT "clientType",count(*)::int n FROM "Session" WHERE "userId"=$1 GROUP BY "clientType" ORDER BY "clientType"',
+              [organizer.data.id],
+            )
+          ).rows,
+          [
+            { clientType: 'WEB_PASSWORD', n: 3 },
+            { clientType: 'WECHAT_MINIAPP', n: 2 },
+          ],
+        );
+      } finally {
+        await wechat.close();
+      }
+    },
+  );
+
+  await t.test(
     'normal identity mode accepts password Cookie but exposes no local signer',
     async () => {
       const normal = await createApplication({
@@ -278,6 +439,7 @@ export async function authenticationIntegration(t, context) {
         assert.equal(modeResponse.status, 200);
         assert.deepEqual(await modeResponse.json(), {
           localIdentityEnabled: false,
+          wechatMiniappEnabled: false,
         });
         assert.equal(
           (await fetch(`${normalBase}/api/v1/local-test-identities`)).status,

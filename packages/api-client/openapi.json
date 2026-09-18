@@ -271,9 +271,12 @@
         "properties": {
           "localIdentityEnabled": {
             "type": "boolean"
+          },
+          "wechatMiniappEnabled": {
+            "type": "boolean"
           }
         },
-        "required": ["localIdentityEnabled"],
+        "required": ["localIdentityEnabled", "wechatMiniappEnabled"],
         "type": "object"
       },
       "AuthenticationSessionDto": {
@@ -1393,6 +1396,20 @@
           }
         },
         "required": ["id"],
+        "type": "object"
+      },
+      "IdentityBindingIntentDto": {
+        "properties": {
+          "bindingToken": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": ["bindingToken", "expiresAt"],
         "type": "object"
       },
       "IndividualActionDto": {
@@ -2599,6 +2616,50 @@
         "required": ["displayName"],
         "type": "object"
       },
+      "WechatBindRequestDto": {
+        "properties": {
+          "bindingToken": {
+            "maxLength": 43,
+            "minLength": 43,
+            "type": "string",
+            "writeOnly": true
+          },
+          "code": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": ["code", "bindingToken"],
+        "type": "object"
+      },
+      "WechatLoginRequestDto": {
+        "properties": {
+          "code": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": ["code"],
+        "type": "object"
+      },
+      "WechatSessionDto": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": ["token", "expiresAt"],
+        "type": "object"
+      },
       "WorkspaceIdentityDto": {
         "properties": {
           "canManageAccounts": {
@@ -3062,6 +3123,136 @@
             "webSession": []
           }
         ],
+        "summary": "",
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/v1/authentication/wechat/bind": {
+      "post": {
+        "operationId": "bindWechatMiniapp",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WechatBindRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WechatSessionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required or failed"
+          },
+          "403": {
+            "description": "Origin, CSRF or access denied"
+          },
+          "429": {
+            "description": "Sign-in temporarily unavailable"
+          },
+          "503": {
+            "description": "Authentication unavailable"
+          }
+        },
+        "summary": "",
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/v1/authentication/wechat/binding-intents": {
+      "post": {
+        "operationId": "createWechatBindingIntent",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityBindingIntentDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required or failed"
+          },
+          "403": {
+            "description": "Origin, CSRF or access denied"
+          },
+          "429": {
+            "description": "Sign-in temporarily unavailable"
+          },
+          "503": {
+            "description": "Authentication unavailable"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "",
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/v1/authentication/wechat/login": {
+      "post": {
+        "operationId": "wechatMiniappLogin",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WechatLoginRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WechatSessionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required or failed"
+          },
+          "403": {
+            "description": "Origin, CSRF or access denied"
+          },
+          "429": {
+            "description": "Sign-in temporarily unavailable"
+          },
+          "503": {
+            "description": "Authentication unavailable"
+          }
+        },
         "summary": "",
         "tags": ["Authentication"]
       }

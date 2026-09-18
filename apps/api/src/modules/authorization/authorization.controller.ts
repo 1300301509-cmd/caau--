@@ -45,6 +45,10 @@ import {
   ReviewerDto,
   TaskDto,
   UserDto,
+  WechatBindRequestDto,
+  WechatLoginRequestDto,
+  WechatSessionDto,
+  IdentityBindingIntentDto,
 } from './authorization.dto.js';
 
 type CookieResponse = {
@@ -67,7 +71,49 @@ export class AuthenticationController {
   @ApiOkResponse({ type: AuthenticationModeDto })
   @Header('Cache-Control', 'no-store')
   mode() {
-    return { localIdentityEnabled: this.service.localIdentityEnabled };
+    return {
+      localIdentityEnabled: this.service.localIdentityEnabled,
+      wechatMiniappEnabled: this.service.wechatMiniappEnabled,
+    };
+  }
+
+  @Post('wechat/login')
+  @Public()
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'wechatMiniappLogin' })
+  @ApiBody({ type: WechatLoginRequestDto })
+  @ApiOkResponse({ type: WechatSessionDto })
+  @Header('Cache-Control', 'no-store')
+  wechatLogin(
+    @Req() request: AuthRequest,
+    @Body() body: WechatLoginRequestDto,
+  ) {
+    return this.service.wechatLogin(body, request);
+  }
+
+  @Post('wechat/bind')
+  @Public()
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'bindWechatMiniapp' })
+  @ApiBody({ type: WechatBindRequestDto })
+  @ApiOkResponse({ type: WechatSessionDto })
+  @Header('Cache-Control', 'no-store')
+  bindWechat(@Req() request: AuthRequest, @Body() body: WechatBindRequestDto) {
+    return this.service.bindWechat(body, request);
+  }
+
+  @Post('wechat/binding-intents')
+  @Permission('session.wechat.binding.create')
+  @ApiCookieAuth('webSession')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'createWechatBindingIntent' })
+  @ApiOkResponse({ type: IdentityBindingIntentDto })
+  @Header('Cache-Control', 'no-store')
+  bindingIntent(@Req() request: AuthRequest) {
+    return this.service.createWechatBindingIntent(
+      request.token!,
+      request.credential,
+    );
   }
 
   @Post('login')

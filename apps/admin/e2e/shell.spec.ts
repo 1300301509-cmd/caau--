@@ -51,8 +51,9 @@ test('review center is the default route with one primary module and two review 
   await expect(
     types.getByRole('link', { name: '承办申请审核' }),
   ).toHaveAttribute('aria-current', 'page');
+  await page.locator('.hq-brand-symbol').hover();
   await expect(page.getByText('正式账号', { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: '修改密码' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '账号安全' })).toBeVisible();
   await expect(page.locator('.review-table-row')).toHaveCount(0);
   await expect(page.locator('.metric-value').first()).toContainText('0项');
   await page.reload();
@@ -70,6 +71,7 @@ test('material review remains accessible within the review center', async ({
       .getByRole('navigation', { name: '审核类型' })
       .getByRole('link', { name: '办赛材料审核' }),
   ).toHaveAttribute('aria-current', 'page');
+  await page.locator('.hq-brand-symbol').hover();
   await expect(page.getByText('正式账号', { exact: true })).toBeVisible();
   await expect(page.getByLabel('选择测试身份')).toHaveCount(0);
 });

@@ -35,18 +35,27 @@ enum EventLifecycleState {
   PREPARING_INTERNAL
 }
 
+enum SessionClientType {
+  LEGACY
+  WEB_PASSWORD
+  WECHAT_MINIAPP
+  LOCAL_TEST
+}
+
 model InternalUser {
-  id                  String                         @id @default(uuid()) @db.Uuid
-  displayName         String                         @db.VarChar(80)
-  active              Boolean                        @default(true)
-  loginName           String?                        @unique @db.VarChar(64)
-  passwordHash        String?                        @db.VarChar(255)
-  mustChangePassword  Boolean                        @default(false)
-  passwordChangedAt   DateTime?                      @db.Timestamptz(3)
-  memberships         OrganizationMember[]
-  sessions            Session[]
-  hostingApplications EventHostingApplication[]      @relation("HostingApplicationCreator")
-  hostingSubmissions  HostingApplicationSubmission[] @relation("HostingSubmissionActor")
+  id                     String                         @id @default(uuid()) @db.Uuid
+  displayName            String                         @db.VarChar(80)
+  active                 Boolean                        @default(true)
+  loginName              String?                        @unique @db.VarChar(64)
+  passwordHash           String?                        @db.VarChar(255)
+  mustChangePassword     Boolean                        @default(false)
+  passwordChangedAt      DateTime?                      @db.Timestamptz(3)
+  memberships            OrganizationMember[]
+  sessions               Session[]
+  wechatIdentities       WechatIdentity[]
+  identityBindingIntents IdentityBindingIntent[]
+  hostingApplications    EventHostingApplication[]      @relation("HostingApplicationCreator")
+  hostingSubmissions     HostingApplicationSubmission[] @relation("HostingSubmissionActor")
 }
 
 model Organization {
@@ -109,13 +118,43 @@ model TaskScope {
 }
 
 model Session {
-  id        String       @id @default(uuid()) @db.Uuid
-  tokenHash String       @unique @db.Char(64)
-  userId    String       @db.Uuid
-  createdAt DateTime     @default(now()) @db.Timestamptz(3)
-  expiresAt DateTime     @db.Timestamptz(3)
-  revokedAt DateTime?    @db.Timestamptz(3)
-  user      InternalUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id             String                  @id @default(uuid()) @db.Uuid
+  tokenHash      String                  @unique @db.Char(64)
+  userId         String                  @db.Uuid
+  clientType     SessionClientType       @default(LEGACY)
+  createdAt      DateTime                @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime                @db.Timestamptz(3)
+  revokedAt      DateTime?               @db.Timestamptz(3)
+  user           InternalUser            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  bindingIntents IdentityBindingIntent[]
+}
+
+model WechatIdentity {
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @db.Uuid
+  appId       String       @db.VarChar(32)
+  openId      String       @db.VarChar(128)
+  unionId     String?      @db.VarChar(128)
+  boundAt     DateTime     @default(now()) @db.Timestamptz(3)
+  lastLoginAt DateTime     @default(now()) @db.Timestamptz(3)
+  user        InternalUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([appId, openId])
+  @@unique([appId, userId])
+}
+
+model IdentityBindingIntent {
+  id         String       @id @default(uuid()) @db.Uuid
+  tokenHash  String       @unique @db.Char(64)
+  userId     String       @db.Uuid
+  sessionId  String       @db.Uuid
+  createdAt  DateTime     @default(now()) @db.Timestamptz(3)
+  expiresAt  DateTime     @db.Timestamptz(3)
+  consumedAt DateTime?    @db.Timestamptz(3)
+  user       InternalUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+  session    Session      @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  @@index([userId, expiresAt])
 }
 
 model AuthenticationThrottle {

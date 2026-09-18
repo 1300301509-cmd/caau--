@@ -13,6 +13,17 @@ test('local identity is opt-in, disallowed in production or on external host', (
     readConfig({ CAAU_IDENTITY_MODE: 'local', HOST: '0.0.0.0' }),
   );
   assert.throws(() => readConfig({ CAAU_IDENTITY_MODE: 'wechat' }));
+  assert.throws(() => readConfig({ CAAU_WECHAT_MINIAPP_APP_ID: 'wx12345678' }));
+  assert.throws(() =>
+    readConfig({ CAAU_WECHAT_MINIAPP_APP_SECRET: 'x'.repeat(32) }),
+  );
+  assert.deepEqual(
+    readConfig({
+      CAAU_WECHAT_MINIAPP_APP_ID: 'wx12345678',
+      CAAU_WECHAT_MINIAPP_APP_SECRET: 'x'.repeat(32),
+    }).wechatMiniapp,
+    { appId: 'wx12345678', appSecret: 'x'.repeat(32) },
+  );
 });
 test('global guard rejects handlers with no explicit policy', async () => {
   const guard = new AuthorizationGuard(

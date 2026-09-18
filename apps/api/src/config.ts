@@ -47,6 +47,16 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   const trustProxy = Number(env.CAAU_TRUST_PROXY_HOPS ?? '0');
   if (!Number.isInteger(trustProxy) || trustProxy < 0 || trustProxy > 2)
     throw new Error('CAAU_TRUST_PROXY_HOPS must be an integer from 0 to 2');
+  const wechatAppId = env.CAAU_WECHAT_MINIAPP_APP_ID?.trim();
+  const wechatAppSecret = env.CAAU_WECHAT_MINIAPP_APP_SECRET?.trim();
+  if (!!wechatAppId !== !!wechatAppSecret)
+    throw new Error(
+      'WeChat Mini Program AppID and AppSecret must be set together',
+    );
+  if (wechatAppId && !/^wx[a-zA-Z0-9]{8,30}$/.test(wechatAppId))
+    throw new Error('Invalid WeChat Mini Program AppID');
+  if (wechatAppSecret && Buffer.byteLength(wechatAppSecret, 'utf8') < 16)
+    throw new Error('Invalid WeChat Mini Program AppSecret');
   return {
     localIdentity,
     production,
@@ -60,5 +70,9 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     origins,
     databaseUrl: env.DATABASE_URL,
     privateFileRoot: env.CAAU_PRIVATE_FILE_ROOT,
+    wechatMiniapp:
+      wechatAppId && wechatAppSecret
+        ? { appId: wechatAppId, appSecret: wechatAppSecret }
+        : undefined,
   };
 }

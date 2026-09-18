@@ -8,7 +8,7 @@ page {
   min-height: 100vh;
   box-sizing: border-box;
   padding: 64px 40px calc(36px + env(safe-area-inset-bottom));
-  overflow: hidden;
+  overflow-x: hidden;
   background:
     radial-gradient(
       circle at 100% 0,
@@ -199,6 +199,62 @@ page {
   margin: 1px 10px 0 0;
   transform: scale(0.78);
   transform-origin: top left;
+}
+
+.wechat-binding {
+  display: flex;
+  flex-direction: column;
+  margin-top: 24px;
+  padding: 22px;
+  border-radius: 18px;
+  background: #f2f6f1;
+}
+
+.wechat-binding-title {
+  color: #29483f;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.wechat-binding-note {
+  margin-top: 4px;
+  color: #69746d;
+  font-size: 20px;
+  line-height: 1.55;
+}
+
+.wechat-binding-input {
+  height: 72px;
+  box-sizing: border-box;
+  margin-top: 16px;
+  padding: 0 18px;
+  border: 2px solid #cbd7cf;
+  border-radius: 14px;
+  background: #fff;
+  color: #293630;
+  font-family: ui-monospace, 'SFMono-Regular', monospace;
+  font-size: 22px;
+}
+
+.wechat-bind-button {
+  min-height: 72px;
+  margin: 14px 0 0;
+  border: 0;
+  border-radius: 14px;
+  background: #dfece5;
+  color: #1f5d50;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 72px;
+}
+
+.wechat-bind-button::after {
+  border: 0;
+}
+
+.wechat-bind-button[disabled] {
+  background: #edf1ed;
+  color: #8b958e;
 }
 
 .login-notice {

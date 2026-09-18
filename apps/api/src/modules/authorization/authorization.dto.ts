@@ -42,6 +42,7 @@ export class LocalSessionDto {
 }
 export class AuthenticationModeDto {
   @ApiProperty() localIdentityEnabled!: boolean;
+  @ApiProperty() wechatMiniappEnabled!: boolean;
 }
 export class LoginRequestDto {
   @ApiProperty({ minLength: 3, maxLength: 64 }) loginName!: string;
@@ -62,6 +63,22 @@ export class ChangePasswordDto {
   currentPassword!: string;
   @ApiProperty({ minLength: 12, maxLength: 128, writeOnly: true })
   newPassword!: string;
+}
+export class WechatLoginRequestDto {
+  @ApiProperty({ minLength: 1, maxLength: 256, writeOnly: true })
+  code!: string;
+}
+export class WechatBindRequestDto extends WechatLoginRequestDto {
+  @ApiProperty({ minLength: 43, maxLength: 43, writeOnly: true })
+  bindingToken!: string;
+}
+export class WechatSessionDto {
+  @ApiProperty({ writeOnly: true }) token!: string;
+  @ApiProperty({ format: 'date-time' }) expiresAt!: string;
+}
+export class IdentityBindingIntentDto {
+  @ApiProperty({ writeOnly: true }) bindingToken!: string;
+  @ApiProperty({ format: 'date-time' }) expiresAt!: string;
 }
 export class AccountMembershipInputDto {
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
