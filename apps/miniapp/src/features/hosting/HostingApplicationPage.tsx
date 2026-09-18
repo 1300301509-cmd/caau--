@@ -70,8 +70,10 @@ const when = (value: string) => new Date(value).toLocaleString();
 
 export function HostingApplicationPage({
   materials = false,
+  applicationId = '',
 }: {
   materials?: boolean;
+  applicationId?: string;
 }) {
   const [eligibleEvents, setEligibleEvents] = useState<
     Array<{ id: string; name: string }>
@@ -79,7 +81,7 @@ export function HostingApplicationPage({
   const [materialEventId, setMaterialEventId] = useState(session.eventId);
   const [identity, setIdentity] = useState<S['WorkspaceIdentityDto']>();
   const [details, setDetails] = useState<HostingDetail[]>([]);
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState(applicationId);
   const [detail, setDetail] = useState<HostingDetail>();
   const [filter, setFilter] = useState<Filter>('ALL');
   const [form, setForm] = useState<HostingForm>({ ...emptyHostingForm });
@@ -99,7 +101,7 @@ export function HostingApplicationPage({
   const generation = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const failures = useRef(0);
-  const selectedIdRef = useRef('');
+  const selectedIdRef = useRef(applicationId);
   const detailRef = useRef<HostingDetail>();
   const dirtyRef = useRef(false);
   const baseRevisionRef = useRef(0);
@@ -223,7 +225,9 @@ export function HostingApplicationPage({
         (item) => item.id === selectedIdRef.current,
       )
         ? selectedIdRef.current
-        : (nextDetails[0]?.id ?? '');
+        : applicationId
+          ? ''
+          : (nextDetails[0]?.id ?? '');
       setSelectedId(nextId);
       selectedIdRef.current = nextId;
       const nextDetail = nextDetails.find((item) => item.id === nextId);
@@ -745,112 +749,117 @@ export function HostingApplicationPage({
         </View>
       ) : (
         <>
-          <View className="card hosting-create-card">
-            <Text className="subtitle">
-              {materials ? '选择已获批赛事' : '新建申请'}
-            </Text>
-            <Text className="description">
-              {materials
-                ? '每场赛事一套材料；可保存草稿、提交及退回后补充。'
-                : '申请机构在建立后不可更改。'}
-            </Text>
-            {materials && !eligibleEvents.length && (
-              <Text className="warning">暂无获批赛事，请先完成承办申请。</Text>
-            )}
-            {materials &&
-              eligibleEvents.map((event) => (
-                <Button
-                  key={event.id}
-                  className={
-                    materialEventId === event.id ? 'choice-active' : ''
-                  }
-                  onClick={() => setMaterialEventId(event.id)}
-                >
-                  {event.name}
-                </Button>
-              ))}
-            {!materials &&
-              identity.hostingApplicantOrganizations.map((organization) => (
-                <Button
-                  key={organization.id}
-                  className={
-                    organizationId === organization.id ? 'choice-active' : ''
-                  }
-                  ariaLabel={`${organization.name}${organizationId === organization.id ? '，当前申请机构' : ''}`}
-                  onClick={() => setOrganizationId(organization.id)}
-                >
-                  {organizationId === organization.id ? '当前：' : ''}
-                  {organization.name}
-                </Button>
-              ))}
-            <Button
-              type="primary"
-              disabled={
-                blocked || (materials ? !materialEventId : !organizationId)
-              }
-              onClick={() => void createApplication()}
-            >
-              {materials ? '进入办赛材料' : '建立新申请草稿'}
-            </Button>
-          </View>
-
-          <View className="card">
-            <Text className="subtitle">
-              {materials ? '本机构办赛材料' : '本机构申请'}
-            </Text>
-            <View
-              className="hosting-filter"
-              ariaRole="group"
-              ariaLabel="申请状态筛选"
-            >
-              <Button
-                className={filter === 'ALL' ? 'active' : ''}
-                onClick={() => setFilter('ALL')}
-              >
-                全部
-              </Button>
-              {hostingStatuses
-                .filter((row) => !materials || row.value !== 'REJECTED')
-                .map((status) => (
+          {materials && (
+            <View className="card hosting-create-card">
+              <Text className="subtitle">
+                {materials ? '选择已获批赛事' : '新建申请'}
+              </Text>
+              <Text className="description">
+                {materials
+                  ? '每场赛事一套材料；可保存草稿、提交及退回后补充。'
+                  : '申请机构在建立后不可更改。'}
+              </Text>
+              {materials && !eligibleEvents.length && (
+                <Text className="warning">
+                  暂无获批赛事，请先完成承办申请。
+                </Text>
+              )}
+              {materials &&
+                eligibleEvents.map((event) => (
                   <Button
-                    key={status.value}
-                    className={filter === status.value ? 'active' : ''}
-                    onClick={() => setFilter(status.value)}
+                    key={event.id}
+                    className={
+                      materialEventId === event.id ? 'choice-active' : ''
+                    }
+                    onClick={() => setMaterialEventId(event.id)}
                   >
-                    {status.label}
+                    {event.name}
                   </Button>
                 ))}
-            </View>
-            {!visible.length && (
-              <Text className="description">当前筛选下暂无申请。</Text>
-            )}
-            {visible.map((item) => {
-              const snapshot = item.submissions.at(-1)?.form ?? item.draft;
-              const rowForm = hostingFormFrom(snapshot);
-              return (
-                <Button
-                  key={item.id}
-                  className={`hosting-application-row ${item.id === selectedId ? 'selected' : ''}`}
-                  ariaLabel={`${rowForm.eventName || '未命名申请'}，${hostingStatusLabel(item.status)}`}
-                  onClick={() => void chooseApplication(item.id)}
-                >
-                  <Text className="hosting-row-title">
-                    {rowForm.eventName || '未命名申请'}
-                  </Text>
-                  <Text
-                    className={`hosting-state state-${item.status.toLowerCase()}`}
+              {!materials &&
+                identity.hostingApplicantOrganizations.map((organization) => (
+                  <Button
+                    key={organization.id}
+                    className={
+                      organizationId === organization.id ? 'choice-active' : ''
+                    }
+                    ariaLabel={`${organization.name}${organizationId === organization.id ? '，当前申请机构' : ''}`}
+                    onClick={() => setOrganizationId(organization.id)}
                   >
-                    {hostingStatusLabel(item.status)}
-                  </Text>
-                  <Text className="hosting-row-meta">
-                    {item.applicantOrganizationName} · V
-                    {item.submissions.at(-1)?.version ?? 0}
-                  </Text>
-                </Button>
-              );
-            })}
-          </View>
+                    {organizationId === organization.id ? '当前：' : ''}
+                    {organization.name}
+                  </Button>
+                ))}
+              <Button
+                type="primary"
+                disabled={
+                  blocked || (materials ? !materialEventId : !organizationId)
+                }
+                onClick={() => void createApplication()}
+              >
+                {materials ? '进入办赛材料' : '建立新申请草稿'}
+              </Button>
+            </View>
+          )}
 
+          {materials && (
+            <View className="card">
+              <Text className="subtitle">
+                {materials ? '本机构办赛材料' : '本机构申请'}
+              </Text>
+              <View
+                className="hosting-filter"
+                ariaRole="group"
+                ariaLabel="申请状态筛选"
+              >
+                <Button
+                  className={filter === 'ALL' ? 'active' : ''}
+                  onClick={() => setFilter('ALL')}
+                >
+                  全部
+                </Button>
+                {hostingStatuses
+                  .filter((row) => !materials || row.value !== 'REJECTED')
+                  .map((status) => (
+                    <Button
+                      key={status.value}
+                      className={filter === status.value ? 'active' : ''}
+                      onClick={() => setFilter(status.value)}
+                    >
+                      {status.label}
+                    </Button>
+                  ))}
+              </View>
+              {!visible.length && (
+                <Text className="description">当前筛选下暂无申请。</Text>
+              )}
+              {visible.map((item) => {
+                const snapshot = item.submissions.at(-1)?.form ?? item.draft;
+                const rowForm = hostingFormFrom(snapshot);
+                return (
+                  <Button
+                    key={item.id}
+                    className={`hosting-application-row ${item.id === selectedId ? 'selected' : ''}`}
+                    ariaLabel={`${rowForm.eventName || '未命名申请'}，${hostingStatusLabel(item.status)}`}
+                    onClick={() => void chooseApplication(item.id)}
+                  >
+                    <Text className="hosting-row-title">
+                      {rowForm.eventName || '未命名申请'}
+                    </Text>
+                    <Text
+                      className={`hosting-state state-${item.status.toLowerCase()}`}
+                    >
+                      {hostingStatusLabel(item.status)}
+                    </Text>
+                    <Text className="hosting-row-meta">
+                      {item.applicantOrganizationName} · V
+                      {item.submissions.at(-1)?.version ?? 0}
+                    </Text>
+                  </Button>
+                );
+              })}
+            </View>
+          )}
           {detail && (
             <>
               <View className="card hosting-summary">

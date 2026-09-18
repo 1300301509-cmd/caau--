@@ -11,6 +11,7 @@ import {
 } from '../../features/materials/session';
 import {
   hostingStatusLabel,
+  hostingStatuses,
   hostingActionLabel,
 } from '../../features/hosting/platform';
 
@@ -19,6 +20,7 @@ const stages = ['APPLICATION', 'MATERIALS', 'CONTRACT', 'PERMITTED'];
 const names = ['申请审核', '材料审核', '合同签订', '批准办赛'];
 export default function HostingProgress() {
   const [rows, setRows] = useState<Journey[]>([]);
+  const [filter, setFilter] = useState('ALL');
   const [error, setError] = useState('');
   const [updated, setUpdated] = useState('');
   const [busy, setBusy] = useState('');
@@ -161,88 +163,125 @@ export default function HostingProgress() {
           </Button>
         </View>
       )}
-      {rows.map((row) => (
-        <View className="card" key={row.applicationId}>
-          <Text className="subtitle">{row.eventName}</Text>
-          <Text className="description">{row.organizationName}</Text>
-          <View className="journey-steps">
-            {stages.map((stage, index) => (
-              <View
-                key={stage}
-                className={`journey-step ${index <= stages.indexOf(row.stage) ? 'reached' : ''}`}
-              >
-                <Text className="journey-number">{index + 1}</Text>
-                <Text>{names[index]}</Text>
-                <Text className="description">
-                  {index < stages.indexOf(row.stage) ||
-                  row.stage === 'PERMITTED'
-                    ? '已完成'
-                    : index === stages.indexOf(row.stage)
-                      ? '当前阶段'
-                      : '未开始'}
-                </Text>
-              </View>
-            ))}
-          </View>
-          <Text className="description">
-            申请：{hostingStatusLabel(row.applicationStatus)} · 材料：
-            {row.materialStatus
-              ? hostingStatusLabel(row.materialStatus)
-              : '待提交'}
-          </Text>
-          {row.stage === 'CONTRACT' && (
-            <Text className="warning">
-              材料已通过，正在等待线下合同签订。签好后由总部工作人员确认批准办赛。
-            </Text>
-          )}
-          {row.permit && (
-            <View>
-              <Text className="success">已批准办赛</Text>
-              <Text className="description">
-                确认时间：{new Date(row.permit.confirmedAt).toLocaleString()}
-              </Text>
-              <Text className="description">
-                操作人：{row.permit.confirmedBy}
-              </Text>
-            </View>
-          )}
-          {row.canConfirm && (
-            <Button
-              type="primary"
-              disabled={!!busy || !!error}
-              loading={busy === row.materialApplicationId}
-              onClick={() => void confirm(row)}
-            >
-              确认合同已签订，批准办赛
-            </Button>
-          )}
+      <Text className="subtitle">本机构申请</Text>
+      <View className="hosting-filter">
+        <Button
+          className={filter === 'ALL' ? 'active' : ''}
+          onClick={() => setFilter('ALL')}
+        >
+          全部
+        </Button>
+        {hostingStatuses.map((status) => (
           <Button
-            onClick={() =>
-              setExpanded(
-                expanded === row.applicationId ? '' : row.applicationId,
-              )
-            }
+            key={status.value}
+            className={filter === status.value ? 'active' : ''}
+            onClick={() => setFilter(status.value)}
           >
-            {expanded === row.applicationId ? '收起办理记录' : '查看办理记录'}
+            {status.label}
           </Button>
-          {expanded === row.applicationId &&
-            row.history.map((action) => (
-              <View className="journey-history" key={action.id}>
-                <Text>
-                  {hostingActionLabel(action.action)} ·{' '}
-                  {new Date(action.occurredAt).toLocaleString()}
-                </Text>
-                {typeof (action.detail as { reason?: unknown }).reason ===
-                  'string' && (
-                  <Text className="warning">
-                    {String((action.detail as { reason: string }).reason)}
+        ))}
+      </View>
+      {!!rows.length &&
+        !rows.some(
+          (row) => filter === 'ALL' || row.applicationStatus === filter,
+        ) && <Text className="description">当前筛选下暂无申请。</Text>}
+      {rows
+        .filter((row) => filter === 'ALL' || row.applicationStatus === filter)
+        .map((row) => (
+          <View className="card" key={row.applicationId}>
+            <Text className="subtitle">{row.eventName}</Text>
+            <Text className="description">{row.organizationName}</Text>
+            <Button
+              onClick={() =>
+                void Taro.navigateTo({
+                  url: `/pages/hosting/index?applicationId=${row.applicationId}`,
+                })
+              }
+            >
+              {row.applicationStatus === 'DRAFT'
+                ? '继续填写'
+                : row.applicationStatus === 'NEEDS_SUPPLEMENT'
+                  ? '补充申请'
+                  : '查看申请'}
+            </Button>
+            <View className="journey-steps">
+              {stages.map((stage, index) => (
+                <View
+                  key={stage}
+                  className={`journey-step ${index <= stages.indexOf(row.stage) ? 'reached' : ''}`}
+                >
+                  <Text className="journey-number">{index + 1}</Text>
+                  <Text>{names[index]}</Text>
+                  <Text className="description">
+                    {index < stages.indexOf(row.stage) ||
+                    row.stage === 'PERMITTED'
+                      ? '已完成'
+                      : index === stages.indexOf(row.stage)
+                        ? '当前阶段'
+                        : '未开始'}
                   </Text>
-                )}
-                <Text className="description">操作人：{action.actorId}</Text>
+                </View>
+              ))}
+            </View>
+            <Text className="description">
+              申请：{hostingStatusLabel(row.applicationStatus)} · 材料：
+              {row.materialStatus
+                ? hostingStatusLabel(row.materialStatus)
+                : '待提交'}
+            </Text>
+            {row.stage === 'CONTRACT' && (
+              <Text className="warning">
+                材料已通过，正在等待线下合同签订。签好后由总部工作人员确认批准办赛。
+              </Text>
+            )}
+            {row.permit && (
+              <View>
+                <Text className="success">已批准办赛</Text>
+                <Text className="description">
+                  确认时间：{new Date(row.permit.confirmedAt).toLocaleString()}
+                </Text>
+                <Text className="description">
+                  操作人：{row.permit.confirmedBy}
+                </Text>
               </View>
-            ))}
-        </View>
-      ))}
+            )}
+            {row.canConfirm && (
+              <Button
+                type="primary"
+                disabled={!!busy || !!error}
+                loading={busy === row.materialApplicationId}
+                onClick={() => void confirm(row)}
+              >
+                确认合同已签订，批准办赛
+              </Button>
+            )}
+            <Button
+              onClick={() =>
+                setExpanded(
+                  expanded === row.applicationId ? '' : row.applicationId,
+                )
+              }
+            >
+              {expanded === row.applicationId ? '收起办理记录' : '查看办理记录'}
+            </Button>
+            {expanded === row.applicationId &&
+              row.history.map((action) => (
+                <View className="journey-history" key={action.id}>
+                  <Text>
+                    {hostingActionLabel(action.action)} ·{' '}
+                    {new Date(action.occurredAt).toLocaleString()}
+                  </Text>
+                  {typeof (action.detail as { reason?: unknown }).reason ===
+                    'string' && (
+                    <Text className="warning">
+                      {String((action.detail as { reason: string }).reason)}
+                    </Text>
+                  )}
+                  <Text className="description">操作人：{action.actorId}</Text>
+                </View>
+              ))}
+          </View>
+        ))}
     </View>
   );
 }
