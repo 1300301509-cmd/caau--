@@ -669,7 +669,7 @@ export async function hostingIntegration(t, context) {
         eventName: '合成简表申请',
         startDate: '2027-07-01',
         endDate: null,
-        startTime: '09:00',
+        startTime: null,
         endTime: null,
         contactName: '合成联系人',
         contactPhone: '13800000000',

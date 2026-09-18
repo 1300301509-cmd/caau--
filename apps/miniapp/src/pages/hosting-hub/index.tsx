@@ -5,7 +5,7 @@ import { session } from '../../features/materials/session';
 const entries = [
   {
     title: '申请比赛',
-    note: '填写地点、日期、时间与联系方式',
+    note: '填写地点、日期与联系方式',
     page: 'hosting',
   },
   {

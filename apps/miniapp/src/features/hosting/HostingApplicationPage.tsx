@@ -1057,27 +1057,6 @@ export function HostingApplicationPage({
                   )}
                   {!materials && detail.formVersion === 2 && (
                     <>
-                      <View className="hosting-date-grid single-date">
-                        {(['startTime'] as const).map((key) => (
-                          <View key={key}>
-                            <Text className="field-label">
-                              {hostingFieldLabel(key)} *（北京时间）
-                            </Text>
-                            <Picker
-                              mode="time"
-                              value={form[key]}
-                              disabled={blocked || conflict}
-                              onChange={(event) =>
-                                edit({ [key]: String(event.detail.value) })
-                              }
-                            >
-                              <View className="field picker-field">
-                                {form[key] || '选择时间'}
-                              </View>
-                            </Picker>
-                          </View>
-                        ))}
-                      </View>
                       {(['contactName', 'contactPhone'] as const).map((key) => (
                         <View key={key}>
                           <Text className="field-label">
@@ -1289,6 +1268,13 @@ export function HostingApplicationPage({
                     当前提交 V{currentSubmission.version}
                   </Text>
                   {Object.entries(hostingFormFrom(currentSubmission.form))
+                    .filter(
+                      ([key, value]) =>
+                        materials ||
+                        detail.formVersion !== 2 ||
+                        !['startTime', 'endTime', 'endDate'].includes(key) ||
+                        !!value,
+                    )
                     .filter(
                       ([key]) =>
                         materials ||

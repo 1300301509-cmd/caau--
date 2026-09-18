@@ -295,11 +295,8 @@ function completeForm(
     (formVersion === 1 && !form.eventExperienceIntroduction)
   )
     throw new BadRequestException('Required application fields are missing');
-  if (
-    formVersion === 2 &&
-    (!form.contactName || !form.contactPhone || !form.startTime)
-  )
-    throw new BadRequestException('请填写比赛时间、联系人姓名和手机号');
+  if (formVersion === 2 && (!form.contactName || !form.contactPhone))
+    throw new BadRequestException('请填写联系人姓名和手机号');
   if (!mainlandProvinces.has(area.province))
     throw new BadRequestException(
       'Only mainland China administrative areas are supported',

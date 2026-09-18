@@ -129,7 +129,7 @@ export function hostingFormBody(
     ...(formVersion === 2 && !materials
       ? {
           contactName: form.contactName.trim() || null,
-          startTime: form.startTime.trim() || null,
+          startTime: null,
           endTime: null,
           additionalNotes: form.additionalNotes.trim() || null,
           contactPhone: form.contactPhone.trim() || null,
@@ -278,7 +278,6 @@ export function validateHostingSubmission(
     if (!form.contactName.trim()) missing.push('联系人姓名');
     if (!/^1[3-9]\d{9}$/.test(form.contactPhone))
       missing.push('有效的11位联系人手机号');
-    if (!form.startTime) missing.push('比赛开始时间');
     return missing.length ? `请补全：${missing.join('、')}。` : '';
   }
   const bound = uploads.filter(
