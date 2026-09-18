@@ -209,3 +209,45 @@ test('Taro transport keeps bearer out of URL and carries upload/download bytes',
   assert.equal(calls[0]!.data, bytes);
   assert.equal(calls[1]!.responseType, 'arraybuffer');
 });
+
+test('material cache is scoped per actor and record; restart clears private fields but preserves event context', async () => {
+  const { materialCacheKey, freshMaterialForm, hasMaterialInput } =
+    await import('../src/features/hosting/material-cache');
+  const { hostingFormBody } = await import('../src/features/hosting/platform');
+  const detail = {
+    draft: hostingFormBody(
+      {
+        ...emptyHostingForm,
+        eventName: '缓存测试',
+        startDate: '2026-09-20',
+        bankAccountNumber: '123456',
+        contactPhone: '13800138000',
+      },
+      true,
+    ),
+    uploads: [],
+  } as unknown as import('../src/features/hosting/platform').HostingDetail;
+  assert.notEqual(
+    materialCacheKey('actor-a', 'one'),
+    materialCacheKey('actor-b', 'one'),
+  );
+  assert.notEqual(
+    materialCacheKey('actor-a', 'one'),
+    materialCacheKey('actor-a', 'two'),
+  );
+  const fresh = freshMaterialForm(detail);
+  assert.equal(fresh.eventName, '缓存测试');
+  assert.equal(fresh.startDate, '2026-09-20');
+  assert.equal(fresh.bankAccountNumber, '');
+  assert.equal(fresh.contactPhone, '');
+  assert.equal(hasMaterialInput(detail), true);
+  const empty = { ...detail, draft: hostingFormBody(fresh, true) };
+  assert.equal(hasMaterialInput(empty), false);
+  assert.equal(
+    hasMaterialInput({
+      ...empty,
+      uploads: [{ bound: true }] as typeof detail.uploads,
+    }),
+    true,
+  );
+});

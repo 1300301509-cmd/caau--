@@ -1,10 +1,15 @@
+import {
+  materialCacheKey,
+  freshMaterialForm,
+  hasMaterialInput,
+  type MaterialCache,
+} from './material-cache';
 import { WorkflowHeading, WorkflowEmptyIcon } from './WorkflowHeading';
 import { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Input,
   Picker,
-  ScrollView,
   Text,
   Textarea,
   View,
@@ -35,7 +40,6 @@ import {
   hostingFormBody,
   hostingFormFrom,
   hostingRequirementNames,
-  hostingStatuses,
   hostingStatusLabel,
   hostingUploadLimit,
   validateHostingSubmission,
@@ -45,7 +49,6 @@ import {
 } from './platform';
 
 type S = components['schemas'];
-type Filter = HostingDetail['status'] | 'ALL';
 type PendingSubmit = {
   key: string;
   expectedDraftRevision: number;
@@ -82,10 +85,9 @@ export function HostingApplicationPage({
   >([]);
   const [materialEventId, setMaterialEventId] = useState(session.eventId);
   const [identity, setIdentity] = useState<S['WorkspaceIdentityDto']>();
-  const [details, setDetails] = useState<HostingDetail[]>([]);
+  const [, setDetails] = useState<HostingDetail[]>([]);
   const [selectedId, setSelectedId] = useState(applicationId);
   const [detail, setDetail] = useState<HostingDetail>();
-  const [filter, setFilter] = useState<Filter>('ALL');
   const [form, setForm] = useState<HostingForm>({ ...emptyHostingForm });
   const [baseDraftRevision, setBaseDraftRevision] = useState(0);
   const [dirty, setDirty] = useState(false);
@@ -95,9 +97,16 @@ export function HostingApplicationPage({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [pendingSubmit, setPendingSubmit] = useState<PendingSubmit>();
-  const [organizationId, setOrganizationId] = useState('');
   const [reading, setReading] = useState(false);
-  const [recordsExpanded, setRecordsExpanded] = useState(false);
+  const [omitted, setOmitted] = useState<string[]>([]);
+  const [cacheReady, setCacheReady] = useState(false);
+  const submitting = useRef(false);
+  const newMaterialIds = useRef(new Set<string>());
+  const cacheScope = useRef('');
+  const restoredId = useRef('');
+  const formRef = useRef(form);
+  const omittedRef = useRef<string[]>([]);
+  const materialEventRef = useRef(materialEventId);
 
   const foreground = useRef(false);
   const running = useRef(false);
@@ -122,6 +131,94 @@ export function HostingApplicationPage({
     baseRevisionRef.current = baseDraftRevision;
   }, [baseDraftRevision]);
 
+  function cacheMaterial(patch: Partial<MaterialCache> = {}) {
+    if (
+      !materials ||
+      !cacheScope.current ||
+      !detailRef.current ||
+      !editableStatus(detailRef.current.status)
+    )
+      return;
+    try {
+      Taro.setStorageSync(cacheScope.current, {
+        form: formRef.current,
+        revision: baseRevisionRef.current,
+        omitted: omittedRef.current,
+        pending: pendingSubmit,
+        ...patch,
+      });
+    } catch {
+      setError('本机缓存未保存，请检查设备存储空间后重试。');
+    }
+  }
+  async function restoreMaterial(next: HostingDetail, actorId: string) {
+    if (!materials || restoredId.current === next.id) return;
+    const token = session.token;
+    restoredId.current = next.id;
+    setCacheReady(false);
+    cacheScope.current = materialCacheKey(actorId, next.id);
+    if (!editableStatus(next.status)) {
+      Taro.removeStorageSync(cacheScope.current);
+      setPendingSubmit(undefined);
+      setCacheReady(true);
+      return;
+    }
+    const saved = Taro.getStorageSync<MaterialCache>(cacheScope.current);
+    let restoredForm = hostingFormFrom(next.draft);
+    let excluded: string[] = [];
+    let revision = next.draftRevision;
+    if (saved?.pending) {
+      restoredForm = saved.form;
+      excluded = saved.omitted;
+      revision = saved.revision;
+      setPendingSubmit(saved.pending);
+      setNotice('上次提交结果待确认，请先核实或重试。');
+    } else if (
+      saved?.form ||
+      (!newMaterialIds.current.has(next.id) && hasMaterialInput(next))
+    ) {
+      const answer = await Taro.showModal({
+        title: '恢复上次材料？',
+        content:
+          '是否恢复上次填写的内容和已上传附件？选择重新填写后，可重新准备整套材料。',
+        confirmText: '恢复草稿',
+        cancelText: '重新填写',
+      });
+      if (token !== session.token || !foreground.current) {
+        restoredId.current = '';
+        return;
+      }
+      if (answer.confirm && saved?.form) {
+        restoredForm = saved.form;
+        excluded = saved.omitted;
+        revision = saved.revision;
+      } else if (!answer.confirm) {
+        restoredForm = freshMaterialForm(next);
+        excluded = next.uploads
+          .filter((file) => file.bound)
+          .map((file) => file.id);
+      }
+    }
+    formRef.current = restoredForm;
+    omittedRef.current = excluded;
+    baseRevisionRef.current = revision;
+    setForm(restoredForm);
+    setOmitted(excluded);
+    setBaseDraftRevision(revision);
+    setDirty(true);
+    dirtyRef.current = true;
+    setConflict(revision !== next.draftRevision);
+    setCacheReady(true);
+    cacheMaterial({
+      form: restoredForm,
+      omitted: excluded,
+      revision,
+      pending: saved?.pending,
+    });
+  }
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
   function stop() {
     generation.current += 1;
     if (timer.current) clearTimeout(timer.current);
@@ -129,6 +226,9 @@ export function HostingApplicationPage({
   }
   function clearProtected(message = '') {
     stop();
+    cacheScope.current = '';
+    restoredId.current = '';
+    setCacheReady(false);
     setIdentity(undefined);
     setDetails([]);
     setSelectedId('');
@@ -138,7 +238,6 @@ export function HostingApplicationPage({
     setDirty(false);
     setConflict(false);
     setPendingSubmit(undefined);
-    setOrganizationId('');
     setNotice('');
     setError(message);
     setLoading(false);
@@ -151,13 +250,20 @@ export function HostingApplicationPage({
     setDetail(next);
     detailRef.current = next;
     if (replaceInput || !dirtyRef.current) {
-      const nextForm = hostingFormFrom(next.draft);
+      const nextForm =
+        materials &&
+        editableStatus(next.status) &&
+        restoredId.current === next.id
+          ? formRef.current
+          : hostingFormFrom(next.draft);
+      formRef.current = nextForm;
       setForm(nextForm);
       setBaseDraftRevision(next.draftRevision);
       baseRevisionRef.current = next.draftRevision;
-      setDirty(false);
-      dirtyRef.current = false;
+      setDirty(materials && editableStatus(next.status));
+      dirtyRef.current = materials && editableStatus(next.status);
       setConflict(false);
+      cacheMaterial({ form: nextForm, revision: next.draftRevision });
     } else if (next.draftRevision !== baseRevisionRef.current) {
       setConflict(true);
     }
@@ -209,6 +315,38 @@ export function HostingApplicationPage({
         !foreground.current
       )
         return;
+      const eventId = approved.some(
+        (event) => event.id === materialEventRef.current,
+      )
+        ? materialEventRef.current
+        : (approved[0]?.id ?? '');
+      if (
+        materials &&
+        eventId &&
+        !nextDetails.some((item) => item.materialEventId === eventId)
+      ) {
+        const created = await client.request(
+          'HostingController_createMaterials',
+          { token, body: { eventId, key: await newKey() } },
+        );
+        newMaterialIds.current.add(created.id);
+        nextDetails.push(
+          await client.request('HostingController_detail', {
+            token,
+            path: { id: created.id },
+          }),
+        );
+        if (
+          epoch !== generation.current ||
+          token !== session.token ||
+          !foreground.current
+        )
+          return;
+      }
+      if (materials) {
+        materialEventRef.current = eventId;
+        setMaterialEventId(eventId);
+      }
       failures.current = 0;
       setEligibleEvents(approved);
       setMaterialEventId((current) =>
@@ -218,24 +356,21 @@ export function HostingApplicationPage({
       );
       setIdentity(nextIdentity);
       setDetails(nextDetails);
-      const organizations = nextIdentity.hostingApplicantOrganizations;
-      setOrganizationId((current) =>
-        organizations.some((item) => item.id === current)
-          ? current
-          : (organizations[0]?.id ?? ''),
-      );
-      const nextId = nextDetails.some(
-        (item) => item.id === selectedIdRef.current,
-      )
-        ? selectedIdRef.current
-        : applicationId
-          ? ''
-          : (nextDetails[0]?.id ?? '');
+      const nextId = materials
+        ? (nextDetails.find((item) => item.materialEventId === eventId)?.id ??
+          '')
+        : nextDetails.some((item) => item.id === selectedIdRef.current)
+          ? selectedIdRef.current
+          : applicationId
+            ? ''
+            : (nextDetails[0]?.id ?? '');
       setSelectedId(nextId);
       selectedIdRef.current = nextId;
       const nextDetail = nextDetails.find((item) => item.id === nextId);
-      if (nextDetail) applyDetail(nextDetail);
-      else {
+      if (nextDetail) {
+        applyDetail(nextDetail);
+        await restoreMaterial(nextDetail, nextIdentity.id);
+      } else {
         setDetail(undefined);
         setForm({ ...emptyHostingForm });
         setDirty(false);
@@ -280,6 +415,8 @@ export function HostingApplicationPage({
   }
   useDidShow(show);
   useDidHide(() => {
+    cacheMaterial();
+    restoredId.current = '';
     foreground.current = false;
     stop();
   });
@@ -308,7 +445,7 @@ export function HostingApplicationPage({
   useEffect(() => {
     void Promise.resolve()
       .then(() =>
-        dirty || pendingSubmit
+        (!materials && dirty) || pendingSubmit
           ? Taro.enableAlertBeforeUnload({
               message: '有未保存申请输入或未确认提交，请先处理。',
             })
@@ -317,102 +454,29 @@ export function HostingApplicationPage({
       .catch(() => {});
   }, [dirty, pendingSubmit]);
 
-  const visible = details.filter(
-    (item) => filter === 'ALL' || item.status === filter,
-  );
   const boundUploads =
     detail?.uploads.filter(
-      (upload) => upload.bound && upload.state === 'CONFIRMED',
+      (upload) =>
+        upload.bound &&
+        upload.state === 'CONFIRMED' &&
+        !omitted.includes(upload.id),
     ) ?? [];
   const currentSubmission =
     detail?.submissions.find(
       (item) => item.id === detail.currentSubmissionId,
     ) ?? detail?.submissions.at(-1);
-  const blocked = busy || reading;
+  const blocked =
+    busy || reading || (materials && (!cacheReady || !!pendingSubmit));
   const editable = editableStatus(detail?.status);
 
   function edit(patch: Partial<HostingForm>) {
-    setForm((current) => ({ ...current, ...patch }));
+    const next = { ...formRef.current, ...patch };
+    formRef.current = next;
+    setForm(next);
+    cacheMaterial({ form: next });
     setDirty(true);
     dirtyRef.current = true;
     setNotice('');
-  }
-  async function chooseApplication(id: string) {
-    if (id === selectedIdRef.current) return;
-    if (dirtyRef.current || pendingSubmit) {
-      const answer = await Taro.showModal({
-        title: '确认切换申请',
-        content: '当前有未保存输入或未确认提交，切换后本页输入将清除。',
-      });
-      if (!answer.confirm) return;
-    }
-    const next = details.find((item) => item.id === id);
-    if (!next) return;
-    setSelectedId(id);
-    selectedIdRef.current = id;
-    setPendingSubmit(undefined);
-    setNotice('');
-    setError('');
-    setDirty(false);
-    dirtyRef.current = false;
-    applyDetail(next, true);
-  }
-  async function createApplication() {
-    if ((materials ? !materialEventId : !organizationId) || blocked) return;
-    if (
-      dirtyRef.current &&
-      !(
-        await Taro.showModal({
-          title: '切换材料',
-          content: '有未保存内容，是否继续？',
-        })
-      ).confirm
-    )
-      return;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const created = materials
-        ? await client.request('HostingController_createMaterials', {
-            token: session.token,
-            body: { eventId: materialEventId, key: await newKey() },
-          })
-        : await client.request('HostingController_create', {
-            token: session.token,
-            body: {
-              applicantOrganizationId: organizationId,
-              formVersion: 2,
-              key: await newKey(),
-            },
-          });
-      const next = await client.request('HostingController_detail', {
-        token: session.token,
-        path: { id: created.id },
-      });
-      setDetails((current) => [
-        next,
-        ...current.filter((row) => row.id !== next.id),
-      ]);
-      setSelectedId(next.id);
-      selectedIdRef.current = next.id;
-      applyDetail(next, true);
-      setFilter('ALL');
-      setNotice(
-        materials
-          ? '已打开赛事办赛材料，请填写并保存。'
-          : '新申请草稿已建立，请填写并保存。',
-      );
-    } catch (cause) {
-      if (
-        cause instanceof ApiError &&
-        (cause.status === 401 || cause.status === 403)
-      )
-        clearAccessFailure(cause, '当前会话失效或申请办理权限已撤销。');
-      else setError(`${workflowError(cause)}；新申请未确认建立，请重试。`);
-    } finally {
-      setBusy(false);
-    }
   }
   async function saveDraft() {
     const current = detailRef.current;
@@ -448,6 +512,37 @@ export function HostingApplicationPage({
     } finally {
       setBusy(false);
     }
+  }
+  async function prepareMaterials() {
+    let next = detailRef.current;
+    if (!next || conflict) throw new Error('材料已变化，请先核对');
+    for (const id of omittedRef.current) {
+      if (!next.uploads.some((file) => file.id === id && file.bound)) continue;
+      await client.request('HostingController_removeUpload', {
+        token: session.token,
+        path: { id },
+        body: { expectedDraftRevision: baseRevisionRef.current },
+      });
+      next = await client.request('HostingController_detail', {
+        token: session.token,
+        path: { id: next.id },
+      });
+      baseRevisionRef.current = next.draftRevision;
+      cacheMaterial({ revision: next.draftRevision });
+    }
+    next = await client.request('HostingController_save', {
+      token: session.token,
+      path: { id: next.id },
+      body: {
+        expectedDraftRevision: baseRevisionRef.current,
+        form: hostingFormBody(formRef.current, true, next.formVersion),
+      },
+    });
+    applyDetail(next, true);
+    omittedRef.current = [];
+    setOmitted([]);
+    cacheMaterial({ revision: next.draftRevision, omitted: [] });
+    return next;
   }
   async function upload(requirementCode: HostingRequirement) {
     const current = detailRef.current;
@@ -494,6 +589,7 @@ export function HostingApplicationPage({
     setError('');
     setNotice('');
     try {
+      if (materials) await prepareMaterials();
       const bytes = await readBytes(file.path);
       const extension = file.name.split('.').at(-1)!.toLowerCase() as
         | 'pdf'
@@ -600,6 +696,8 @@ export function HostingApplicationPage({
         body: command,
       });
       setPendingSubmit(undefined);
+      if (materials && cacheScope.current)
+        Taro.removeStorageSync(cacheScope.current);
       const next = await client.request('HostingController_detail', {
         token: session.token,
         path: { id: current.id },
@@ -614,9 +712,11 @@ export function HostingApplicationPage({
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 400) {
         setPendingSubmit(undefined);
+        cacheMaterial({ pending: undefined });
         setError('正式提交校验未通过，请核对全部必填字段和附件。');
       } else if (cause instanceof ApiError && cause.status === 409) {
         setPendingSubmit(undefined);
+        cacheMaterial({ pending: undefined });
         await refresh();
         setConflict(true);
         setError('提交目标已由其他经办人更新，请核对权威状态。');
@@ -627,6 +727,7 @@ export function HostingApplicationPage({
         setPendingSubmit(undefined);
         clearAccessFailure(cause, '当前会话失效或申请办理权限已撤销。');
       } else {
+        cacheMaterial({ pending: command });
         setPendingSubmit(command);
         setError(
           '提交结果暂时未知；原幂等键和目标已保留，请先核实或沿用原命令重试。',
@@ -637,12 +738,20 @@ export function HostingApplicationPage({
     }
   }
   async function submit() {
-    const current = detailRef.current;
-    if (!current || dirty || conflict || !editableStatus(current.status))
+    let current = detailRef.current;
+    if (
+      !current ||
+      (!materials && dirty) ||
+      busy ||
+      submitting.current ||
+      pendingSubmit ||
+      conflict ||
+      !editableStatus(current.status)
+    )
       return;
     const validation = validateHostingSubmission(
       form,
-      current.uploads,
+      current.uploads.filter((file) => !omitted.includes(file.id)),
       materials,
       detail?.formVersion ?? 1,
     );
@@ -650,22 +759,51 @@ export function HostingApplicationPage({
       setError(validation);
       return;
     }
+    submitting.current = true;
+    setBusy(true);
     const answer = await Taro.showModal({
       title:
         current.status === 'NEEDS_SUPPLEMENT' ? '确认重新提交' : '确认正式提交',
       content:
         current.status === 'NEEDS_SUPPLEMENT'
-          ? '将基于同一申请生成新的不可变版本，并重新进入总部审核。'
-          : '将当前已保存草稿生成不可变 V1；提交后只能等待审核结果。',
+          ? '补充的资料将重新提交总部审核。'
+          : materials
+            ? '确认提交整套办赛材料给总部审核？'
+            : '将当前已保存草稿生成不可变 V1；提交后只能等待审核结果。',
     });
-    if (!answer.confirm) return;
-    const command = {
-      key: await newKey(),
-      expectedDraftRevision: current.draftRevision,
-      expectedRevision: current.revision,
-    };
-    setPendingSubmit(command);
-    await executeSubmit(command);
+    if (!answer.confirm) {
+      submitting.current = false;
+      setBusy(false);
+      return;
+    }
+    if (materials) {
+      setBusy(true);
+      try {
+        current = await prepareMaterials();
+      } catch (cause) {
+        setError(`${workflowError(cause)}；缓存仍保留，请核对后重试。`);
+        if (cause instanceof ApiError && cause.status === 409)
+          setConflict(true);
+        submitting.current = false;
+        setBusy(false);
+        return;
+      }
+    }
+    try {
+      const command = {
+        key: await newKey(),
+        expectedDraftRevision: current.draftRevision,
+        expectedRevision: current.revision,
+      };
+      cacheMaterial({ pending: command });
+      setPendingSubmit(command);
+      await executeSubmit(command);
+    } catch (cause) {
+      setError(`${workflowError(cause)}；填写内容仍保留。`);
+    } finally {
+      submitting.current = false;
+      setBusy(false);
+    }
   }
   async function download(upload: S['HostingUploadViewDto']) {
     if (reading) return;
@@ -767,140 +905,88 @@ export function HostingApplicationPage({
                   ),
                 )}
                 disabled={blocked}
-                onChange={(event) =>
-                  setMaterialEventId(
-                    eligibleEvents[Number(event.detail.value)]?.id ?? '',
-                  )
-                }
+                onChange={(event) => {
+                  cacheMaterial();
+                  const id =
+                    eligibleEvents[Number(event.detail.value)]?.id ?? '';
+                  materialEventRef.current = id;
+                  setMaterialEventId(id);
+                  restoredId.current = '';
+                  cacheScope.current = '';
+                  setCacheReady(false);
+                  setDirty(false);
+                  dirtyRef.current = false;
+                  setDetail(undefined);
+                  detailRef.current = undefined;
+                  void refresh();
+                }}
               >
                 <View className="field picker-field">
                   {eligibleEvents.find((event) => event.id === materialEventId)
                     ?.name || '选择赛事'}
                 </View>
               </Picker>
-              {detail?.materialEventId !== materialEventId && (
-                <Button
-                  type="primary"
-                  disabled={blocked || !materialEventId}
-                  onClick={() => void createApplication()}
-                >
-                  打开办赛材料
-                </Button>
-              )}
-              <Button
-                className="workflow-text-action"
-                onClick={() => setRecordsExpanded((value) => !value)}
-              >
-                {recordsExpanded
-                  ? '收起材料记录'
-                  : `查看材料记录 · ${details.length}`}
-              </Button>
-            </View>
-          )}
-
-          {materials && recordsExpanded && (
-            <View className="card">
-              <Text className="subtitle">
-                {materials ? '本机构办赛材料' : '本机构申请'}
-              </Text>
-              <ScrollView scrollX className="workflow-filter-scroll">
-                <View
-                  className="hosting-filter"
-                  ariaRole="group"
-                  ariaLabel="申请状态筛选"
-                >
-                  <Button
-                    className={filter === 'ALL' ? 'active' : ''}
-                    onClick={() => setFilter('ALL')}
-                  >
-                    全部
-                  </Button>
-                  {hostingStatuses
-                    .filter((row) => !materials || row.value !== 'REJECTED')
-                    .map((status) => (
-                      <Button
-                        key={status.value}
-                        className={filter === status.value ? 'active' : ''}
-                        onClick={() => setFilter(status.value)}
-                      >
-                        {status.label}
-                      </Button>
-                    ))}
-                </View>
-              </ScrollView>
-              {!visible.length && (
-                <Text className="description">当前筛选下暂无申请。</Text>
-              )}
-              {visible.map((item) => {
-                const snapshot = item.submissions.at(-1)?.form ?? item.draft;
-                const rowForm = hostingFormFrom(snapshot);
-                return (
-                  <Button
-                    key={item.id}
-                    className={`hosting-application-row ${item.id === selectedId ? 'selected' : ''}`}
-                    ariaLabel={`${rowForm.eventName || '未命名申请'}，${hostingStatusLabel(item.status)}`}
-                    onClick={() => void chooseApplication(item.id)}
-                  >
-                    <Text className="hosting-row-title">
-                      {rowForm.eventName || '未命名申请'}
-                    </Text>
-                    <Text
-                      className={`hosting-state state-${item.status.toLowerCase()}`}
-                    >
-                      {hostingStatusLabel(item.status)}
-                    </Text>
-                    <Text className="hosting-row-meta">
-                      {item.applicantOrganizationName} · V
-                      {item.submissions.at(-1)?.version ?? 0}
-                    </Text>
-                  </Button>
-                );
-              })}
             </View>
           )}
           {detail && (
             <>
-              <View className="card hosting-summary">
-                <View className="hosting-summary-heading">
-                  <Text className="subtitle">
-                    {materials ? '当前材料' : '申请详情'}
+              {!materials && (
+                <View className="card hosting-summary">
+                  <View className="hosting-summary-heading">
+                    <Text className="subtitle">
+                      {materials ? '当前材料' : '申请详情'}
+                    </Text>
+                    <Text
+                      className={`hosting-state state-${detail.status.toLowerCase()}`}
+                    >
+                      {hostingStatusLabel(detail.status)}
+                    </Text>
+                  </View>
+                  <Text>{hostingFormFrom(detail.draft).eventName}</Text>
+                  <Text className="description">
+                    {detail.applicantOrganizationName}
                   </Text>
-                  <Text
-                    className={`hosting-state state-${detail.status.toLowerCase()}`}
-                  >
-                    {hostingStatusLabel(detail.status)}
+                  <Text className="description">
+                    {currentSubmission
+                      ? `已提交第 ${currentSubmission.version} 版`
+                      : '尚未提交，可继续完善资料'}
                   </Text>
+                  {detail.status === 'NEEDS_SUPPLEMENT' && (
+                    <Text className="warning">
+                      补充要求：
+                      {displayHostingValue(
+                        (
+                          detail.actions
+                            .filter(
+                              (action) =>
+                                action.action === 'REQUEST_SUPPLEMENT',
+                            )
+                            .at(-1)?.detail as { reason?: unknown } | undefined
+                        )?.reason,
+                      )}
+                    </Text>
+                  )}
+                  {detail.status === 'REJECTED' && (
+                    <Text className="error">
+                      此申请已驳回并只读；如需继续，请在上方另建新申请。
+                    </Text>
+                  )}
                 </View>
-                <Text>{hostingFormFrom(detail.draft).eventName}</Text>
-                <Text className="description">
-                  {detail.applicantOrganizationName}
+              )}
+              {materials && detail.status === 'NEEDS_SUPPLEMENT' && (
+                <Text className="warning">
+                  请按总部退回意见补充后重新提交。
+                  {displayHostingValue(
+                    (
+                      detail.actions
+                        .filter(
+                          (action) => action.action === 'REQUEST_SUPPLEMENT',
+                        )
+                        .at(-1)?.detail as { reason?: unknown } | undefined
+                    )?.reason,
+                  )}
                 </Text>
-                <Text className="description">
-                  {currentSubmission
-                    ? `已提交第 ${currentSubmission.version} 版`
-                    : '尚未提交，可继续完善资料'}
-                </Text>
-                {detail.status === 'NEEDS_SUPPLEMENT' && (
-                  <Text className="warning">
-                    补充要求：
-                    {displayHostingValue(
-                      (
-                        detail.actions
-                          .filter(
-                            (action) => action.action === 'REQUEST_SUPPLEMENT',
-                          )
-                          .at(-1)?.detail as { reason?: unknown } | undefined
-                      )?.reason,
-                    )}
-                  </Text>
-                )}
-                {detail.status === 'REJECTED' && (
-                  <Text className="error">
-                    此申请已驳回并只读；如需继续，请在上方另建新申请。
-                  </Text>
-                )}
-              </View>
-
+              )}
               {editable && (
                 <View className="card hosting-form-card">
                   <Text className="subtitle">
@@ -911,7 +997,9 @@ export function HostingApplicationPage({
                         : '比赛信息'}
                   </Text>
                   <Text className="description">
-                    请完善必填信息，未填完可先保存。
+                    {materials
+                      ? '输入自动缓存，中途退出后可恢复。'
+                      : '请完善必填信息，未填完可先保存。'}
                   </Text>
                   {conflict && (
                     <View className="hosting-conflict">
@@ -923,7 +1011,17 @@ export function HostingApplicationPage({
                         onClick={() => {
                           const current = detailRef.current;
                           if (!current) return;
-                          setForm(hostingFormFrom(current.draft));
+                          const latest = hostingFormFrom(current.draft);
+                          formRef.current = latest;
+                          setForm(latest);
+                          omittedRef.current = [];
+                          setOmitted([]);
+                          cacheMaterial({
+                            form: latest,
+                            revision: current.draftRevision,
+                            omitted: [],
+                            pending: undefined,
+                          });
                           setBaseDraftRevision(current.draftRevision);
                           baseRevisionRef.current = current.draftRevision;
                           setDirty(false);
@@ -941,7 +1039,9 @@ export function HostingApplicationPage({
                           baseRevisionRef.current = detail.draftRevision;
                           setConflict(false);
                           setError(
-                            '已核对服务器修订；您的输入继续保留，请再次保存。',
+                            materials
+                              ? '已核对最新资料；您的输入继续保留，可再次提交。'
+                              : '已核对服务器修订；您的输入继续保留，请再次保存。',
                           );
                         }}
                       >
@@ -1187,12 +1287,14 @@ export function HostingApplicationPage({
                       )}
                     </>
                   )}
-                  <Button
-                    disabled={blocked || conflict || !dirty}
-                    onClick={() => void saveDraft()}
-                  >
-                    保存草稿
-                  </Button>
+                  {!materials && (
+                    <Button
+                      disabled={blocked || conflict || !dirty}
+                      onClick={() => void saveDraft()}
+                    >
+                      保存草稿
+                    </Button>
+                  )}
                 </View>
               )}
 
@@ -1260,7 +1362,7 @@ export function HostingApplicationPage({
                   )}
                   <Button
                     type="primary"
-                    disabled={blocked || dirty || conflict}
+                    disabled={blocked || (!materials && dirty) || conflict}
                     onClick={() => void submit()}
                   >
                     {detail.status === 'NEEDS_SUPPLEMENT'
@@ -1269,7 +1371,7 @@ export function HostingApplicationPage({
                         ? '提交办赛材料'
                         : '提交申请'}
                   </Button>
-                  {dirty && (
+                  {!materials && dirty && (
                     <Text className="warning">
                       请先保存当前表单输入，再正式提交。
                     </Text>
@@ -1278,7 +1380,7 @@ export function HostingApplicationPage({
                     <View className="hosting-pending-command">
                       <Text>上次提交结果未知，原命令不会自动重复执行。</Text>
                       <Button
-                        disabled={blocked}
+                        disabled={busy || reading}
                         onClick={() => void executeSubmit(pendingSubmit)}
                       >
                         沿用原命令核实 / 重试
@@ -1368,7 +1470,7 @@ export function HostingApplicationPage({
                 </View>
               )}
 
-              {!!detail.diffs.length && (
+              {!materials && !!detail.diffs.length && (
                 <View className="card">
                   <Text className="subtitle">相邻版本差异</Text>
                   {detail.diffs.map((diff, index) => (
@@ -1416,52 +1518,54 @@ export function HostingApplicationPage({
                 </View>
               )}
 
-              <View className="card">
-                <Text className="subtitle">提交版本与操作历史</Text>
-                {detail.submissions.map((submission) => (
-                  <View className="hosting-version-block" key={submission.id}>
-                    <Text className="field-label">
-                      第 {submission.version} 版
-                    </Text>
-                    <Text className="description">
-                      提交人 {submission.submittedBy} ·{' '}
-                      {when(submission.submittedAt)}
-                    </Text>
-                    {submission.attachments.map((file) => (
-                      <Button
-                        key={file.id}
-                        disabled={blocked}
-                        onClick={() => void download(file)}
-                      >
-                        查看 V{submission.version}{' '}
-                        {hostingRequirementNames[file.requirementCode]}
-                      </Button>
-                    ))}
-                  </View>
-                ))}
-                {detail.actions.map((action) => (
-                  <View className="history-item" key={action.id}>
-                    <Text>
-                      {hostingActionLabel(action.action)} ·{' '}
-                      {hostingStatusLabel(action.fromState)} →{' '}
-                      {hostingStatusLabel(action.toState)}
-                    </Text>
-                    <Text className="description">
-                      操作人 {action.actorId} · {when(action.occurredAt)}
-                    </Text>
-                    {typeof action.detail === 'object' &&
-                      action.detail &&
-                      'reason' in action.detail && (
-                        <Text>
-                          意见：
-                          {displayHostingValue(
-                            (action.detail as { reason?: unknown }).reason,
-                          )}
-                        </Text>
-                      )}
-                  </View>
-                ))}
-              </View>
+              {!materials && (
+                <View className="card">
+                  <Text className="subtitle">提交版本与操作历史</Text>
+                  {detail.submissions.map((submission) => (
+                    <View className="hosting-version-block" key={submission.id}>
+                      <Text className="field-label">
+                        第 {submission.version} 版
+                      </Text>
+                      <Text className="description">
+                        提交人 {submission.submittedBy} ·{' '}
+                        {when(submission.submittedAt)}
+                      </Text>
+                      {submission.attachments.map((file) => (
+                        <Button
+                          key={file.id}
+                          disabled={blocked}
+                          onClick={() => void download(file)}
+                        >
+                          查看 V{submission.version}{' '}
+                          {hostingRequirementNames[file.requirementCode]}
+                        </Button>
+                      ))}
+                    </View>
+                  ))}
+                  {detail.actions.map((action) => (
+                    <View className="history-item" key={action.id}>
+                      <Text>
+                        {hostingActionLabel(action.action)} ·{' '}
+                        {hostingStatusLabel(action.fromState)} →{' '}
+                        {hostingStatusLabel(action.toState)}
+                      </Text>
+                      <Text className="description">
+                        操作人 {action.actorId} · {when(action.occurredAt)}
+                      </Text>
+                      {typeof action.detail === 'object' &&
+                        action.detail &&
+                        'reason' in action.detail && (
+                          <Text>
+                            意见：
+                            {displayHostingValue(
+                              (action.detail as { reason?: unknown }).reason,
+                            )}
+                          </Text>
+                        )}
+                    </View>
+                  ))}
+                </View>
+              )}
             </>
           )}
         </>
