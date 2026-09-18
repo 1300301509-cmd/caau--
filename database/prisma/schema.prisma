@@ -225,6 +225,8 @@ model HostingApplicationReviewGrant {
 }
 
 model EventHostingApplication {
+  formVersion Int @default(1)
+  permit HostingPermit?
   materialEventId         String?                        @unique @db.Uuid
   materialEvent           Event?                         @relation("EventMaterialDossier", fields: [materialEventId], references: [id], onDelete: Restrict)
   id                      String                         @id @default(uuid()) @db.Uuid
@@ -747,4 +749,12 @@ model DeadlineHistory {
   reason     String        @db.VarChar(2000)
   previous   Json
   next       Json
+}
+
+model HostingPermit {
+  applicationId String @id @db.Uuid
+  application EventHostingApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  confirmedBy String @db.Uuid
+  confirmedAt DateTime @default(now()) @db.Timestamptz(3)
+  key String @unique @db.Uuid
 }

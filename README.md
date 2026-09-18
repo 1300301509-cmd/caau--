@@ -1,5 +1,7 @@
 # CAAU 正式工程
 
+CAAU-034已完成本地交付：小程序首页→我要办赛→申请比赛/材料提交/办赛进度；新申请简表、材料获批门槛、线下合同确认及最终批准办赛，见[流程规格](docs/product/hosting-journey.md)。数据库51/51、Web E2E9/9通过，微信工具页面已核对，正式平台与真机仍待验收。
+
 本仓库用于建设 CAAU 微信小程序、Web 管理后台和后端 API。
 
 CAAU-029“总部Web正式账号密码认证”A/B/C/D已完成本地交付：复用既有`InternalUser`、角色/grant和opaque `Session`，实现scrypt、HttpOnly Cookie、CSRF、持久限流、会话撤销、受控超级管理员初始化、全局AuthGate、首次/主动改密及账号/角色/业务授权管理；正常模式不暴露测试身份，小程序Bearer保持兼容。隔离`db:test` 48/48、Web E2E 9/9通过；本地正式登录入口和忽略凭据文件已准备，生产HTTPS/代理/密钥/多实例及远程CI未验收。见[认证运行手册](docs/runbooks/password-authentication.md)、[技术设计](docs/adr/0011-password-cookie-authentication.md)和[分阶段计划](docs/planning/caau-029-password-authentication.md)。

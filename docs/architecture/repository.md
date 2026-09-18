@@ -62,3 +62,5 @@ CAAU-029在同一authorization模块和`InternalUser`/`Session`上追加正式�
 单元测试靠近被测源码；各应用集成测试放其 `test/`，端到端测试放其 `e2e/`。使用合成 fixture，不把原型账号或真实名单作为测试数据提交。CAAU-002 使用 Node 原生测试、tsx 请求逻辑测试与 Playwright Web E2E；真实 HTTP 联调编排放 scripts/clients-http.integration.mjs，仅测试用途，不被任何应用引用。微信工具与真机验证独立记录。数据库真实联调单独由 scripts/database.integration.mjs 编排 test 容器；临时迁移模型/库不进入正式 schema，不混入无需 Docker 的 test 命令，也不缺环境就静默跳过。真实数据库套件已在本机 macOS/arm64 执行通过，远程 Linux CI 未执行。
 
 CAAU-033在既有`event-hosting-applications`版本化执行引擎中以`materialEventId`区分获批后的整套办赛材料，复用权限/附件/命令与两端协调逻辑；新创建/列表入口与承办申请隔离，材料审核不创建赛事。具体边界见[ADR-0013](../adr/0013-required-event-materials.md)。
+
+CAAU-034在同一hosting模块提供简表版本、只追加的线下合同确认和权威流程查询；小程序新增办赛二级导航及进度页。见[ADR-0014](../adr/0014-hosting-journey.md)。

@@ -656,6 +656,165 @@ export async function hostingIntegration(t, context) {
     },
   );
 
+  await t.test(
+    'CAAU-034 simple application and contract-confirmed permit journey',
+    async () => {
+      const created = await call('a', 'POST', 'hosting-applications', {
+        applicantOrganizationId: orgA,
+        formVersion: 2,
+        key: randomUUID(),
+      });
+      let d = await call('a', 'GET', `hosting-applications/${created.id}`);
+      const form = {
+        eventName: '合成简表申请',
+        startDate: '2027-07-01',
+        endDate: '2027-07-01',
+        startTime: '09:00',
+        endTime: '18:00',
+        contactName: '合成联系人',
+        contactPhone: '13800000000',
+        additionalNotes: '选填说明',
+        location: {
+          administrativeArea: {
+            province: '北京市',
+            city: '北京市',
+            district: null,
+          },
+          detailedAddress: '合成场地地址',
+          venueName: '合成场馆',
+        },
+      };
+      d = await call('a', 'PUT', `hosting-applications/${d.id}/draft`, {
+        expectedDraftRevision: d.draftRevision,
+        form: { ...form, contactPhone: null },
+      });
+      await call(
+        'a',
+        'POST',
+        `hosting-applications/${d.id}/submit`,
+        {
+          expectedDraftRevision: d.draftRevision,
+          expectedRevision: d.revision,
+          key: randomUUID(),
+        },
+        400,
+      );
+      d = await call('a', 'PUT', `hosting-applications/${d.id}/draft`, {
+        expectedDraftRevision: d.draftRevision,
+        form,
+      });
+      await call('a', 'POST', `hosting-applications/${d.id}/submit`, {
+        expectedDraftRevision: d.draftRevision,
+        expectedRevision: d.revision,
+        key: randomUUID(),
+      });
+      d = await call('reviewer', 'GET', `hosting-applications/${d.id}`);
+      assert.equal(d.submissions[0].attachments.length, 0);
+      assert.equal(d.submissions[0].form.contactName, form.contactName);
+      await call(
+        'reviewer',
+        'POST',
+        `event-materials/${d.id}/confirm-permit`,
+        { submissionId: d.currentSubmissionId, key: randomUUID() },
+        409,
+      );
+      await call(
+        'reviewer',
+        'POST',
+        `hosting-applications/${d.id}/start-review`,
+        {
+          submissionId: d.currentSubmissionId,
+          expectedRevision: d.revision,
+          key: randomUUID(),
+        },
+      );
+      d = await call('reviewer', 'GET', `hosting-applications/${d.id}`);
+      await call('reviewer', 'POST', `hosting-applications/${d.id}/approve`, {
+        submissionId: d.currentSubmissionId,
+        expectedRevision: d.revision,
+        key: randomUUID(),
+      });
+      let journeys = await call('a', 'GET', 'hosting-journeys');
+      assert.equal(
+        journeys.find((j) => j.applicationId === d.id).stage,
+        'MATERIALS',
+      );
+      assert.equal(
+        journeys.find((j) => j.applicationId === approvedId).stage,
+        'CONTRACT',
+      );
+      await call('b', 'GET', 'hosting-journeys', undefined, 403);
+      const material = await call(
+        'reviewer',
+        'GET',
+        `hosting-applications/${materialsId}`,
+      );
+      const command = {
+        submissionId: material.currentSubmissionId,
+        key: randomUUID(),
+      };
+      await call(
+        'a',
+        'POST',
+        `event-materials/${materialsId}/confirm-permit`,
+        command,
+        403,
+      );
+      await call(
+        'b',
+        'POST',
+        `event-materials/${materialsId}/confirm-permit`,
+        command,
+        403,
+      );
+      const permitted = await call(
+        'reviewer',
+        'POST',
+        `event-materials/${materialsId}/confirm-permit`,
+        command,
+      );
+      assert.equal(permitted.confirmedBy, users.reviewer);
+      assert.deepEqual(
+        await call(
+          'reviewer',
+          'POST',
+          `event-materials/${materialsId}/confirm-permit`,
+          command,
+        ),
+        permitted,
+      );
+      assert.deepEqual(
+        await call(
+          'reviewer2',
+          'POST',
+          `event-materials/${materialsId}/confirm-permit`,
+          { ...command, key: randomUUID() },
+        ),
+        permitted,
+      );
+      journeys = await call('a', 'GET', 'hosting-journeys');
+      const complete = journeys.find((j) => j.applicationId === approvedId);
+      assert.equal(complete.stage, 'PERMITTED');
+      assert.equal(complete.canConfirm, false);
+      assert.equal(complete.permit.confirmedBy, users.reviewer);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "HostingPermit" WHERE "applicationId"=$1',
+            [materialsId],
+          )
+        ).rows[0].n,
+        1,
+      );
+      await assert.rejects(
+        sql.query(
+          'UPDATE "HostingPermit" SET "confirmedAt"=now() WHERE "applicationId"=$1',
+          [materialsId],
+        ),
+      );
+    },
+  );
+
   async function browserCandidate(label) {
     const application = await call('a', 'POST', 'hosting-applications', {
       applicantOrganizationId: orgA,

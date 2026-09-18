@@ -7,6 +7,11 @@ export type HostingRequirement = S['HostingUploadInputDto']['requirementCode'];
 export type HostingUpload = S['HostingUploadViewDto'];
 
 export type HostingForm = {
+  contactName: string;
+  startTime: string;
+  endTime: string;
+  additionalNotes: string;
+
   bankAccountName: string;
   bankName: string;
   bankAccountNumber: string;
@@ -26,6 +31,11 @@ export type HostingForm = {
 };
 
 type FormSnapshot = {
+  contactName?: unknown;
+  startTime?: unknown;
+  endTime?: unknown;
+  additionalNotes?: unknown;
+
   bankAccountName?: unknown;
   bankName?: unknown;
   bankAccountNumber?: unknown;
@@ -49,6 +59,11 @@ type FormSnapshot = {
 };
 
 export const emptyHostingForm: HostingForm = {
+  contactName: '',
+  startTime: '',
+  endTime: '',
+  additionalNotes: '',
+
   bankAccountName: '',
   bankName: '',
   bankAccountNumber: '',
@@ -75,6 +90,11 @@ export function hostingFormFrom(value: unknown): HostingForm {
     value && typeof value === 'object' ? value : {}
   ) as FormSnapshot;
   return {
+    contactName: stringValue(form.contactName),
+    startTime: stringValue(form.startTime),
+    endTime: stringValue(form.endTime),
+    additionalNotes: stringValue(form.additionalNotes),
+
     bankAccountName: stringValue(form.bankAccountName),
     bankName: stringValue(form.bankName),
     bankAccountNumber: stringValue(form.bankAccountNumber),
@@ -93,7 +113,11 @@ export function hostingFormFrom(value: unknown): HostingForm {
   };
 }
 
-export function hostingFormBody(form: HostingForm, materials = false) {
+export function hostingFormBody(
+  form: HostingForm,
+  materials = false,
+  formVersion = 1,
+) {
   const hasLocation = [
     form.province,
     form.city,
@@ -102,6 +126,15 @@ export function hostingFormBody(form: HostingForm, materials = false) {
     form.venueName,
   ].some((value) => value.trim());
   return {
+    ...(formVersion === 2 && !materials
+      ? {
+          contactName: form.contactName.trim() || null,
+          startTime: form.startTime.trim() || null,
+          endTime: form.endTime.trim() || null,
+          additionalNotes: form.additionalNotes.trim() || null,
+          contactPhone: form.contactPhone.trim() || null,
+        }
+      : {}),
     ...(materials
       ? {
           bankAccountName: form.bankAccountName.trim() || null,
@@ -178,7 +211,11 @@ export function hostingFieldLabel(field: string) {
       bankAccountNumber: '银行账号',
       registrationStart: '报名开始时间',
       registrationEnd: '报名截止时间',
-      contactPhone: '报名联系人手机号',
+      contactPhone: '联系人手机号',
+      contactName: '联系人姓名',
+      startTime: '开始时间',
+      endTime: '结束时间',
+      additionalNotes: '补充说明',
       eventName: '赛事名称',
       startDate: '开始日期',
       endDate: '结束日期',
@@ -196,6 +233,7 @@ export function validateHostingSubmission(
   form: HostingForm,
   uploads: readonly HostingUpload[],
   materials = false,
+  formVersion = 1,
 ) {
   const missing: string[] = [];
   if (materials) {
@@ -223,9 +261,23 @@ export function validateHostingSubmission(
   if (!materials && !form.city.trim()) missing.push('城市');
   if (!materials && !form.detailedAddress.trim()) missing.push('详细地址');
   if (!materials && !form.venueName.trim()) missing.push('场馆名称');
-  if (!form.eventExperienceIntroduction.trim()) missing.push('办赛经验简介');
+  if (
+    (materials || formVersion === 1) &&
+    !form.eventExperienceIntroduction.trim()
+  )
+    missing.push('办赛经验简介');
   if (form.startDate && form.endDate && form.endDate < form.startDate)
     return '结束日期不能早于开始日期。';
+  if (!materials && formVersion === 2) {
+    if (!form.contactName.trim()) missing.push('联系人姓名');
+    if (!/^1[3-9]\d{9}$/.test(form.contactPhone))
+      missing.push('有效的11位联系人手机号');
+    if (!form.startTime) missing.push('比赛开始时间');
+    if (!form.endTime) missing.push('比赛结束时间');
+    if (form.startDate === form.endDate && form.startTime > form.endTime)
+      missing.push('结束时间不能早于开始时间');
+    return missing.length ? `请补全：${missing.join('、')}。` : '';
+  }
   const bound = uploads.filter(
     (upload) => upload.bound && upload.state === 'CONFIRMED',
   );

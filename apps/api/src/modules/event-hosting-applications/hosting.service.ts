@@ -32,6 +32,11 @@ type Status =
   | 'APPROVED';
 type Requirement = 'BUSINESS_LICENSE' | 'VENUE_PHOTO' | 'OTHER_DOCUMENT';
 type DraftForm = {
+  contactName?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  additionalNotes?: string | null;
+
   bankAccountName?: string | null;
   bankName?: string | null;
   bankAccountNumber?: string | null;
@@ -136,6 +141,11 @@ const dateValue = (value: unknown) => {
 };
 function formValue(input: unknown, materials = false): DraftForm {
   const form = bodyObject(input, [
+    'contactName',
+    'startTime',
+    'endTime',
+    'additionalNotes',
+    'contactPhone',
     'eventName',
     'startDate',
     'endDate',
@@ -175,6 +185,12 @@ function formValue(input: unknown, materials = false): DraftForm {
     };
   }
   const result: DraftForm = {
+    contactName: optionalText(form.contactName, 120),
+    startTime: optionalText(form.startTime, 120),
+    endTime: optionalText(form.endTime, 120),
+    additionalNotes: optionalText(form.additionalNotes, 2000),
+    contactPhone: optionalText(form.contactPhone, 120),
+
     eventName: optionalText(form.eventName, 120),
     startDate: dateValue(form.startDate),
     endDate: dateValue(form.endDate),
@@ -184,6 +200,19 @@ function formValue(input: unknown, materials = false): DraftForm {
       20000,
     ),
   };
+  for (const k of ['startTime', 'endTime'] as const) {
+    if (result[k] && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(result[k]!))
+      throw new BadRequestException('比赛时间格式不正确');
+  }
+  if (result.contactPhone && !/^1[3-9]\d{9}$/.test(result.contactPhone))
+    throw new BadRequestException('请输入有效的11位手机号');
+  if (
+    result.startDate === result.endDate &&
+    result.startTime &&
+    result.endTime &&
+    result.endTime < result.startTime
+  )
+    throw new BadRequestException('比赛结束时间不能早于开始时间');
   if (result.startDate && result.endDate && result.endDate < result.startDate)
     throw new BadRequestException('End date cannot be before start date');
   if (materials) {
@@ -231,7 +260,11 @@ function formValue(input: unknown, materials = false): DraftForm {
   }
   return result;
 }
-function completeForm(value: unknown, materials = false): DraftForm {
+function completeForm(
+  value: unknown,
+  materials = false,
+  formVersion = 1,
+): DraftForm {
   const form = formValue(value, materials);
   if (materials) {
     if (
@@ -259,9 +292,17 @@ function completeForm(value: unknown, materials = false): DraftForm {
     !area.city ||
     !form.location?.detailedAddress ||
     !form.location.venueName ||
-    !form.eventExperienceIntroduction
+    (formVersion === 1 && !form.eventExperienceIntroduction)
   )
     throw new BadRequestException('Required application fields are missing');
+  if (
+    formVersion === 2 &&
+    (!form.contactName ||
+      !form.contactPhone ||
+      !form.startTime ||
+      !form.endTime)
+  )
+    throw new BadRequestException('请填写比赛时间、联系人姓名和手机号');
   if (!mainlandProvinces.has(area.province))
     throw new BadRequestException(
       'Only mainland China administrative areas are supported',
@@ -322,6 +363,10 @@ const fieldPaths = [
   ['registrationStart'],
   ['registrationEnd'],
   ['contactPhone'],
+  ['contactName'],
+  ['startTime'],
+  ['endTime'],
+  ['additionalNotes'],
 ];
 
 const applicationInclude = {
@@ -484,6 +529,7 @@ export class HostingService {
       currentSubmissionId: application.currentSubmissionId,
       approvedEventId: application.approvedEventId,
       materialEventId: application.materialEventId,
+      formVersion: application.formVersion,
       canReview: scope !== 'handler',
       createdAt: application.createdAt.toISOString(),
       draft: scope === 'reviewer' ? null : application.draft,
@@ -526,6 +572,7 @@ export class HostingService {
       currentSubmissionId: string | null;
       approvedEventId: string | null;
       materialEventId: string | null;
+      formVersion: number;
       createdAt: Date;
       applicantOrganization: { name: string };
     },
@@ -540,6 +587,7 @@ export class HostingService {
       currentSubmissionId: application.currentSubmissionId,
       approvedEventId: application.approvedEventId,
       materialEventId: application.materialEventId,
+      formVersion: application.formVersion,
       applicantOrganizationName: application.applicantOrganization.name,
       canReview,
       createdAt: application.createdAt.toISOString(),
@@ -745,6 +793,121 @@ export class HostingService {
       { retries: 3, retryUnique: true },
     );
   }
+  async journeys(token: string) {
+    const visible = await this.list(token);
+    return this.auth.run(
+      token,
+      'hosting.journey.list',
+      undefined,
+      undefined,
+      async (tx, actor) => {
+        const results = [];
+        for (const row of visible) {
+          const source = await this.load(tx, row.id);
+          const scope = await this.canRead(tx, actor, source);
+          if (scope === 'reviewer' && !source.currentSubmissionId) continue;
+          const material = source.approvedEventId
+            ? await tx.eventHostingApplication.findUnique({
+                where: { materialEventId: source.approvedEventId },
+                include: { ...applicationInclude, permit: true },
+              })
+            : null;
+          const current = source.submissions.find(
+            (s) => s.id === source.currentSubmissionId,
+          );
+          const form = formValue(
+            current?.form ??
+              (scope === 'handler' || scope === 'super' ? source.draft : {}),
+          );
+          const history = [
+            ...this.view(source, scope).actions,
+            ...(material ? this.view(material, scope).actions : []),
+          ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+          results.push({
+            applicationId: source.id,
+            materialApplicationId: material?.id ?? null,
+            eventName: form.eventName ?? '未命名赛事',
+            organizationName: source.applicantOrganization.name,
+            applicationStatus: source.status,
+            materialStatus: material?.status ?? null,
+            stage: material?.permit
+              ? 'PERMITTED'
+              : material?.status === 'APPROVED'
+                ? 'CONTRACT'
+                : source.status === 'APPROVED'
+                  ? 'MATERIALS'
+                  : 'APPLICATION',
+            canConfirm:
+              scope !== 'handler' &&
+              material?.status === 'APPROVED' &&
+              !material.permit &&
+              !material.submissions.some((s) => s.submittedBy === actor.id),
+            permit: material?.permit
+              ? {
+                  confirmedBy: material.permit.confirmedBy,
+                  confirmedAt: material.permit.confirmedAt.toISOString(),
+                }
+              : null,
+            updatedAt:
+              material?.permit?.confirmedAt.toISOString() ??
+              history.at(-1)?.occurredAt ??
+              source.createdAt.toISOString(),
+            history,
+          });
+        }
+        return results;
+      },
+    );
+  }
+  confirmPermit(token: string, id: string, input: unknown) {
+    return this.auth.run(
+      token,
+      'hosting.permit.confirm',
+      id,
+      input,
+      async (tx, actor) => {
+        const body = bodyObject(input, ['key', 'submissionId']);
+        const key = uuid(body.key);
+        const submissionId = uuid(body.submissionId);
+        await this.lock(tx, uuid(id));
+        actor = await this.auth.reloadActor(tx, token);
+        await this.reviewer(tx, actor);
+        await this.selfReviewDenied(tx, actor, id);
+        const material = await this.load(tx, id);
+        if (
+          !material.materialEventId ||
+          material.status !== 'APPROVED' ||
+          material.currentSubmissionId !== submissionId
+        )
+          throw new ConflictException('仅材料审核通过后可确认合同并批准办赛');
+        const sameKey = await tx.hostingPermit.findUnique({ where: { key } });
+        if (
+          sameKey &&
+          (sameKey.applicationId !== id || sameKey.confirmedBy !== actor.id)
+        )
+          throw new ConflictException(
+            'Idempotency key used with different input',
+          );
+        const prior = await tx.hostingPermit.findUnique({
+          where: { applicationId: id },
+        });
+        if (prior)
+          return {
+            confirmedBy: prior.confirmedBy,
+            confirmedAt: prior.confirmedAt.toISOString(),
+          };
+        const permit = await tx.hostingPermit.create({
+          data: { applicationId: id, confirmedBy: actor.id, key },
+        });
+        return {
+          confirmedBy: permit.confirmedBy,
+          confirmedAt: permit.confirmedAt.toISOString(),
+        };
+      },
+      { retries: 3, retryUnique: true },
+    );
+  }
+
   create(token: string, input: unknown, materials = false) {
     return this.auth.run(
       token,
@@ -754,8 +917,16 @@ export class HostingService {
       async (tx, actor) => {
         const body = bodyObject(
           input,
-          materials ? ['eventId', 'key'] : ['applicantOrganizationId', 'key'],
+          materials
+            ? ['eventId', 'key']
+            : ['applicantOrganizationId', 'key', 'formVersion'],
         );
+        if (
+          body.formVersion !== undefined &&
+          body.formVersion !== 1 &&
+          body.formVersion !== 2
+        )
+          throw new BadRequestException('Invalid form version');
         const materialEventId = materials ? uuid(body.eventId) : null;
         const source = materialEventId
           ? await tx.eventHostingApplication.findFirst({
@@ -773,7 +944,9 @@ export class HostingService {
         const key = uuid(body.key);
         await this.handler(tx, actor, organizationId);
         const hash = requestHash(
-          materials ? { organizationId, materialEventId } : { organizationId },
+          materials
+            ? { organizationId, materialEventId }
+            : { organizationId, formVersion: body.formVersion ?? 1 },
         );
         const prior = await tx.hostingApplicationCommand.findFirst({
           where: { actorId: actor.id, key },
@@ -795,6 +968,7 @@ export class HostingService {
         const application = await tx.eventHostingApplication.create({
           data: {
             applicantOrganizationId: organizationId,
+            formVersion: materials ? 1 : Number(body.formVersion ?? 1),
             materialEventId,
             createdBy: actor.id,
             draft: json(
@@ -1186,6 +1360,7 @@ export class HostingService {
         const form = completeForm(
           application.draft,
           !!application.materialEventId,
+          application.formVersion,
         );
         const files = application.uploads.filter(
           (file) => file.state === 'CONFIRMED' && file.bound,
@@ -1193,8 +1368,9 @@ export class HostingService {
         const grouped = (code: Requirement) =>
           files.filter((file) => file.requirementCode === code);
         if (
-          grouped('BUSINESS_LICENSE').length !== 1 ||
-          grouped('VENUE_PHOTO').length < 1 ||
+          ((application.materialEventId || application.formVersion === 1) &&
+            (grouped('BUSINESS_LICENSE').length !== 1 ||
+              grouped('VENUE_PHOTO').length < 1)) ||
           grouped('VENUE_PHOTO').length > 10 ||
           grouped('OTHER_DOCUMENT').length > 5
         )
@@ -1207,9 +1383,27 @@ export class HostingService {
             version: application.nextVersion,
             form: json(form),
             requirementSnapshot: json({
-              BUSINESS_LICENSE: { required: true, min: 1, max: 1 },
+              BUSINESS_LICENSE: {
+                required:
+                  !!application.materialEventId ||
+                  application.formVersion === 1,
+                min:
+                  application.materialEventId || application.formVersion === 1
+                    ? 1
+                    : 0,
+                max: 1,
+              },
               EVENT_EXPERIENCE_INTRO: { required: true, type: 'TEXT' },
-              VENUE_PHOTO: { required: true, min: 1, max: 10 },
+              VENUE_PHOTO: {
+                required:
+                  !!application.materialEventId ||
+                  application.formVersion === 1,
+                min:
+                  application.materialEventId || application.formVersion === 1
+                    ? 1
+                    : 0,
+                max: 10,
+              },
               OTHER_DOCUMENT: { required: false, min: 0, max: 5 },
               maxBytes: 10 * 1024 * 1024,
             }),
@@ -1418,7 +1612,11 @@ export class HostingService {
           (item) => item.id === submissionId,
         );
         if (!submission) deny();
-        const form = completeForm(submission.form);
+        const form = completeForm(
+          submission.form,
+          false,
+          application.formVersion,
+        );
         const eventId = randomUUID();
         await tx.eventScope.create({ data: { id: eventId } });
         await tx.event.create({

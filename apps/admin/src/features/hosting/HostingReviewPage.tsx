@@ -12,6 +12,10 @@ type Submission = S['HostingSubmissionViewDto'];
 type Status = Detail['status'];
 type ReviewAction = 'supplement' | 'reject';
 type FormSnapshot = {
+  contactName?: string;
+  startTime?: string;
+  endTime?: string;
+  additionalNotes?: string;
   bankAccountName?: string;
   bankName?: string;
   bankAccountNumber?: string;
@@ -87,7 +91,11 @@ const fieldNames: Record<string, string> = {
   bankAccountNumber: '银行账号',
   registrationStart: '报名开始时间',
   registrationEnd: '报名截止时间',
-  contactPhone: '报名联系人手机号',
+  contactPhone: '联系人手机号',
+  contactName: '联系人姓名',
+  startTime: '开始时间',
+  endTime: '结束时间',
+  additionalNotes: '补充说明',
 
   eventName: '赛事名称',
   startDate: '开始日期',
@@ -612,6 +620,27 @@ export function HostingReviewPage({
                         {text(currentForm.eventExperienceIntroduction)}
                       </p>
                     </section>
+                    {!materials && selected.formVersion === 2 && (
+                      <section className="hosting-section">
+                        <h3>时间与联系方式</h3>
+                        <dl className="hosting-definition">
+                          {(
+                            [
+                              'startTime',
+                              'endTime',
+                              'contactName',
+                              'contactPhone',
+                              'additionalNotes',
+                            ] as const
+                          ).map((key) => (
+                            <div key={key}>
+                              <dt>{fieldNames[key]}</dt>
+                              <dd>{text(currentForm[key])}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </section>
+                    )}
                     {materials && (
                       <section className="hosting-section">
                         <h3>报名与收款信息</h3>
@@ -692,6 +721,10 @@ export function HostingReviewPage({
                               {materials &&
                                 (
                                   [
+                                    'contactName',
+                                    'startTime',
+                                    'endTime',
+                                    'additionalNotes',
                                     'bankAccountName',
                                     'bankName',
                                     'bankAccountNumber',

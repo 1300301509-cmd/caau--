@@ -375,6 +375,7 @@ export function HostingApplicationPage({
             token: session.token,
             body: {
               applicantOrganizationId: organizationId,
+              formVersion: 2,
               key: await newKey(),
             },
           });
@@ -418,7 +419,7 @@ export function HostingApplicationPage({
         path: { id: current.id },
         body: {
           expectedDraftRevision: baseRevisionRef.current,
-          form: hostingFormBody(form, materials),
+          form: hostingFormBody(form, materials, detail?.formVersion ?? 1),
         },
       });
       applyDetail(next, true);
@@ -636,6 +637,7 @@ export function HostingApplicationPage({
       form,
       current.uploads,
       materials,
+      detail?.formVersion ?? 1,
     );
     if (validation) {
       setError(validation);
@@ -707,7 +709,7 @@ export function HostingApplicationPage({
           返回首页
         </Button>
       </View>
-      <Text className="title">{materials ? '办赛材料' : '赛事承办申请'}</Text>
+      <Text className="title">{materials ? '材料提交' : '申请比赛'}</Text>
       <Text className="description">
         {materials
           ? '承办申请获批后，完成7项必填资料，整套提交总部审核。'
@@ -726,6 +728,20 @@ export function HostingApplicationPage({
           <Text className="description">
             当前身份没有任何机构的承办申请办理权限，不能读取或新建申请。
           </Text>
+        </View>
+      ) : materials && !loading && !eligibleEvents.length ? (
+        <View className="card">
+          <Text className="subtitle">暂无可提交材料的比赛</Text>
+          <Text className="description">
+            当前没有通过申请的比赛，请联系相关工作人员哦
+          </Text>
+          <Button
+            onClick={() =>
+              void Taro.navigateTo({ url: '/pages/hosting/index' })
+            }
+          >
+            申请比赛
+          </Button>
         </View>
       ) : (
         <>
@@ -1012,22 +1028,84 @@ export function HostingApplicationPage({
                       />
                     </>
                   )}
-                  <Text className="field-label">
-                    {materials
-                      ? '办赛公司/机构简介（3～4句话，介绍地点、办赛经验等）*'
-                      : '办赛经验简介 *'}
-                  </Text>
-                  <Textarea
-                    className="hosting-textarea"
-                    ariaLabel="办赛经验简介"
-                    autoHeight
-                    maxlength={20000}
-                    disabled={blocked || conflict}
-                    value={form.eventExperienceIntroduction}
-                    onInput={(event) =>
-                      edit({ eventExperienceIntroduction: event.detail.value })
-                    }
-                  />
+                  {(materials || detail.formVersion === 1) && (
+                    <>
+                      {' '}
+                      <Text className="field-label">
+                        {materials
+                          ? '办赛公司/机构简介（3～4句话，介绍地点、办赛经验等）*'
+                          : '办赛经验简介 *'}
+                      </Text>
+                      <Textarea
+                        className="hosting-textarea"
+                        ariaLabel="办赛经验简介"
+                        autoHeight
+                        maxlength={20000}
+                        disabled={blocked || conflict}
+                        value={form.eventExperienceIntroduction}
+                        onInput={(event) =>
+                          edit({
+                            eventExperienceIntroduction: event.detail.value,
+                          })
+                        }
+                      />
+                    </>
+                  )}
+                  {!materials && detail.formVersion === 2 && (
+                    <>
+                      <View className="hosting-date-grid">
+                        {(['startTime', 'endTime'] as const).map((key) => (
+                          <View key={key}>
+                            <Text className="field-label">
+                              {hostingFieldLabel(key)} *（北京时间）
+                            </Text>
+                            <Picker
+                              mode="time"
+                              value={form[key]}
+                              disabled={blocked || conflict}
+                              onChange={(event) =>
+                                edit({ [key]: String(event.detail.value) })
+                              }
+                            >
+                              <View className="field picker-field">
+                                {form[key] || '选择时间'}
+                              </View>
+                            </Picker>
+                          </View>
+                        ))}
+                      </View>
+                      {(['contactName', 'contactPhone'] as const).map((key) => (
+                        <View key={key}>
+                          <Text className="field-label">
+                            {hostingFieldLabel(key)} *
+                          </Text>
+                          <Input
+                            className="field"
+                            ariaLabel={hostingFieldLabel(key)}
+                            maxlength={key === 'contactPhone' ? 11 : 120}
+                            type={key === 'contactPhone' ? 'number' : 'text'}
+                            value={form[key]}
+                            disabled={blocked || conflict}
+                            onInput={(event) =>
+                              edit({ [key]: event.detail.value })
+                            }
+                          />
+                        </View>
+                      ))}
+                      <Text className="field-label">补充说明（选填）</Text>
+                      <Textarea
+                        className="hosting-textarea"
+                        ariaLabel="补充说明"
+                        maxlength={2000}
+                        autoHeight
+                        value={form.additionalNotes}
+                        disabled={blocked || conflict}
+                        onInput={(event) =>
+                          edit({ additionalNotes: event.detail.value })
+                        }
+                      />
+                    </>
+                  )}
                   {materials && (
                     <>
                       <Text className="subtitle">公司银行账户</Text>
@@ -1113,62 +1191,66 @@ export function HostingApplicationPage({
 
               {editable && (
                 <View className="card">
-                  <Text className="subtitle">申请附件</Text>
-                  <Text className="description">
-                    营业执照1个；现场照片1～10个；其他文档选交且最多5个。单个不超过10
-                    MiB。
-                  </Text>
-                  {(
-                    [
-                      'BUSINESS_LICENSE',
-                      'VENUE_PHOTO',
-                      'OTHER_DOCUMENT',
-                    ] as HostingRequirement[]
-                  ).map((code) => {
-                    const files = boundUploads.filter(
-                      (item) => item.requirementCode === code,
-                    );
-                    return (
-                      <View className="hosting-upload-group" key={code}>
-                        <Text className="field-label">
-                          {hostingRequirementNames[code]}
-                          {code === 'OTHER_DOCUMENT' ? '（选交）' : ' *'}
-                        </Text>
-                        {files.map((file) => (
-                          <View className="hosting-file-row" key={file.id}>
-                            <View className="grow">
-                              <Text>{file.originalName}</Text>
-                              <Text className="description">
-                                {formatHostingSize(file.expectedBytes)}
-                              </Text>
-                            </View>
+                  {(materials || detail.formVersion === 1) && (
+                    <>
+                      <Text className="subtitle">申请附件</Text>
+                      <Text className="description">
+                        营业执照1个；现场照片1～10个；其他文档选交且最多5个。单个不超过10
+                        MiB。
+                      </Text>
+                      {(
+                        [
+                          'BUSINESS_LICENSE',
+                          'VENUE_PHOTO',
+                          'OTHER_DOCUMENT',
+                        ] as HostingRequirement[]
+                      ).map((code) => {
+                        const files = boundUploads.filter(
+                          (item) => item.requirementCode === code,
+                        );
+                        return (
+                          <View className="hosting-upload-group" key={code}>
+                            <Text className="field-label">
+                              {hostingRequirementNames[code]}
+                              {code === 'OTHER_DOCUMENT' ? '（选交）' : ' *'}
+                            </Text>
+                            {files.map((file) => (
+                              <View className="hosting-file-row" key={file.id}>
+                                <View className="grow">
+                                  <Text>{file.originalName}</Text>
+                                  <Text className="description">
+                                    {formatHostingSize(file.expectedBytes)}
+                                  </Text>
+                                </View>
+                                <Button
+                                  disabled={blocked}
+                                  onClick={() => void download(file)}
+                                >
+                                  查看
+                                </Button>
+                                <Button
+                                  disabled={blocked || conflict}
+                                  onClick={() => void removeUpload(file.id)}
+                                >
+                                  移除
+                                </Button>
+                              </View>
+                            ))}
                             <Button
-                              disabled={blocked}
-                              onClick={() => void download(file)}
+                              disabled={
+                                blocked ||
+                                conflict ||
+                                files.length >= hostingUploadLimit(code)
+                              }
+                              onClick={() => void upload(code)}
                             >
-                              查看
-                            </Button>
-                            <Button
-                              disabled={blocked || conflict}
-                              onClick={() => void removeUpload(file.id)}
-                            >
-                              移除
+                              选择并上传{hostingRequirementNames[code]}
                             </Button>
                           </View>
-                        ))}
-                        <Button
-                          disabled={
-                            blocked ||
-                            conflict ||
-                            files.length >= hostingUploadLimit(code)
-                          }
-                          onClick={() => void upload(code)}
-                        >
-                          选择并上传{hostingRequirementNames[code]}
-                        </Button>
-                      </View>
-                    );
-                  })}
+                        );
+                      })}
+                    </>
+                  )}
                   <Button
                     type="primary"
                     disabled={blocked || dirty || conflict}
@@ -1212,7 +1294,6 @@ export function HostingApplicationPage({
                           'bankAccountNumber',
                           'registrationStart',
                           'registrationEnd',
-                          'contactPhone',
                         ].includes(key),
                     )
                     .map(([key, value]) => (

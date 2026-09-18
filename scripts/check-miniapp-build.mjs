@@ -7,6 +7,8 @@ assert.deepEqual(app.pages, [
   'pages/login/index',
   'pages/home/index',
   'pages/hosting/index',
+  'pages/hosting-hub/index',
+  'pages/hosting-progress/index',
   'pages/event-materials/index',
   'pages/event-info/index',
   'pages/materials/index',

@@ -1038,6 +1038,7 @@ export const operations = {
               type: 'string',
             },
             draftRevision: { type: 'integer' },
+            formVersion: { type: 'number' },
             id: { format: 'uuid', type: 'string' },
             materialEventId: { format: 'uuid', nullable: true, type: 'string' },
             revision: { type: 'integer' },
@@ -1054,6 +1055,7 @@ export const operations = {
             },
           },
           required: [
+            'formVersion',
             'materialEventId',
             'id',
             'applicantOrganizationId',
@@ -1097,6 +1099,7 @@ export const operations = {
             type: 'string',
           },
           draftRevision: { type: 'integer' },
+          formVersion: { type: 'number' },
           id: { format: 'uuid', type: 'string' },
           materialEventId: { format: 'uuid', nullable: true, type: 'string' },
           revision: { type: 'integer' },
@@ -1113,6 +1116,7 @@ export const operations = {
           },
         },
         required: [
+          'formVersion',
           'materialEventId',
           'id',
           'applicantOrganizationId',
@@ -1137,6 +1141,39 @@ export const operations = {
         key: { format: 'uuid', type: 'string' },
       },
       required: ['eventId', 'key'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  HostingController_confirmPermit: {
+    path: '/api/v1/event-materials/{id}/confirm-permit',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          confirmedAt: { format: 'date-time', type: 'string' },
+          confirmedBy: { format: 'uuid', type: 'string' },
+        },
+        required: ['confirmedBy', 'confirmedAt'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      {
+        in: 'path',
+        name: 'id',
+        required: true,
+        schema: { format: 'uuid', type: 'string' },
+      },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        key: { format: 'uuid', type: 'string' },
+        submissionId: { format: 'uuid', type: 'string' },
+      },
+      required: ['key', 'submissionId'],
       type: 'object',
     },
     authenticated: true,
@@ -1274,6 +1311,7 @@ export const operations = {
               type: 'string',
             },
             draftRevision: { type: 'integer' },
+            formVersion: { type: 'number' },
             id: { format: 'uuid', type: 'string' },
             materialEventId: { format: 'uuid', nullable: true, type: 'string' },
             revision: { type: 'integer' },
@@ -1290,6 +1328,7 @@ export const operations = {
             },
           },
           required: [
+            'formVersion',
             'materialEventId',
             'id',
             'applicantOrganizationId',
@@ -1333,6 +1372,7 @@ export const operations = {
             type: 'string',
           },
           draftRevision: { type: 'integer' },
+          formVersion: { type: 'number' },
           id: { format: 'uuid', type: 'string' },
           materialEventId: { format: 'uuid', nullable: true, type: 'string' },
           revision: { type: 'integer' },
@@ -1349,6 +1389,7 @@ export const operations = {
           },
         },
         required: [
+          'formVersion',
           'materialEventId',
           'id',
           'applicantOrganizationId',
@@ -1370,6 +1411,7 @@ export const operations = {
     body: {
       properties: {
         applicantOrganizationId: { format: 'uuid', type: 'string' },
+        formVersion: { enum: [1, 2], type: 'number' },
         key: { format: 'uuid', type: 'string' },
       },
       required: ['applicantOrganizationId', 'key'],
@@ -1483,6 +1525,7 @@ export const operations = {
             properties: {},
           },
           draftRevision: { type: 'integer' },
+          formVersion: { type: 'number' },
           id: { format: 'uuid', type: 'string' },
           materialEventId: { format: 'uuid', nullable: true, type: 'string' },
           revision: { type: 'integer' },
@@ -1586,6 +1629,7 @@ export const operations = {
           },
         },
         required: [
+          'formVersion',
           'materialEventId',
           'id',
           'applicantOrganizationId',
@@ -1752,6 +1796,7 @@ export const operations = {
             properties: {},
           },
           draftRevision: { type: 'integer' },
+          formVersion: { type: 'number' },
           id: { format: 'uuid', type: 'string' },
           materialEventId: { format: 'uuid', nullable: true, type: 'string' },
           revision: { type: 'integer' },
@@ -1855,6 +1900,7 @@ export const operations = {
           },
         },
         required: [
+          'formVersion',
           'materialEventId',
           'id',
           'applicantOrganizationId',
@@ -1890,6 +1936,7 @@ export const operations = {
         expectedDraftRevision: { minimum: 1, type: 'integer' },
         form: {
           properties: {
+            additionalNotes: { nullable: true, type: 'string' },
             bankAccountName: { maxLength: 200, nullable: true, type: 'string' },
             bankAccountNumber: {
               maxLength: 200,
@@ -1897,8 +1944,10 @@ export const operations = {
               type: 'string',
             },
             bankName: { maxLength: 200, nullable: true, type: 'string' },
+            contactName: { nullable: true, type: 'string' },
             contactPhone: { maxLength: 200, nullable: true, type: 'string' },
             endDate: { format: 'date', nullable: true, type: 'string' },
+            endTime: { nullable: true, type: 'string' },
             eventExperienceIntroduction: {
               maxLength: 20000,
               nullable: true,
@@ -1918,6 +1967,7 @@ export const operations = {
               type: 'string',
             },
             startDate: { format: 'date', nullable: true, type: 'string' },
+            startTime: { nullable: true, type: 'string' },
           },
           required: [
             'eventName',
@@ -2105,6 +2155,104 @@ export const operations = {
       ],
       type: 'object',
     },
+    authenticated: true,
+  },
+  HostingController_journeys: {
+    path: '/api/v1/hosting-journeys',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            applicationId: { format: 'uuid', type: 'string' },
+            applicationStatus: { type: 'string' },
+            canConfirm: { type: 'boolean' },
+            eventName: { type: 'string' },
+            history: {
+              items: {
+                properties: {
+                  action: { type: 'string' },
+                  actorId: { format: 'uuid', type: 'string' },
+                  detail: {
+                    additionalProperties: true,
+                    type: 'object',
+                    properties: {},
+                  },
+                  fromState: {
+                    enum: [
+                      'DRAFT',
+                      'PENDING_REVIEW',
+                      'IN_REVIEW',
+                      'NEEDS_SUPPLEMENT',
+                      'REJECTED',
+                      'APPROVED',
+                    ],
+                    type: 'string',
+                  },
+                  id: { format: 'uuid', type: 'string' },
+                  occurredAt: { format: 'date-time', type: 'string' },
+                  toState: {
+                    enum: [
+                      'DRAFT',
+                      'PENDING_REVIEW',
+                      'IN_REVIEW',
+                      'NEEDS_SUPPLEMENT',
+                      'REJECTED',
+                      'APPROVED',
+                    ],
+                    type: 'string',
+                  },
+                },
+                required: [
+                  'id',
+                  'action',
+                  'fromState',
+                  'toState',
+                  'actorId',
+                  'occurredAt',
+                  'detail',
+                ],
+                type: 'object',
+              },
+              type: 'array',
+            },
+            materialApplicationId: { nullable: true, type: 'string' },
+            materialStatus: { nullable: true, type: 'string' },
+            organizationName: { type: 'string' },
+            permit: {
+              allOf: [{ $ref: '#/components/schemas/HostingPermitDto' }],
+              nullable: true,
+              type: 'object',
+              properties: {},
+            },
+            stage: {
+              enum: ['APPLICATION', 'MATERIALS', 'CONTRACT', 'PERMITTED'],
+              type: 'string',
+            },
+            updatedAt: { type: 'string' },
+          },
+          required: [
+            'applicationId',
+            'materialApplicationId',
+            'eventName',
+            'organizationName',
+            'applicationStatus',
+            'materialStatus',
+            'stage',
+            'canConfirm',
+            'permit',
+            'updatedAt',
+            'history',
+          ],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
     authenticated: true,
   },
   HostingController_confirmUpload: {

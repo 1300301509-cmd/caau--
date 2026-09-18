@@ -32,6 +32,8 @@ export class CreateEventMaterialsDto {
   @ApiProperty({ format: 'uuid' }) key!: string;
 }
 export class CreateHostingApplicationDto {
+  @ApiProperty({ type: Number, enum: [1, 2], required: false })
+  formVersion?: number;
   @ApiProperty({ format: 'uuid' }) applicantOrganizationId!: string;
   @ApiProperty({ format: 'uuid' }) key!: string;
 }
@@ -48,6 +50,18 @@ export class HostingLocationDto {
   @ApiProperty({ maxLength: 120 }) venueName!: string;
 }
 export class HostingDraftFormDto {
+  @ApiProperty({ type: String, required: false, nullable: true }) contactName?:
+    | string
+    | null;
+  @ApiProperty({ type: String, required: false, nullable: true }) startTime?:
+    | string
+    | null;
+  @ApiProperty({ type: String, required: false, nullable: true }) endTime?:
+    | string
+    | null;
+  @ApiProperty({ type: String, required: false, nullable: true })
+  additionalNotes?: string | null;
+
   @ApiProperty({
     type: String,
     nullable: true,
@@ -174,6 +188,7 @@ export class HostingDiffViewDto {
   attachmentChanges!: object[];
 }
 export class HostingApplicationListItemDto {
+  @ApiProperty({ type: Number }) formVersion!: number;
   @ApiProperty({ type: String, format: 'uuid', nullable: true })
   materialEventId!: string | null;
   @ApiProperty({ format: 'uuid' }) id!: string;
@@ -202,4 +217,31 @@ export class HostingApplicationDetailDto extends HostingApplicationListItemDto {
   @ApiProperty({ type: [HostingActionViewDto] })
   actions!: HostingActionViewDto[];
   @ApiProperty({ type: [HostingDiffViewDto] }) diffs!: HostingDiffViewDto[];
+}
+
+export class HostingPermitDto {
+  @ApiProperty({ format: 'uuid' }) confirmedBy!: string;
+  @ApiProperty({ format: 'date-time' }) confirmedAt!: string;
+}
+export class HostingJourneyDto {
+  @ApiProperty({ format: 'uuid' }) applicationId!: string;
+  @ApiProperty({ type: String, nullable: true }) materialApplicationId!:
+    | string
+    | null;
+  @ApiProperty() eventName!: string;
+  @ApiProperty() organizationName!: string;
+  @ApiProperty() applicationStatus!: string;
+  @ApiProperty({ type: String, nullable: true }) materialStatus!: string | null;
+  @ApiProperty({ enum: ['APPLICATION', 'MATERIALS', 'CONTRACT', 'PERMITTED'] })
+  stage!: string;
+  @ApiProperty() canConfirm!: boolean;
+  @ApiProperty({ type: HostingPermitDto, nullable: true })
+  permit!: HostingPermitDto | null;
+  @ApiProperty() updatedAt!: string;
+  @ApiProperty({ type: [HostingActionViewDto] })
+  history!: HostingActionViewDto[];
+}
+export class ConfirmHostingPermitDto {
+  @ApiProperty({ format: 'uuid' }) key!: string;
+  @ApiProperty({ format: 'uuid' }) submissionId!: string;
 }

@@ -87,6 +87,26 @@ test('hosting application form keeps partial drafts and validates confirmed subm
     eventExperienceIntroduction: '仅用于自动测试',
   };
   assert.deepEqual(hostingFormFrom(hostingFormBody(form)), form);
+  const simple = {
+    ...form,
+    eventExperienceIntroduction: '',
+    contactName: '合成联系人',
+    contactPhone: '13800000000',
+    startTime: '09:00',
+    endTime: '18:00',
+    additionalNotes: '',
+  };
+  assert.deepEqual(hostingFormFrom(hostingFormBody(simple, false, 2)), simple);
+  assert.equal(validateHostingSubmission(simple, [], false, 2), '');
+  assert.match(
+    validateHostingSubmission({ ...simple, contactPhone: '' }, [], false, 2),
+    /手机号/,
+  );
+  assert.match(
+    validateHostingSubmission({ ...simple, endTime: '08:00' }, [], false, 2),
+    /结束时间/,
+  );
+
   assert.match(validateHostingSubmission(form, []), /营业执照、现场照片/);
   const uploads = [
     {

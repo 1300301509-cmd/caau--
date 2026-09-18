@@ -958,3 +958,41 @@ button[type='primary']::after {
     transition: none;
   }
 }
+
+.hosting-entry {
+  width: 100%;
+  text-align: left;
+}
+.journey-steps {
+  display: flex;
+  margin: 28px 0;
+  gap: 10px;
+}
+.journey-step {
+  flex: 1;
+  min-width: 0;
+  color: #777f76;
+  font-size: 23px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.journey-number {
+  width: 48px;
+  height: 48px;
+  line-height: 48px;
+  background: #eff1e9;
+  border-radius: 50%;
+}
+.journey-step.reached {
+  color: #23695b;
+}
+.journey-step.reached .journey-number {
+  background: #cae6d9;
+}
+.journey-history {
+  border-top: 1px solid #e2e7dc;
+  padding: 20px 0;
+}

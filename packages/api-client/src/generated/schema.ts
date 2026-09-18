@@ -514,6 +514,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/event-materials/{id}/confirm-permit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['HostingController_confirmPermit'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events': {
     parameters: {
       query?: never;
@@ -701,6 +717,22 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations['HostingController_uploadIntent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/hosting-journeys': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['HostingController_journeys'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1557,6 +1589,12 @@ export interface components {
       expectedRevision: number;
       requirements: components['schemas']['RequirementsDto'];
     };
+    ConfirmHostingPermitDto: {
+      /** Format: uuid */
+      key: string;
+      /** Format: uuid */
+      submissionId: string;
+    };
     CreateAccountDto: {
       displayName: string;
       loginName: string;
@@ -1572,6 +1610,8 @@ export interface components {
     CreateHostingApplicationDto: {
       /** Format: uuid */
       applicantOrganizationId: string;
+      /** @enum {number} */
+      formVersion?: 1 | 2;
       /** Format: uuid */
       key: string;
     };
@@ -1768,6 +1808,7 @@ export interface components {
         [key: string]: unknown;
       } | null;
       draftRevision: number;
+      formVersion: number;
       /** Format: uuid */
       id: string;
       /** Format: uuid */
@@ -1797,6 +1838,7 @@ export interface components {
       /** Format: uuid */
       currentSubmissionId: string | null;
       draftRevision: number;
+      formVersion: number;
       /** Format: uuid */
       id: string;
       /** Format: uuid */
@@ -1824,12 +1866,15 @@ export interface components {
       toSubmissionId: string;
     };
     HostingDraftFormDto: {
+      additionalNotes?: string | null;
       bankAccountName?: string | null;
       bankAccountNumber?: string | null;
       bankName?: string | null;
+      contactName?: string | null;
       contactPhone?: string | null;
       /** Format: date */
       endDate: string | null;
+      endTime?: string | null;
       eventExperienceIntroduction: string | null;
       eventName: string | null;
       location: components['schemas']['HostingLocationDto'] | null;
@@ -1837,6 +1882,7 @@ export interface components {
       registrationStart?: string | null;
       /** Format: date */
       startDate: string | null;
+      startTime?: string | null;
     };
     HostingGrantActiveDto: {
       active: boolean;
@@ -1854,10 +1900,31 @@ export interface components {
       /** Format: uuid */
       organizationId: string | null;
     };
+    HostingJourneyDto: {
+      /** Format: uuid */
+      applicationId: string;
+      applicationStatus: string;
+      canConfirm: boolean;
+      eventName: string;
+      history: components['schemas']['HostingActionViewDto'][];
+      materialApplicationId: string | null;
+      materialStatus: string | null;
+      organizationName: string;
+      permit: components['schemas']['HostingPermitDto'] | null;
+      /** @enum {string} */
+      stage: 'APPLICATION' | 'MATERIALS' | 'CONTRACT' | 'PERMITTED';
+      updatedAt: string;
+    };
     HostingLocationDto: {
       administrativeArea: components['schemas']['HostingAdministrativeAreaDto'];
       detailedAddress: string;
       venueName: string;
+    };
+    HostingPermitDto: {
+      /** Format: date-time */
+      confirmedAt: string;
+      /** Format: uuid */
+      confirmedBy: string;
     };
     HostingReasonCommandDto: {
       expectedRevision: number;
@@ -4167,6 +4234,45 @@ export interface operations {
       };
     };
   };
+  HostingController_confirmPermit: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConfirmHostingPermitDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingPermitDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   listEvents: {
     parameters: {
       query?: never;
@@ -4731,6 +4837,39 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['HostingUploadViewDto'];
+        };
+      };
+      /** @description No active application permission */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Revision, state, or idempotency conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  HostingController_journeys: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HostingJourneyDto'][];
         };
       };
       /** @description No active application permission */

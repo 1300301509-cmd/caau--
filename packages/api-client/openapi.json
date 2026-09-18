@@ -368,6 +368,20 @@
         "required": ["expectedRevision", "requirements"],
         "type": "object"
       },
+      "ConfirmHostingPermitDto": {
+        "properties": {
+          "key": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "submissionId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["key", "submissionId"],
+        "type": "object"
+      },
       "CreateAccountDto": {
         "properties": {
           "displayName": {
@@ -419,6 +433,10 @@
           "applicantOrganizationId": {
             "format": "uuid",
             "type": "string"
+          },
+          "formVersion": {
+            "enum": [1, 2],
+            "type": "number"
           },
           "key": {
             "format": "uuid",
@@ -974,6 +992,9 @@
           "draftRevision": {
             "type": "integer"
           },
+          "formVersion": {
+            "type": "number"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -1011,6 +1032,7 @@
           }
         },
         "required": [
+          "formVersion",
           "materialEventId",
           "id",
           "applicantOrganizationId",
@@ -1060,6 +1082,9 @@
           "draftRevision": {
             "type": "integer"
           },
+          "formVersion": {
+            "type": "number"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -1085,6 +1110,7 @@
           }
         },
         "required": [
+          "formVersion",
           "materialEventId",
           "id",
           "applicantOrganizationId",
@@ -1134,6 +1160,10 @@
       },
       "HostingDraftFormDto": {
         "properties": {
+          "additionalNotes": {
+            "nullable": true,
+            "type": "string"
+          },
           "bankAccountName": {
             "maxLength": 200,
             "nullable": true,
@@ -1149,6 +1179,10 @@
             "nullable": true,
             "type": "string"
           },
+          "contactName": {
+            "nullable": true,
+            "type": "string"
+          },
           "contactPhone": {
             "maxLength": 200,
             "nullable": true,
@@ -1156,6 +1190,10 @@
           },
           "endDate": {
             "format": "date",
+            "nullable": true,
+            "type": "string"
+          },
+          "endTime": {
             "nullable": true,
             "type": "string"
           },
@@ -1190,6 +1228,10 @@
           },
           "startDate": {
             "format": "date",
+            "nullable": true,
+            "type": "string"
+          },
+          "startTime": {
             "nullable": true,
             "type": "string"
           }
@@ -1244,6 +1286,70 @@
         "required": ["id", "memberId", "organizationId", "active"],
         "type": "object"
       },
+      "HostingJourneyDto": {
+        "properties": {
+          "applicationId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "applicationStatus": {
+            "type": "string"
+          },
+          "canConfirm": {
+            "type": "boolean"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/HostingActionViewDto"
+            },
+            "type": "array"
+          },
+          "materialApplicationId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "materialStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "permit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HostingPermitDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "stage": {
+            "enum": ["APPLICATION", "MATERIALS", "CONTRACT", "PERMITTED"],
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicationId",
+          "materialApplicationId",
+          "eventName",
+          "organizationName",
+          "applicationStatus",
+          "materialStatus",
+          "stage",
+          "canConfirm",
+          "permit",
+          "updatedAt",
+          "history"
+        ],
+        "type": "object"
+      },
       "HostingLocationDto": {
         "properties": {
           "administrativeArea": {
@@ -1259,6 +1365,20 @@
           }
         },
         "required": ["administrativeArea", "detailedAddress", "venueName"],
+        "type": "object"
+      },
+      "HostingPermitDto": {
+        "properties": {
+          "confirmedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "confirmedBy": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["confirmedBy", "confirmedAt"],
         "type": "object"
       },
       "HostingReasonCommandDto": {
@@ -4463,6 +4583,59 @@
         "tags": ["event-hosting-applications"]
       }
     },
+    "/api/v1/event-materials/{id}/confirm-permit": {
+      "post": {
+        "operationId": "HostingController_confirmPermit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmHostingPermitDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingPermitDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
     "/api/v1/events": {
       "get": {
         "operationId": "listEvents",
@@ -5108,6 +5281,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HostingUploadViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "No active application permission"
+          },
+          "409": {
+            "description": "Revision, state, or idempotency conflict"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/hosting-journeys": {
+      "get": {
+        "operationId": "HostingController_journeys",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HostingJourneyDto"
+                  },
+                  "type": "array"
                 }
               }
             },

@@ -31,6 +31,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Permission } from '../authorization/authorization.guard.js';
 import {
   CreateHostingApplicationDto,
+  HostingJourneyDto,
+  ConfirmHostingPermitDto,
+  HostingPermitDto,
   CreateEventMaterialsDto,
   HostingApplicationDetailDto,
   HostingApplicationListItemDto,
@@ -110,6 +113,24 @@ export class HostingController {
     @Body() body: HostingGrantActiveDto,
   ) {
     return this.hosting.manageGrant(token(identity), 'review', id, body);
+  }
+  @Get('hosting-journeys')
+  @Permission('hosting')
+  @ApiOkResponse({ type: HostingJourneyDto, isArray: true })
+  journeys(@SessionToken() identity: string | undefined) {
+    return this.hosting.journeys(token(identity));
+  }
+  @Post('event-materials/:id/confirm-permit')
+  @Permission('hosting')
+  @HttpCode(200)
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: HostingPermitDto })
+  confirmPermit(
+    @SessionToken() identity: string | undefined,
+    @Param('id') id: string,
+    @Body() body: ConfirmHostingPermitDto,
+  ) {
+    return this.hosting.confirmPermit(token(identity), id, body);
   }
   @Post('event-materials')
   @Permission('hosting')
