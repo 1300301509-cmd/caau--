@@ -28,6 +28,42 @@ export async function eventManager(
   });
   if (!grant) deny();
 }
+
+/** Write access for event-operation domains such as teams and scheduling. */
+export async function eventOperations(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  eventId: string,
+) {
+  if (isHeadquartersSuperAdmin(actor)) return;
+  if (
+    await tx.eventGrant.findFirst({
+      where: {
+        eventId,
+        active: true,
+        member: { userId: actor.id, active: true, role: 'EVENT_MANAGER' },
+      },
+    })
+  )
+    return;
+  const handlers = await tx.hostingApplicationHandlerGrant.findMany({
+    where: {
+      active: true,
+      member: { userId: actor.id, active: true, role: 'ORGANIZER' },
+    },
+    select: { organizationId: true },
+  });
+  if (
+    !(await tx.eventOrganizerAppointment.findFirst({
+      where: {
+        eventId,
+        active: true,
+        organizationId: { in: handlers.map((item) => item.organizationId) },
+      },
+    }))
+  )
+    deny();
+}
 export async function taskPolicy(
   tx: Prisma.TransactionClient,
   actor: Actor,

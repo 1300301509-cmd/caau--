@@ -546,6 +546,70 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/events/{eventId}/schedule': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getEventSchedule'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/schedule/generate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['generateEventSchedule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/schedule/matches/{matchId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['adjustEventScheduleMatch'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/schedule/publish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['publishEventSchedule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events/{eventId}/teams': {
     parameters: {
       query?: never;
@@ -1632,6 +1696,12 @@ export interface components {
     AddEventTeamDto: {
       teamId: string;
     };
+    AdjustScheduleMatchDto: {
+      commandId: string;
+      expectedRevision: number;
+      startAt: string;
+      venue: string;
+    };
     AuditDto: {
       action: string;
       actorId: string | null;
@@ -1830,6 +1900,12 @@ export interface components {
       id: string;
       name: string;
       originalNameKnown: boolean;
+    };
+    GenerateScheduleDto: {
+      commandId: string;
+      config: components['schemas']['ScheduleConfigDto'];
+      /** @enum {string} */
+      format: 'ROUND_ROBIN' | 'SINGLE_ELIMINATION';
     };
     GrantDto: {
       /** Format: uuid */
@@ -2312,6 +2388,10 @@ export interface components {
       /** Format: uuid */
       id: string;
     };
+    PublishScheduleDto: {
+      commandId: string;
+      expectedRevision: number;
+    };
     ReadyDto: {
       /** @enum {string} */
       service: 'caau-api';
@@ -2367,6 +2447,49 @@ export interface components {
       content: components['schemas']['IndividualContentDto'];
       expectedDraftRevision: number;
       generation: number;
+    };
+    ScheduleConfigDto: {
+      bufferMinutes: number;
+      dailyEnd: string;
+      dailyStart: string;
+      durationMinutes: number;
+      endDate: string;
+      minRestMinutes: number;
+      startDate: string;
+      teamIds: string[];
+      venues: string[];
+    };
+    ScheduleIssueDto: {
+      code: string;
+      matchIds: string[];
+      message: string;
+    };
+    ScheduleMatchDto: {
+      awayEventTeamId: string;
+      awayLabel: string;
+      awaySourceMatchId: string;
+      homeEventTeamId: string;
+      homeLabel: string;
+      homeSourceMatchId: string;
+      id: string;
+      order: number;
+      round: number;
+      startAt: string;
+      venue: string;
+    };
+    ScheduleViewDto: {
+      config: components['schemas']['ScheduleConfigDto'];
+      eventId: string;
+      exists: boolean;
+      /** @enum {string} */
+      format: 'ROUND_ROBIN' | 'SINGLE_ELIMINATION';
+      issues: components['schemas']['ScheduleIssueDto'][];
+      matches: components['schemas']['ScheduleMatchDto'][];
+      publishedAt: string;
+      revision: number;
+      /** @enum {string} */
+      status: 'DRAFT' | 'PUBLISHED';
+      updatedAt: string;
     };
     SubmissionViewDto: {
       /** Format: uuid */
@@ -4509,6 +4632,131 @@ export interface operations {
       };
       /** @description Database or audit unavailable */
       503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getEventSchedule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduleViewDto'];
+        };
+      };
+      /** @description Revision, command, or validation conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  generateEventSchedule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GenerateScheduleDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduleViewDto'];
+        };
+      };
+      /** @description Revision, command, or validation conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  adjustEventScheduleMatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        matchId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdjustScheduleMatchDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduleViewDto'];
+        };
+      };
+      /** @description Revision, command, or validation conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  publishEventSchedule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PublishScheduleDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduleViewDto'];
+        };
+      };
+      /** @description Revision, command, or validation conflict */
+      409: {
         headers: {
           [name: string]: unknown;
         };

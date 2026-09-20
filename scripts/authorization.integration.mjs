@@ -21,6 +21,7 @@ import {
 import { individualIntegration } from './individual.integration.mjs';
 import { individualBrowserTest } from './individual-browser.integration.mjs';
 import { teamsIntegration } from './teams.integration.mjs';
+import { schedulingIntegration } from './scheduling.integration.mjs';
 import { hostingIntegration } from './hosting.integration.mjs';
 import { authenticationIntegration } from './authentication.integration.mjs';
 export async function authorizationIntegration(t) {
@@ -106,6 +107,7 @@ export async function authorizationIntegration(t) {
                   '202609190002_required_event_materials',
                   '202609190003_hosting_journey',
                   '202609200001_team_profiles',
+                  '202609200002_event_scheduling',
                 ],
               ],
             )
@@ -817,7 +819,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          12,
+          13,
         );
       },
     );
@@ -836,6 +838,20 @@ export async function authorizationIntegration(t) {
       session,
     });
     await teamsIntegration(t, {
+      base,
+      config,
+      tokens,
+      users,
+      members,
+      orgA,
+      orgB,
+      hq,
+      sql,
+      runtime,
+      api,
+      session,
+    });
+    await schedulingIntegration(t, {
       base,
       config,
       tokens,

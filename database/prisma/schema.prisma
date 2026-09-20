@@ -42,6 +42,16 @@ enum SessionClientType {
   LOCAL_TEST
 }
 
+enum ScheduleFormat {
+  ROUND_ROBIN
+  SINGLE_ELIMINATION
+}
+
+enum ScheduleStatus {
+  DRAFT
+  PUBLISHED
+}
+
 model InternalUser {
   teamMemberships TeamMembership[]
 
@@ -186,6 +196,7 @@ model AuditRecord {
 
 model Event {
   teams EventTeam[]
+  schedule EventSchedule?
 
   materialDossier EventHostingApplication? @relation("EventMaterialDossier")
   id                    String                        @id @db.Uuid
@@ -201,6 +212,42 @@ model Event {
   organizerAppointments EventOrganizerAppointment[]
   informationGrants     EventInformationAccessGrant[]
   approvedApplication   EventHostingApplication?      @relation("ApprovedHostingEvent")
+}
+
+model EventSchedule {
+  eventId String @id @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  format ScheduleFormat
+  status ScheduleStatus @default(DRAFT)
+  config Json
+  matches Json
+  issues Json
+  revision Int @default(1)
+  lastCommandId String @unique @db.Uuid
+  lastCommandHash String @db.VarChar(64)
+  createdBy String @db.Uuid
+  updatedBy String @db.Uuid
+  publishedBy String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  publishedAt DateTime? @db.Timestamptz(3)
+  versions EventScheduleVersion[]
+}
+
+model EventScheduleVersion {
+  id String @id @db.Uuid
+  eventId String @db.Uuid
+  schedule EventSchedule @relation(fields: [eventId], references: [eventId], onDelete: Restrict)
+  format ScheduleFormat
+  status ScheduleStatus
+  config Json
+  matches Json
+  issues Json
+  revision Int
+  actorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([eventId, revision])
 }
 
 model HostingApplicationHandlerGrant {

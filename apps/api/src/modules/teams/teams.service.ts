@@ -14,6 +14,7 @@ import {
 import {
   type Actor,
   deny,
+  eventOperations,
   isHeadquartersSuperAdmin,
 } from '../authorization/policy.js';
 import type { TeamProfileDto, TeamViewDto } from './teams.dto.js';
@@ -108,33 +109,7 @@ export class TeamsService {
   private async event(tx: Tx, actor: Actor, eventId: string) {
     uuid(eventId);
     if (!(await tx.event.findUnique({ where: { id: eventId } }))) deny();
-    if (isHeadquartersSuperAdmin(actor)) return;
-    if (
-      await tx.eventGrant.findFirst({
-        where: {
-          eventId,
-          active: true,
-          member: { userId: actor.id, active: true, role: 'EVENT_MANAGER' },
-        },
-      })
-    )
-      return;
-    const handlers = await tx.hostingApplicationHandlerGrant.findMany({
-      where: {
-        active: true,
-        member: { userId: actor.id, active: true, role: 'ORGANIZER' },
-      },
-    });
-    if (
-      !(await tx.eventOrganizerAppointment.findFirst({
-        where: {
-          eventId,
-          active: true,
-          organizationId: { in: handlers.map((g) => g.organizationId) },
-        },
-      }))
-    )
-      deny();
+    await eventOperations(tx, actor, eventId);
   }
   private view(row: Master | Entry, actor: Actor): TeamViewDto {
     const master = 'members' in row;

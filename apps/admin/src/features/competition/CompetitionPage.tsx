@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { NavIcon } from '../../components/admin-shell/NavIcon';
 import './competition.css';
 import { TeamManagementPanel } from './TeamManagementPanel';
+import { SchedulingPanel } from './SchedulingPanel';
 
 const modules = [
   {
@@ -202,6 +203,11 @@ export function CompetitionPage() {
       </nav>
       {active === 'teams' ? (
         <TeamManagementPanel
+          key={`${auth.identity?.id}-${eventId}`}
+          eventId={eventId}
+        />
+      ) : active === 'schedule' ? (
+        <SchedulingPanel
           key={`${auth.identity?.id}-${eventId}`}
           eventId={eventId}
         />

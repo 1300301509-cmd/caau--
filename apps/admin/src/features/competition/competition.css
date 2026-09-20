@@ -322,3 +322,92 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.schedule-panel {
+  padding: 24px;
+}
+.schedule-panel > header {
+  padding: 0 0 20px;
+}
+.schedule-panel > .ant-alert {
+  margin-bottom: 16px;
+}
+.schedule-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.schedule-config {
+  padding: 20px;
+  border: 1px solid var(--hq-border);
+  border-radius: 16px;
+  background: #fafbf7;
+}
+.schedule-config h3,
+.schedule-result h3 {
+  margin: 0 0 18px;
+  font-size: 16px;
+}
+.schedule-team-options {
+  display: grid;
+  gap: 10px;
+}
+.schedule-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+}
+.schedule-form-grid .ant-input-number {
+  width: 100%;
+}
+.schedule-helper {
+  margin: 12px 0 0;
+  color: var(--hq-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.schedule-result {
+  min-width: 0;
+}
+.schedule-result-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.schedule-result-heading h3 {
+  margin-bottom: 6px;
+}
+.schedule-result-heading p {
+  margin: 0;
+  color: var(--hq-muted);
+  font-size: 12px;
+}
+.schedule-result > .ant-alert {
+  margin-bottom: 16px;
+}
+.schedule-issues {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.schedule-issues li + li {
+  margin-top: 4px;
+}
+@media (max-width: 1000px) {
+  .schedule-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .schedule-panel {
+    padding: 16px;
+  }
+  .schedule-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .schedule-result-heading {
+    display: grid;
+  }
+}

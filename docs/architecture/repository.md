@@ -66,3 +66,5 @@ CAAU-033在既有`event-hosting-applications`版本化执行引擎中以`materia
 CAAU-034在同一hosting模块提供简表版本、只追加的线下合同确认和权威流程查询；小程序新增办赛二级导航及进度页。见[ADR-0014](../adr/0014-hosting-journey.md)。
 
 CAAU-041 新增 `teams` 模块，负责球队主档案、赛事资料快照及球队账号关系的读取权限；Web `features/competition/TeamManagementPanel` 仅消费生成客户端。创建和快照关联同事务，绝不通过主档案联表动态替代比赛资料。见 [ADR-0015](../adr/0015-team-event-snapshots.md)。
+
+CAAU-042 新增 `scheduling` 模块，算法、校验、版本和发布门槛均在 API 侧；Web `SchedulingPanel` 与未来智能体只调用生成契约。赛程引用 `EventTeam` 并冻结对阵显示名称，不从球队主档案动态同步。见 [ADR-0016](../adr/0016-event-scheduling-engine.md)。

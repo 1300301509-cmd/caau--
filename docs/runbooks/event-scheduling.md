@@ -1,0 +1,26 @@
+# 赛程编排操作与验证（CAAU-042）
+
+Web 入口：`http://127.0.0.1:5175/competition?module=schedule`。选择赛事后，页面读取该赛事独立球队和当前赛程。
+
+1. 选择单循环或单败淘汰，并勾选当前赛事有效球队。
+2. 填写日期范围、每天开始/结束时间、场地、每场分钟、换场缓冲和最短休息。
+3. 点击【生成候选赛程】。冲突区会说明无法安排、场地重叠、球队休息不足或淘汰赛前置依赖问题。
+4. 可逐场点击【调整】修改时间和场地。调整允许保存冲突，便于继续处理。
+5. 只有没有冲突时【发布赛程】可用；服务端在发布事务中再次校验。
+
+重新生成不会物理删除历史版本。页面显示的 V 数字是当前修订号。发生 409 时刷新页面，核对其他人员已经保存的版本后再操作。
+
+## 接口
+
+- `GET /api/v1/events/:eventId/schedule`：当前方案及实时校验结果。
+- `POST /api/v1/events/:eventId/schedule/generate`：生成或重新生成候选方案。
+- `PUT /api/v1/events/:eventId/schedule/matches/:matchId`：调整一场比赛。
+- `POST /api/v1/events/:eventId/schedule/publish`：零冲突方案发布。
+
+写入均携带随机 commandId；调整和发布还携带 expectedRevision。不要通过数据库直接修改赛程或历史。
+
+## 本地验证
+
+使用固定 Node/pnpm，先执行 `pnpm build`，再在 3000/4173 空闲时执行 `pnpm db:test`。`scripts/scheduling.integration.mjs` 覆盖循环赛、淘汰赛、不可行说明、手工冲突、并发修订、权限及撤销、发布版本、球队退出和历史保护；`scripts/scheduling-browser.integration.mjs` 使用真实隔离数据库与 API 验证生成、发布和响应式布局。
+
+开发库只允许通过 `pnpm db:migrate:deploy` 追加第 13 个迁移，禁止 reset。测试会创建自身临时库，合成赛事和球队不会写入开发库。当前验证不是生产部署、正式账号、微信开发者工具或真机验收。
