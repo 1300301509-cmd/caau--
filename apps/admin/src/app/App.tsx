@@ -1,3 +1,4 @@
+import { CompetitionPage } from '../features/competition/CompetitionPage';
 import { useEffect } from 'react';
 import { Button, Result } from 'antd';
 import { AppShell } from '../components/admin-shell/AppShell';
@@ -25,19 +26,22 @@ export function App() {
   const hostingPage = path === '/hosting-applications';
 
   useEffect(() => {
-    document.title = reviewPage
-      ? '办赛材料审核 · CAAU'
-      : hostingPage
-        ? '赛事审核中心 · CAAU'
-        : eventPage
-          ? '赛事管理 · CAAU'
-          : path === '/accounts'
-            ? '账号与权限 · CAAU'
-            : path === '/account/password'
-              ? '账号安全 · CAAU'
-              : path === '/system/health'
-                ? '工程连接检查 · CAAU'
-                : '页面未找到 · CAAU';
+    document.title =
+      path === '/competition'
+        ? '比赛管理中心 · CAAU'
+        : reviewPage
+          ? '办赛材料审核 · CAAU'
+          : hostingPage
+            ? '赛事审核中心 · CAAU'
+            : eventPage
+              ? '赛事管理 · CAAU'
+              : path === '/accounts'
+                ? '账号与权限 · CAAU'
+                : path === '/account/password'
+                  ? '账号安全 · CAAU'
+                  : path === '/system/health'
+                    ? '工程连接检查 · CAAU'
+                    : '页面未找到 · CAAU';
   }, [eventPage, hostingPage, path, reviewPage]);
 
   if (reviewPage) {
@@ -56,6 +60,12 @@ export function App() {
       </AppShell>
     );
   }
+  if (path === '/competition')
+    return (
+      <AppShell active="competition">
+        <CompetitionPage />
+      </AppShell>
+    );
   if (eventPage) {
     return (
       <AppShell active="events">

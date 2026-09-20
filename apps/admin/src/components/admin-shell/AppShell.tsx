@@ -10,15 +10,17 @@ export function AppShell({
   active = 'materials',
 }: {
   children: ReactNode;
-  active?: 'materials' | 'events' | 'hosting' | 'accounts';
+  active?: 'materials' | 'events' | 'hosting' | 'accounts' | 'competition';
 }) {
   const auth = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const events = active === 'events';
+  const competition = active === 'competition';
+  const reviewing = active === 'hosting' || active === 'materials';
   return (
     <div className="hq-shell">
       <a className="skip-link" href="#review-content">
-        跳到审核内容
+        跳到主要内容
       </a>
       <aside
         className={`hq-sidebar ${sidebarOpen ? 'is-expanded' : ''}`}
@@ -73,12 +75,20 @@ export function AppShell({
           </div>
           <nav id="hq-primary-nav" aria-label="主要导航">
             <a
-              className={`hq-nav-item ${active !== 'accounts' ? 'active' : ''}`}
+              className={`hq-nav-item ${reviewing || events ? 'active' : ''}`}
               href="/hosting-applications"
-              aria-current={active !== 'accounts' ? 'page' : undefined}
+              aria-current={reviewing || events ? 'page' : undefined}
             >
               <NavIcon name="review" />
               <span>赛事审核中心</span>
+            </a>
+            <a
+              className={`hq-nav-item ${competition ? 'active' : ''}`}
+              href="/competition"
+              aria-current={competition ? 'page' : undefined}
+            >
+              <NavIcon name="calendar" />
+              <span>比赛管理中心</span>
             </a>
             {auth.mode === 'formal' && auth.identity?.canManageAccounts && (
               <a
@@ -127,11 +137,13 @@ export function AppShell({
           <div className="hq-breadcrumb">
             总部工作台 <span>/</span>{' '}
             <strong>
-              {events
-                ? '赛事详情'
-                : active === 'accounts'
-                  ? '账号与权限'
-                  : '赛事审核中心'}
+              {competition
+                ? '比赛管理中心'
+                : events
+                  ? '赛事详情'
+                  : active === 'accounts'
+                    ? '账号与权限'
+                    : '赛事审核中心'}
             </strong>
           </div>
         </header>
@@ -142,30 +154,46 @@ export function AppShell({
         >
           <header className="hq-page-heading">
             <div>
-              <p className="hq-eyebrow">EVENT REVIEW CENTER</p>
+              <p className="hq-eyebrow">
+                {competition ? 'COMPETITION MANAGEMENT' : 'EVENT REVIEW CENTER'}
+              </p>
               <h1>
-                {events
-                  ? '赛事详情'
-                  : active === 'accounts'
-                    ? '账号与权限'
-                    : '赛事审核中心'}
+                {competition
+                  ? '比赛管理中心'
+                  : events
+                    ? '赛事详情'
+                    : active === 'accounts'
+                      ? '账号与权限'
+                      : '赛事审核中心'}
               </h1>
               <p>
-                {events
-                  ? '查看申请获批后的赛事信息与承办机构。'
-                  : active === 'accounts'
-                    ? '创建、停用和重置总部工作账号；业务授权仍以后端为准。'
-                    : '有序处理每一份申请，让赛事从这里启程。'}
+                {competition
+                  ? '从球队到赛程，集中管理每一场比赛。'
+                  : events
+                    ? '查看申请获批后的赛事信息与承办机构。'
+                    : active === 'accounts'
+                      ? '创建、停用和重置总部工作账号；业务授权仍以后端为准。'
+                      : '有序处理每一份申请，让赛事从这里启程。'}
               </p>
             </div>
             <span className="hq-heading-badge">
               <NavIcon
-                name={active === 'accounts' ? 'account' : 'application'}
+                name={
+                  competition
+                    ? 'calendar'
+                    : active === 'accounts'
+                      ? 'account'
+                      : 'application'
+                }
               />
-              {active === 'accounts' ? '安全管理' : '总部审核工作台'}
+              {competition
+                ? '总部比赛工作台'
+                : active === 'accounts'
+                  ? '安全管理'
+                  : '总部审核工作台'}
             </span>
           </header>
-          {!events && active !== 'accounts' && (
+          {reviewing && (
             <nav className="hq-review-tabs" aria-label="审核类型">
               <a
                 href="/hosting-applications"

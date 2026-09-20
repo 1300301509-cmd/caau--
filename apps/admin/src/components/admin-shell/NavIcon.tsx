@@ -1,7 +1,14 @@
 export function NavIcon({
   name,
 }: {
-  name: 'review' | 'calendar' | 'application' | 'account';
+  name:
+    | 'review'
+    | 'calendar'
+    | 'application'
+    | 'account'
+    | 'teams'
+    | 'supplies'
+    | 'chart';
 }) {
   return (
     <svg
@@ -15,7 +22,20 @@ export function NavIcon({
       aria-hidden="true"
       data-icon={name}
     >
-      {name === 'account' ? (
+      {name === 'teams' ? (
+        <>
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3 21v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 5" />
+        </>
+      ) : name === 'supplies' ? (
+        <>
+          <path d="m3 7 9-4 9 4v10l-9 4-9-4ZM3 7l9 4 9-4M12 11v10M7.5 5l9 4" />
+        </>
+      ) : name === 'chart' ? (
+        <>
+          <path d="M3 3v18h18M7 16v-4M12 16V8M17 16V5" />
+        </>
+      ) : name === 'account' ? (
         <>
           <circle cx="12" cy="8" r="4" />
           <path d="M4 21a8 8 0 0 1 16 0M19 3v4M17 5h4" />
