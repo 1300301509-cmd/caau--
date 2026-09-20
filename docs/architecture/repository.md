@@ -18,15 +18,17 @@
 | docs/adr | 有理由和影响的架构决策 | 日常任务流水 |
 | docs/runbooks | 可验证的运行维护步骤 | 未验证的成功声明 |
 
-使用 pnpm workspace 单仓库；应用为 `@caau/miniapp`、`@caau/admin`、`@caau/api`；`@caau/api-client` 提供真实契约、请求门面与平台适配；`@caau/database` 提供仅服务端使用的 Prisma/pg 入口。后两个包已随 CAAU-003 实际实现而加入，不是占位空包；正式 Prisma schema 当前包含身份/授权、赛事/任务、要求/模板快照、私有文件、旧整包草稿/提交/审核，以及 CAAU-012 单份材料执行模型；新旧模型分开，旧提交不拆成假逐份结果。
+使用 pnpm workspace 单仓库；当前应用为 `@caau/miniapp`、`@caau/admin`、`@caau/api`；`@caau/api-client` 提供真实契约、请求门面与平台适配；`@caau/database` 提供仅服务端使用的 Prisma/pg 入口。后两个包已随 CAAU-003 实际实现而加入，不是占位空包；正式 Prisma schema 当前包含身份/授权、赛事/任务、要求/模板快照、私有文件、旧整包草稿/提交/审核，以及 CAAU-012 单份材料执行模型；新旧模型分开，旧提交不拆成假逐份结果。CAAU-046 A阶段仅规划未来新增 `apps/team-miniapp`（建议包名 `@caau/team-miniapp`）；该目录当前尚未创建，实施时必须独立构建/AppID并遵守相同依赖边界，见[球队端规格](../product/team-miniapp-spec.md)。
 
 ## 依赖方向
 
 ```text
-miniapp ─┐
-         ├── api-client ── HTTP ── api ── database ── PostgreSQL
-admin ───┘
+miniapp ──────┐
+admin ─────────┼── api-client ── HTTP ── api ── database ── PostgreSQL
+team-miniapp* ─┘
 ```
+
+\* `team-miniapp` 为 CAAU-046 后续实施计划，A阶段尚不存在。
 
 - 应用之间不能通过相对路径导入源码；前端不能依赖 api 或 database。
 - api-client 的类型、路径/方法和响应枚举来自 Nest OpenAPI，生成文件不手工修改。`contract:generate` / `contract:check` 固定生成与漂移检查；手写门面消费生成元数据，fetch 与 Taro 适配器分开。客户端无运行时依赖，不引用 API 源码或数据库实体；当前生成器范围与扩展限制见 [数据库与契约文档](../runbooks/database-contract.md)。
@@ -68,3 +70,5 @@ CAAU-034在同一hosting模块提供简表版本、只追加的线下合同确�
 CAAU-041 新增 `teams` 模块，负责球队主档案、赛事资料快照及球队账号关系的读取权限；Web `features/competition/TeamManagementPanel` 仅消费生成客户端。创建和快照关联同事务，绝不通过主档案联表动态替代比赛资料。见 [ADR-0015](../adr/0015-team-event-snapshots.md)。
 
 CAAU-042 新增 `scheduling` 模块，算法、校验、版本和发布门槛均在 API 侧；Web `SchedulingPanel` 与未来智能体只调用生成契约。赛程引用 `EventTeam` 并冻结对阵显示名称，不从球队主档案动态同步。见 [ADR-0016](../adr/0016-event-scheduling-engine.md)。
+
+CAAU-046 A阶段规划独立球队端小程序。后续 `apps/team-miniapp` 只消费 `@caau/api-client`，不得引用承办方小程序源码；继续复用 `InternalUser`、`Team` 与 `TeamMembership`，不授予球队用户承办方角色。新 AppID 需要多客户端微信认证，赛事读取需要独立公开发布投影，不能开放内部 Event/Profile。实施时还须把新应用加入边界检查器的受检单元、前端集合以及两小程序构建产物检查。见[ADR-0018](../adr/0018-team-miniapp-boundaries.md)。
