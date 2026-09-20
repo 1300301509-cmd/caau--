@@ -596,6 +596,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/events/{eventId}/matches/{matchId}/staff': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** replaceEventMatchStaff */
+    put: operations['replaceEventMatchStaff'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events/{eventId}/schedule': {
     parameters: {
       query?: never;
@@ -654,6 +671,23 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations['publishEventSchedule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/situation': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** getEventSituation */
+    get: operations['getEventSituation'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -741,6 +775,23 @@ export interface paths {
     put?: never;
     /** addEventTeam */
     post: operations['addEventTeam'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/teams/{eventTeamId}/roster': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** replaceEventTeamRoster */
+    put: operations['replaceEventTeamRoster'];
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -2001,6 +2052,39 @@ export interface components {
       description: string;
       name: string;
     };
+    EventParticipantDto: {
+      contactPhone: string;
+      id: string;
+      jerseyNumber: string;
+      name: string;
+      notes: string;
+      position: string;
+      /** @enum {string} */
+      role: 'PLAYER' | 'COACH' | 'MANAGER' | 'MEDICAL' | 'OTHER';
+    };
+    EventSituationMatchDto: {
+      awayLabel: string;
+      awayTeam: components['schemas']['EventTeamRosterViewDto'] | null;
+      homeLabel: string;
+      homeTeam: components['schemas']['EventTeamRosterViewDto'] | null;
+      id: string;
+      order: number;
+      round: number;
+      staff: components['schemas']['MatchStaffMemberDto'][];
+      staffRevision: number;
+      startAt: string;
+      venue: string;
+    };
+    EventSituationViewDto: {
+      eventId: string;
+      eventName: string;
+      exists: boolean;
+      matches: components['schemas']['EventSituationMatchDto'][];
+      scheduleRevision: number;
+      /** @enum {string} */
+      scheduleStatus: 'DRAFT' | 'PUBLISHED';
+      updatedAt: string;
+    };
     EventSupplyHistoryDto: {
       action: string;
       /** Format: uuid */
@@ -2046,6 +2130,13 @@ export interface components {
       originalName: string;
       /** @enum {string} */
       state: 'PENDING' | 'CONFIRMED';
+    };
+    EventTeamRosterViewDto: {
+      eventTeamId: string;
+      members: components['schemas']['EventParticipantDto'][];
+      revision: number;
+      teamName: string;
+      updatedAt: string;
     };
     EventViewDto: {
       /** Format: date-time */
@@ -2507,6 +2598,14 @@ export interface components {
       loginName: string;
       password: string;
     };
+    MatchStaffMemberDto: {
+      contactPhone: string;
+      id: string;
+      name: string;
+      notes: string;
+      organization: string;
+      role: string;
+    };
     MaterialRequirementDto: {
       acceptanceStandard: string;
       /** Format: date-time */
@@ -2581,6 +2680,15 @@ export interface components {
       service: 'caau-api';
       /** @enum {string} */
       status: 'ready';
+    };
+    ReplaceEventTeamRosterDto: {
+      expectedRevision: number;
+      members: components['schemas']['EventParticipantDto'][];
+    };
+    ReplaceMatchStaffDto: {
+      expectedRevision: number;
+      expectedScheduleRevision: number;
+      staff: components['schemas']['MatchStaffMemberDto'][];
     };
     RequirementsDto: {
       /** Format: date-time */
@@ -4930,6 +5038,32 @@ export interface operations {
       };
     };
   };
+  replaceEventMatchStaff: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        matchId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReplaceMatchStaffDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSituationViewDto'];
+        };
+      };
+    };
+  };
   getEventSchedule: {
     parameters: {
       query?: never;
@@ -5052,6 +5186,27 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  getEventSituation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSituationViewDto'];
+        };
       };
     };
   };
@@ -5217,6 +5372,32 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['TeamViewDto'];
+        };
+      };
+    };
+  };
+  replaceEventTeamRoster: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        eventTeamId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReplaceEventTeamRosterDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventTeamRosterViewDto'];
         };
       };
     };

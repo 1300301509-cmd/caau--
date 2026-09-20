@@ -812,6 +812,147 @@
         "required": ["name", "description"],
         "type": "object"
       },
+      "EventParticipantDto": {
+        "properties": {
+          "contactPhone": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "jerseyNumber": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "role": {
+            "enum": ["PLAYER", "COACH", "MANAGER", "MEDICAL", "OTHER"],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "jerseyNumber",
+          "position",
+          "contactPhone",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "EventSituationMatchDto": {
+        "properties": {
+          "awayLabel": {
+            "type": "string"
+          },
+          "awayTeam": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EventTeamRosterViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "homeLabel": {
+            "type": "string"
+          },
+          "homeTeam": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EventTeamRosterViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "order": {
+            "type": "number"
+          },
+          "round": {
+            "type": "number"
+          },
+          "staff": {
+            "items": {
+              "$ref": "#/components/schemas/MatchStaffMemberDto"
+            },
+            "type": "array"
+          },
+          "staffRevision": {
+            "type": "number"
+          },
+          "startAt": {
+            "type": "string"
+          },
+          "venue": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "round",
+          "order",
+          "startAt",
+          "venue",
+          "homeLabel",
+          "awayLabel",
+          "homeTeam",
+          "awayTeam",
+          "staff",
+          "staffRevision"
+        ],
+        "type": "object"
+      },
+      "EventSituationViewDto": {
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/EventSituationMatchDto"
+            },
+            "type": "array"
+          },
+          "scheduleRevision": {
+            "type": "number"
+          },
+          "scheduleStatus": {
+            "enum": ["DRAFT", "PUBLISHED"],
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exists",
+          "eventId",
+          "eventName",
+          "scheduleStatus",
+          "scheduleRevision",
+          "matches",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "EventSupplyHistoryDto": {
         "properties": {
           "action": {
@@ -947,6 +1088,36 @@
           "expectedBytes",
           "state",
           "confirmedAt"
+        ],
+        "type": "object"
+      },
+      "EventTeamRosterViewDto": {
+        "properties": {
+          "eventTeamId": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/EventParticipantDto"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventTeamId",
+          "teamName",
+          "members",
+          "revision",
+          "updatedAt"
         ],
         "type": "object"
       },
@@ -2355,6 +2526,37 @@
         "required": ["loginName", "password"],
         "type": "object"
       },
+      "MatchStaffMemberDto": {
+        "properties": {
+          "contactPhone": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "organization": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "organization",
+          "contactPhone",
+          "notes"
+        ],
+        "type": "object"
+      },
       "MaterialRequirementDto": {
         "properties": {
           "acceptanceStandard": {
@@ -2550,6 +2752,39 @@
           }
         },
         "required": ["status", "service"],
+        "type": "object"
+      },
+      "ReplaceEventTeamRosterDto": {
+        "properties": {
+          "expectedRevision": {
+            "type": "number"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/EventParticipantDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["expectedRevision", "members"],
+        "type": "object"
+      },
+      "ReplaceMatchStaffDto": {
+        "properties": {
+          "expectedRevision": {
+            "type": "number"
+          },
+          "expectedScheduleRevision": {
+            "type": "number"
+          },
+          "staff": {
+            "items": {
+              "$ref": "#/components/schemas/MatchStaffMemberDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["expectedScheduleRevision", "expectedRevision", "staff"],
         "type": "object"
       },
       "RequirementsDto": {
@@ -5522,6 +5757,61 @@
         "tags": ["Materials"]
       }
     },
+    "/api/v1/events/{eventId}/matches/{matchId}/staff": {
+      "put": {
+        "operationId": "replaceEventMatchStaff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "matchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceMatchStaffDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventSituationViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "replaceEventMatchStaff",
+        "tags": ["EventSituation"]
+      }
+    },
     "/api/v1/events/{eventId}/schedule": {
       "get": {
         "operationId": "getEventSchedule",
@@ -5718,6 +6008,43 @@
         ],
         "summary": "",
         "tags": ["event-scheduling"]
+      }
+    },
+    "/api/v1/events/{eventId}/situation": {
+      "get": {
+        "operationId": "getEventSituation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventSituationViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "getEventSituation",
+        "tags": ["EventSituation"]
       }
     },
     "/api/v1/events/{eventId}/supplies": {
@@ -6046,6 +6373,61 @@
         ],
         "summary": "addEventTeam",
         "tags": ["Teams"]
+      }
+    },
+    "/api/v1/events/{eventId}/teams/{eventTeamId}/roster": {
+      "put": {
+        "operationId": "replaceEventTeamRoster",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "eventTeamId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceEventTeamRosterDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventTeamRosterViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "replaceEventTeamRoster",
+        "tags": ["EventSituation"]
       }
     },
     "/api/v1/events/{eventId}/teams/{id}": {

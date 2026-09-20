@@ -634,6 +634,411 @@
   gap: 16px;
   margin-bottom: 16px;
 }
+
+.situation-panel {
+  padding: 24px;
+}
+.situation-panel > header {
+  padding: 0 0 20px;
+}
+.situation-panel > .ant-alert {
+  margin-bottom: 16px;
+}
+.situation-calendar-shell {
+  overflow: hidden;
+  border: 1px solid var(--hq-border);
+  border-radius: 18px;
+  background: #fff;
+}
+.situation-calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--hq-border);
+  background: #fafbf7;
+}
+.situation-calendar-toolbar span {
+  color: var(--hq-muted);
+  font-size: 12px;
+}
+.situation-calendar-toolbar h3 {
+  margin: 5px 0 0;
+  color: #2f4439;
+  font-size: 20px;
+}
+.situation-month-actions {
+  display: flex;
+  gap: 8px;
+}
+.situation-month-actions .ant-btn:first-child,
+.situation-month-actions .ant-btn:last-child {
+  width: 36px;
+  padding-inline: 0;
+  font-size: 21px;
+}
+.situation-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.situation-weekday {
+  padding: 11px 8px;
+  border-bottom: 1px solid var(--hq-border);
+  color: #758278;
+  font-size: 12px;
+  text-align: center;
+}
+.situation-day {
+  min-height: 126px;
+  padding: 9px;
+  border-right: 1px solid var(--hq-border);
+  border-bottom: 1px solid var(--hq-border);
+  background: #fff;
+}
+.situation-day:nth-child(7n) {
+  border-right: 0;
+}
+.situation-day.is-outside {
+  background: #fafbf8;
+  color: #a8b0aa;
+}
+.situation-day.has-matches {
+  background: #fdfdf9;
+}
+.situation-day-number {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: #5d6a62;
+  font-size: 12px;
+}
+.situation-day-number > span {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+}
+.situation-day-number > span.is-today {
+  border-radius: 50%;
+  background: #286f5d;
+  color: #fff;
+}
+.situation-day-number small {
+  color: #8a7350;
+}
+.situation-day-matches {
+  display: grid;
+  gap: 6px;
+}
+.situation-day-matches button {
+  width: 100%;
+  padding: 7px 8px;
+  overflow: hidden;
+  border: 0;
+  border-left: 3px solid #d39a44;
+  border-radius: 7px;
+  background: #fbefd9;
+  color: #4e402c;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.situation-day-matches button:hover,
+.situation-day-matches button:focus-visible {
+  background: #f8ddb0;
+}
+.situation-day-matches time {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.situation-day-matches button > span {
+  display: block;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.situation-day-matches b {
+  margin: 0 4px;
+  color: #9b7441;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.situation-modal .ant-modal-content {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 20px;
+}
+.situation-modal .ant-modal-header {
+  margin: 0;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--hq-border);
+}
+.situation-modal .ant-modal-close {
+  top: 15px;
+}
+.situation-detail {
+  max-height: min(76vh, 760px);
+  overflow-y: auto;
+  padding: 22px 24px 26px;
+}
+.situation-match-hero {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.7fr) minmax(0, 1.3fr);
+  gap: 24px;
+  padding: 20px;
+  border-radius: 16px;
+  background: #f4f7ef;
+}
+.situation-match-meta {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+}
+.situation-match-meta span,
+.situation-match-meta small {
+  color: #708076;
+  font-size: 12px;
+}
+.situation-match-meta strong {
+  color: #30473b;
+  font-size: 17px;
+}
+.situation-versus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-align: center;
+}
+.situation-versus strong {
+  overflow-wrap: anywhere;
+  color: #293e34;
+  font-size: 18px;
+}
+.situation-versus span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #e5bd76;
+  color: #533d22;
+  font-size: 11px;
+  font-weight: 700;
+}
+.situation-staff-section {
+  padding: 24px 0;
+  border-bottom: 1px solid var(--hq-border);
+}
+.situation-section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.situation-section-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #e7f0ea;
+  color: #39715f;
+}
+.situation-section-icon .shell-icon {
+  width: 19px;
+  height: 19px;
+}
+.situation-section-title h4,
+.situation-section-title p {
+  margin: 0;
+}
+.situation-section-title h4 {
+  font-size: 15px;
+}
+.situation-section-title p {
+  margin-top: 4px;
+  color: var(--hq-muted);
+  font-size: 11px;
+}
+.situation-staff-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.situation-staff-grid article {
+  display: grid;
+  gap: 5px;
+  padding: 13px;
+  border: 1px solid var(--hq-border);
+  border-radius: 12px;
+}
+.situation-staff-grid span {
+  color: #8b7044;
+  font-size: 11px;
+}
+.situation-staff-grid strong {
+  color: #304438;
+  font-size: 14px;
+}
+.situation-staff-grid small,
+.situation-staff-grid a {
+  color: #758177;
+  font-size: 11px;
+}
+.situation-rosters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding-top: 24px;
+}
+.situation-roster {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--hq-border);
+  border-radius: 15px;
+}
+.situation-roster-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--hq-border);
+}
+.situation-roster-heading span {
+  color: var(--hq-muted);
+  font-size: 10px;
+}
+.situation-roster-heading h4 {
+  margin: 4px 0 0;
+  color: #304438;
+  font-size: 15px;
+}
+.situation-person-list {
+  display: grid;
+}
+.situation-person {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid #eef0ea;
+}
+.situation-person:last-child {
+  border-bottom: 0;
+}
+.situation-person-number {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #f8ecd8;
+  color: #7b5d32;
+  font-size: 11px;
+  font-weight: 700;
+}
+.situation-person strong,
+.situation-person small {
+  display: block;
+}
+.situation-person strong {
+  color: #31443a;
+  font-size: 13px;
+}
+.situation-person small,
+.situation-person a {
+  margin-top: 3px;
+  color: #7b867e;
+  font-size: 10px;
+}
+.situation-inline-empty {
+  margin: 0;
+  padding: 18px;
+  border-radius: 11px;
+  background: #f7f8f4;
+  color: #7a857d;
+  font-size: 12px;
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .situation-day {
+    min-height: 100px;
+    padding: 6px;
+  }
+  .situation-day-matches button > span {
+    white-space: normal;
+  }
+  .situation-staff-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .situation-panel {
+    padding: 16px;
+  }
+  .situation-calendar-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .situation-month-actions {
+    width: 100%;
+  }
+  .situation-month-actions .ant-btn:nth-child(2) {
+    flex: 1;
+  }
+  .situation-weekday {
+    padding-inline: 2px;
+    font-size: 10px;
+  }
+  .situation-day {
+    min-height: 72px;
+    padding: 4px;
+  }
+  .situation-day-number {
+    margin-bottom: 4px;
+  }
+  .situation-day-number small {
+    display: none;
+  }
+  .situation-day-matches button {
+    min-height: 26px;
+    padding: 4px;
+    border-left-width: 2px;
+  }
+  .situation-day-matches time {
+    margin: 0;
+    font-size: 9px;
+  }
+  .situation-day-matches button > span {
+    display: none;
+  }
+  .situation-detail {
+    padding: 16px;
+  }
+  .situation-match-hero,
+  .situation-rosters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .situation-staff-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .situation-person {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .situation-person > a {
+    grid-column: 2;
+  }
+}
 .schedule-result-heading h3 {
   margin-bottom: 6px;
 }

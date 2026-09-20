@@ -14,11 +14,13 @@ import { HostingModule } from './modules/event-hosting-applications/hosting.modu
 import { TeamsModule } from './modules/teams/teams.module.js';
 import { SchedulingModule } from './modules/scheduling/scheduling.module.js';
 import { EventSuppliesModule } from './modules/event-supplies/event-supplies.module.js';
+import { EventSituationModule } from './modules/event-situation/event-situation.module.js';
 @Module({
   imports: [
     TeamsModule,
     SchedulingModule,
     EventSuppliesModule,
+    EventSituationModule,
     HealthModule,
     MaterialsModule,
     IndividualModule,

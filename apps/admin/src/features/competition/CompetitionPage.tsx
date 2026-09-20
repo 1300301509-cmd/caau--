@@ -8,6 +8,7 @@ import './competition.css';
 import { TeamManagementPanel } from './TeamManagementPanel';
 import { SchedulingPanel } from './SchedulingPanel';
 import { SuppliesPanel } from './SuppliesPanel';
+import { EventSituationPanel } from './EventSituationPanel';
 
 const modules = [
   {
@@ -42,13 +43,13 @@ const modules = [
   },
   {
     key: 'data',
-    title: '赛事数据',
-    english: 'EVENT DATA',
+    title: '赛事情况',
+    english: 'EVENT SITUATION',
     icon: 'chart',
-    note: '汇集比赛结果，清楚掌握赛事表现。',
-    columns: ['比赛场次', '对阵双方', '比赛结果', '球队数据', '球员数据'],
-    sections: ['比赛结果', '球队数据', '球员数据'],
-    description: '建议从比赛结果进入，再按球队、球员查看赛事数据。',
+    note: '通过日历查看比赛安排与场次人员。',
+    columns: ['比赛日期', '比赛场次', '对阵双方', '工作人员', '参赛人员'],
+    sections: ['赛事日历', '场次详情', '人员信息'],
+    description: '按日期定位比赛，再进入场次详情查看工作人员与参赛人员。',
   },
 ] as const;
 type ModuleKey = (typeof modules)[number]['key'];
@@ -214,6 +215,11 @@ export function CompetitionPage() {
         />
       ) : active === 'supplies' ? (
         <SuppliesPanel
+          key={`${auth.identity?.id}-${eventId}`}
+          eventId={eventId}
+        />
+      ) : active === 'data' ? (
+        <EventSituationPanel
           key={`${auth.identity?.id}-${eventId}`}
           eventId={eventId}
         />
