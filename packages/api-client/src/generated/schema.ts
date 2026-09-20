@@ -2037,7 +2037,7 @@ export interface components {
     };
     EventSupplyPhotoViewDto: {
       /** Format: date-time */
-      confirmedAt: Record<string, never> | null;
+      confirmedAt: string | null;
       expectedBytes: number;
       /** @enum {string} */
       extension: 'png' | 'jpg' | 'jpeg';

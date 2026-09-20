@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
+import { eventSuppliesBrowserTest } from './event-supplies-browser.integration.mjs';
 
 export async function eventSuppliesIntegration(t, context) {
   const { base, tokens, users, members, sql, runtime, session } = context;
@@ -187,6 +188,11 @@ export async function eventSuppliesIntegration(t, context) {
       );
       assert.equal(downloaded.status, 200);
       assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), bytes);
+      await eventSuppliesBrowserTest({
+        ...context,
+        eventId,
+        itemName: item.name,
+      });
       await call('a', 'POST', `event-supply-photos/${photo.id}/remove`, {
         expectedRevision: item.revision,
       });

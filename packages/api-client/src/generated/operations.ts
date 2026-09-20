@@ -1184,12 +1184,7 @@ export const operations = {
     responses: {
       '200': {
         properties: {
-          confirmedAt: {
-            format: 'date-time',
-            nullable: true,
-            type: 'object',
-            properties: {},
-          },
+          confirmedAt: { format: 'date-time', nullable: true, type: 'string' },
           expectedBytes: { type: 'integer' },
           extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
           id: { format: 'uuid', type: 'string' },
@@ -1254,12 +1249,7 @@ export const operations = {
     responses: {
       '200': {
         properties: {
-          confirmedAt: {
-            format: 'date-time',
-            nullable: true,
-            type: 'object',
-            properties: {},
-          },
+          confirmedAt: { format: 'date-time', nullable: true, type: 'string' },
           expectedBytes: { type: 'integer' },
           extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
           id: { format: 'uuid', type: 'string' },
@@ -1882,8 +1872,7 @@ export const operations = {
                   confirmedAt: {
                     format: 'date-time',
                     nullable: true,
-                    type: 'object',
-                    properties: {},
+                    type: 'string',
                   },
                   expectedBytes: { type: 'integer' },
                   extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
@@ -1962,8 +1951,7 @@ export const operations = {
                 confirmedAt: {
                   format: 'date-time',
                   nullable: true,
-                  type: 'object',
-                  properties: {},
+                  type: 'string',
                 },
                 expectedBytes: { type: 'integer' },
                 extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
@@ -2049,8 +2037,7 @@ export const operations = {
                 confirmedAt: {
                   format: 'date-time',
                   nullable: true,
-                  type: 'object',
-                  properties: {},
+                  type: 'string',
                 },
                 expectedBytes: { type: 'integer' },
                 extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
@@ -2174,12 +2161,7 @@ export const operations = {
     responses: {
       '200': {
         properties: {
-          confirmedAt: {
-            format: 'date-time',
-            nullable: true,
-            type: 'object',
-            properties: {},
-          },
+          confirmedAt: { format: 'date-time', nullable: true, type: 'string' },
           expectedBytes: { type: 'integer' },
           extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
           id: { format: 'uuid', type: 'string' },

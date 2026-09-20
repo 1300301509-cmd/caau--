@@ -919,7 +919,7 @@
           "confirmedAt": {
             "format": "date-time",
             "nullable": true,
-            "type": "object"
+            "type": "string"
           },
           "expectedBytes": {
             "type": "integer"

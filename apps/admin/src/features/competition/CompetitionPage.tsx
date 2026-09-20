@@ -7,6 +7,7 @@ import { NavIcon } from '../../components/admin-shell/NavIcon';
 import './competition.css';
 import { TeamManagementPanel } from './TeamManagementPanel';
 import { SchedulingPanel } from './SchedulingPanel';
+import { SuppliesPanel } from './SuppliesPanel';
 
 const modules = [
   {
@@ -208,6 +209,11 @@ export function CompetitionPage() {
         />
       ) : active === 'schedule' ? (
         <SchedulingPanel
+          key={`${auth.identity?.id}-${eventId}`}
+          eventId={eventId}
+        />
+      ) : active === 'supplies' ? (
+        <SuppliesPanel
           key={`${auth.identity?.id}-${eventId}`}
           eventId={eventId}
         />
