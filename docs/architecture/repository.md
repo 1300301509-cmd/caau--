@@ -64,3 +64,5 @@ CAAU-029在同一authorization模块和`InternalUser`/`Session`上追加正式�
 CAAU-033在既有`event-hosting-applications`版本化执行引擎中以`materialEventId`区分获批后的整套办赛材料，复用权限/附件/命令与两端协调逻辑；新创建/列表入口与承办申请隔离，材料审核不创建赛事。具体边界见[ADR-0013](../adr/0013-required-event-materials.md)。
 
 CAAU-034在同一hosting模块提供简表版本、只追加的线下合同确认和权威流程查询；小程序新增办赛二级导航及进度页。见[ADR-0014](../adr/0014-hosting-journey.md)。
+
+CAAU-041 新增 `teams` 模块，负责球队主档案、赛事资料快照及球队账号关系的读取权限；Web `features/competition/TeamManagementPanel` 仅消费生成客户端。创建和快照关联同事务，绝不通过主档案联表动态替代比赛资料。见 [ADR-0015](../adr/0015-team-event-snapshots.md)。

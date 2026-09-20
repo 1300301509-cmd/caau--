@@ -222,6 +222,15 @@
         "required": ["active"],
         "type": "object"
       },
+      "AddEventTeamDto": {
+        "properties": {
+          "teamId": {
+            "type": "string"
+          }
+        },
+        "required": ["teamId"],
+        "type": "object"
+      },
       "AuditDto": {
         "properties": {
           "action": {
@@ -522,6 +531,24 @@
           "eventId",
           "title"
         ],
+        "type": "object"
+      },
+      "CreateTeamDto": {
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/TeamProfileDto"
+          }
+        },
+        "required": ["id", "organizationId", "profile"],
         "type": "object"
       },
       "DeadlineDto": {
@@ -2611,6 +2638,120 @@
         ],
         "type": "object"
       },
+      "TeamOrganizationDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
+      "TeamProfileDto": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "clubName": {
+            "type": "string"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "district": {
+            "type": "string"
+          },
+          "introduction": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "province": {
+            "type": "string"
+          },
+          "shortName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "contactName",
+          "contactPhone",
+          "province",
+          "city",
+          "district",
+          "address",
+          "shortName",
+          "clubName",
+          "introduction",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "TeamViewDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "bound": {
+            "type": "boolean"
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/TeamProfileDto"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "sourceTeamRevision": {
+            "type": "number"
+          },
+          "teamId": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "teamId",
+          "organizationId",
+          "eventId",
+          "profile",
+          "active",
+          "revision",
+          "sourceTeamRevision",
+          "bound",
+          "canEdit",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "TemplateFileDto": {
         "properties": {
           "bytes": {
@@ -2720,6 +2861,21 @@
           "reviewerMemberId",
           "expectedRevision"
         ],
+        "type": "object"
+      },
+      "UpdateTeamDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "number"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/TeamProfileDto"
+          }
+        },
+        "required": ["expectedRevision", "active", "profile"],
         "type": "object"
       },
       "UploadCapabilitiesDto": {
@@ -4731,6 +4887,146 @@
         ],
         "summary": "",
         "tags": ["Materials"]
+      }
+    },
+    "/api/v1/events/{eventId}/teams": {
+      "get": {
+        "operationId": "listEventTeams",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeamViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "listEventTeams",
+        "tags": ["Teams"]
+      },
+      "post": {
+        "operationId": "addEventTeam",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddEventTeamDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "addEventTeam",
+        "tags": ["Teams"]
+      }
+    },
+    "/api/v1/events/{eventId}/teams/{id}": {
+      "put": {
+        "operationId": "updateEventTeam",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "updateEventTeam",
+        "tags": ["Teams"]
       }
     },
     "/api/v1/events/{id}": {
@@ -7756,6 +8052,151 @@
         },
         "summary": "Database connectivity; 1500ms application deadline, not schema readiness",
         "tags": ["system"]
+      }
+    },
+    "/api/v1/teams": {
+      "get": {
+        "operationId": "listTeams",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeamViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "listTeams",
+        "tags": ["Teams"]
+      },
+      "post": {
+        "operationId": "createTeam",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "createTeam",
+        "tags": ["Teams"]
+      }
+    },
+    "/api/v1/teams/organizations": {
+      "get": {
+        "operationId": "listTeamOrganizations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeamOrganizationDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "listTeamOrganizations",
+        "tags": ["Teams"]
+      }
+    },
+    "/api/v1/teams/{id}": {
+      "put": {
+        "operationId": "updateTeam",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "updateTeam",
+        "tags": ["Teams"]
       }
     },
     "/api/v1/templates/{id}/confirm": {

@@ -1,0 +1,29 @@
+# 球队管理操作与验证（CAAU-041）
+
+## 本地入口
+
+Web：`http://127.0.0.1:5175/competition?module=teams`。API：3000。登录后进入【比赛管理中心 → 球队管理】。
+
+1. 【球队档案】可在无账号、无赛事时录入球队。必填球队名称、负责人、联系方式、省份和城市。
+2. 选择当前赛事，在【本赛事球队】点击【从档案添加】；也可直接【录入球队】，原子创建档案并复制资料加入当前赛事。
+3. 两个页签分别编辑，保存不会同步到另一侧。修改档案后再次添加已关联球队，也不会覆盖原比赛资料。
+4. 档案可停用归档，赛事球队可标记退出，均保留原记录及版本。
+5. 409 表示版本变化或重试请求不一致；表单保留输入，请关闭窗口、刷新核对后重新修改。不能通过连续点击强行覆盖他人修改。
+
+总部超级管理员可管理全范围。普通经理需有效赛事授权；承办人员需有效赛事承办关系及办理授权。无权限时返回错误说明，不以空表代表加载成功。详见 [权限及产品范围](../product/team-management.md)。
+
+## 接口
+
+- `GET /api/v1/teams/organizations`：有权录入的机构。
+- `GET /api/v1/teams`、`POST /api/v1/teams`：授权档案列表、新建。
+- `PUT /api/v1/teams/:id`：档案修改及归档，携带 expectedRevision。
+- `GET /api/v1/events/:eventId/teams`、`POST /api/v1/events/:eventId/teams`：赛事独立列表与添加。
+- `PUT /api/v1/events/:eventId/teams/:id`：赛事专属资料及退出，携带 expectedRevision。
+
+契约由 Nest DTO 生成。创建 ID 作为幂等键；创建时可携带 eventId。前端只消费 @caau/api-client。不得通过数据库脚本给真实用户强制认领球队。
+
+## 本地验证
+
+固定工具链下先 `pnpm build`，再 `pnpm db:test`。后者只在独立 test 容器创建和清理自身临时数据库；包含 `scripts/teams.integration.mjs` 及使用实际 API 的 `scripts/teams-browser.integration.mjs`。需要3000/4173空闲，不能复用已有业务服务。
+
+按 [数据库运行手册](database-contract.md) 使用 `pnpm db:migrate:deploy` 追加迁移，禁止 reset。迁移后 `pnpm db:api` 恢复 API；Vite5175继续消费新接口。未新增任何本机演示球队。邀请认领、小程序页面、正式微信登录与真机结果另验，不将本地数据库或浏览器测试计为微信验收。

@@ -11,8 +11,15 @@ import { MaterialsModule } from './modules/materials/materials.module.js';
 
 import { IndividualModule } from './modules/individual-materials/individual.module.js';
 import { HostingModule } from './modules/event-hosting-applications/hosting.module.js';
+import { TeamsModule } from './modules/teams/teams.module.js';
 @Module({
-  imports: [HealthModule, MaterialsModule, IndividualModule, HostingModule],
+  imports: [
+    TeamsModule,
+    HealthModule,
+    MaterialsModule,
+    IndividualModule,
+    HostingModule,
+  ],
 })
 export class AppModule {
   static register(

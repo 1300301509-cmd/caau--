@@ -43,6 +43,8 @@ enum SessionClientType {
 }
 
 model InternalUser {
+  teamMemberships TeamMembership[]
+
   id                     String                         @id @default(uuid()) @db.Uuid
   displayName            String                         @db.VarChar(80)
   active                 Boolean                        @default(true)
@@ -59,6 +61,8 @@ model InternalUser {
 }
 
 model Organization {
+  teams Team[]
+
   id                         String                           @id @default(uuid()) @db.Uuid
   name                       String                           @db.VarChar(120)
   members                    OrganizationMember[]
@@ -181,6 +185,8 @@ model AuditRecord {
 }
 
 model Event {
+  teams EventTeam[]
+
   materialDossier EventHostingApplication? @relation("EventMaterialDossier")
   id                    String                        @id @db.Uuid
   scope                 EventScope                    @relation(fields: [id], references: [id], onDelete: Restrict)
@@ -757,4 +763,70 @@ model HostingPermit {
   confirmedBy String @db.Uuid
   confirmedAt DateTime @default(now()) @db.Timestamptz(3)
   key String @unique @db.Uuid
+}
+
+model Team {
+  id String @id @db.Uuid
+  organizationId String @db.Uuid
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  profile Json
+  active Boolean @default(true)
+  revision Int @default(1)
+  creationHash String @db.VarChar(64)
+  createdBy String @db.Uuid
+  updatedBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  eventTeams EventTeam[]
+  members TeamMembership[]
+  versions TeamVersion[]
+  @@index([organizationId])
+}
+model EventTeam {
+  id String @id @db.Uuid
+  eventId String @db.Uuid
+  teamId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  profile Json
+  sourceTeamRevision Int
+  active Boolean @default(true)
+  revision Int @default(1)
+  createdBy String @db.Uuid
+  updatedBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  versions EventTeamVersion[]
+  @@unique([eventId, teamId])
+}
+model TeamMembership {
+  id String @id @db.Uuid
+  teamId String @db.Uuid
+  userId String @db.Uuid
+  active Boolean @default(true)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  user InternalUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@unique([teamId, userId])
+}
+model TeamVersion {
+  id String @id @db.Uuid
+  teamId String @db.Uuid
+  team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  profile Json
+  active Boolean
+  revision Int
+  actorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([teamId, revision])
+}
+model EventTeamVersion {
+  id String @id @db.Uuid
+  eventTeamId String @db.Uuid
+  eventTeam EventTeam @relation(fields: [eventTeamId], references: [id], onDelete: Restrict)
+  profile Json
+  active Boolean
+  revision Int
+  actorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([eventTeamId, revision])
 }

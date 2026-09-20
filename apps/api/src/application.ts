@@ -32,7 +32,7 @@ export async function createApplication(
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: config.origins,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
     credentials: true,
   });

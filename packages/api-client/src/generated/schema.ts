@@ -546,6 +546,41 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/events/{eventId}/teams': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listEventTeams */
+    get: operations['listEventTeams'];
+    put?: never;
+    /** addEventTeam */
+    post: operations['addEventTeam'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/teams/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** updateEventTeam */
+    put: operations['updateEventTeam'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events/{id}': {
     parameters: {
       query?: never;
@@ -1300,6 +1335,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/teams': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listTeams */
+    get: operations['listTeams'];
+    put?: never;
+    /** createTeam */
+    post: operations['createTeam'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/teams/organizations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listTeamOrganizations */
+    get: operations['listTeamOrganizations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/teams/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** updateTeam */
+    put: operations['updateTeam'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/templates/{id}/confirm': {
     parameters: {
       query?: never;
@@ -1542,6 +1629,9 @@ export interface components {
     ActiveDto: {
       active: boolean;
     };
+    AddEventTeamDto: {
+      teamId: string;
+    };
     AuditDto: {
       action: string;
       actorId: string | null;
@@ -1644,6 +1734,12 @@ export interface components {
       /** Format: uuid */
       reviewerMemberId: string;
       title: string;
+    };
+    CreateTeamDto: {
+      eventId?: string;
+      id: string;
+      organizationId: string;
+      profile: components['schemas']['TeamProfileDto'];
     };
     DeadlineDto: {
       /** Format: date-time */
@@ -2323,6 +2419,36 @@ export interface components {
       templateFiles: components['schemas']['TemplateFileDto'][];
       title: string;
     };
+    TeamOrganizationDto: {
+      id: string;
+      name: string;
+    };
+    TeamProfileDto: {
+      address: string;
+      city: string;
+      clubName: string;
+      contactName: string;
+      contactPhone: string;
+      district: string;
+      introduction: string;
+      name: string;
+      notes: string;
+      province: string;
+      shortName: string;
+    };
+    TeamViewDto: {
+      active: boolean;
+      bound: boolean;
+      canEdit: boolean;
+      eventId: string;
+      id: string;
+      organizationId: string;
+      profile: components['schemas']['TeamProfileDto'];
+      revision: number;
+      sourceTeamRevision: number;
+      teamId: string;
+      updatedAt: string;
+    };
     TemplateFileDto: {
       bytes: number;
       extension: string;
@@ -2358,6 +2484,11 @@ export interface components {
       organizationId: string;
       /** Format: uuid */
       reviewerMemberId: string;
+    };
+    UpdateTeamDto: {
+      active: boolean;
+      expectedRevision: number;
+      profile: components['schemas']['TeamProfileDto'];
     };
     UploadCapabilitiesDto: {
       formats: string[];
@@ -4382,6 +4513,78 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  listEventTeams: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TeamViewDto'][];
+        };
+      };
+    };
+  };
+  addEventTeam: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AddEventTeamDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TeamViewDto'];
+        };
+      };
+    };
+  };
+  updateEventTeam: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateTeamDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TeamViewDto'];
+        };
       };
     };
   };
@@ -7171,6 +7374,92 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['NotReadyDto'];
+        };
+      };
+    };
+  };
+  listTeams: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TeamViewDto'][];
+        };
+      };
+    };
+  };
+  createTeam: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateTeamDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TeamViewDto'];
+        };
+      };
+    };
+  };
+  listTeamOrganizations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TeamOrganizationDto'][];
+        };
+      };
+    };
+  };
+  updateTeam: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateTeamDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TeamViewDto'];
         };
       };
     };

@@ -5,6 +5,7 @@ import { client } from '../materials/client';
 import { useAuth } from '../auth/AuthContext';
 import { NavIcon } from '../../components/admin-shell/NavIcon';
 import './competition.css';
+import { TeamManagementPanel } from './TeamManagementPanel';
 
 const modules = [
   {
@@ -199,62 +200,69 @@ export function CompetitionPage() {
           </a>
         ))}
       </nav>
-      <div className="competition-workspace">
-        <section
-          className="competition-panel"
-          aria-labelledby="competition-module-title"
-        >
-          <header>
-            <div>
-              <span className="competition-kicker">{module.english}</span>
-              <h2 id="competition-module-title">{module.title}</h2>
-              <p>{module.note}</p>
+      {active === 'teams' ? (
+        <TeamManagementPanel
+          key={`${auth.identity?.id}-${eventId}`}
+          eventId={eventId}
+        />
+      ) : (
+        <div className="competition-workspace">
+          <section
+            className="competition-panel"
+            aria-labelledby="competition-module-title"
+          >
+            <header>
+              <div>
+                <span className="competition-kicker">{module.english}</span>
+                <h2 id="competition-module-title">{module.title}</h2>
+                <p>{module.note}</p>
+              </div>
+              <span className="competition-preview-badge">布局预览</span>
+            </header>
+            <div className="competition-table-scroll">
+              <table>
+                <caption className="competition-caption">
+                  建议列表布局 · 字段待确认
+                </caption>
+                <thead>
+                  <tr>
+                    {module.columns.map((column) => (
+                      <th key={column} scope="col">
+                        {column}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody />
+              </table>
             </div>
-            <span className="competition-preview-badge">布局预览</span>
-          </header>
-          <div className="competition-table-scroll">
-            <table>
-              <caption className="competition-caption">
-                建议列表布局 · 字段待确认
-              </caption>
-              <thead>
-                <tr>
-                  {module.columns.map((column) => (
-                    <th key={column} scope="col">
-                      {column}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody />
-            </table>
-          </div>
-          <div className="competition-empty">
-            <span>
-              <NavIcon name={module.icon} />
-            </span>
-            <h3>{module.title}工作区</h3>
-            <p>页面结构已预留，具体功能将按后续需求完善。</p>
-            <small>当前展示为布局方案，未加载该模块的业务数据。</small>
-          </div>
-        </section>
-        <aside className="competition-plan" aria-label="模块布局说明">
-          <span className="competition-kicker">模块规划</span>
-          <h3>这一页如何展开</h3>
-          <p>{module.description}</p>
-          <ol>
-            {module.sections.map((section, index) => (
-              <li key={section}>
-                <span>0{index + 1}</span>
-                {section}
-              </li>
-            ))}
-          </ol>
-          <div className="competition-plan-note">
-            先确定模块布局，再逐项完善操作流程。
-          </div>
-        </aside>
-      </div>
+            <div className="competition-empty">
+              <span>
+                <NavIcon name={module.icon} />
+              </span>
+              <h3>{module.title}工作区</h3>
+              <p>页面结构已预留，具体功能将按后续需求完善。</p>
+              <small>当前展示为布局方案，未加载该模块的业务数据。</small>
+            </div>
+          </section>
+          <aside className="competition-plan" aria-label="模块布局说明">
+            <span className="competition-kicker">模块规划</span>
+            <h3>这一页如何展开</h3>
+            <p>{module.description}</p>
+            <ol>
+              {module.sections.map((section, index) => (
+                <li key={section}>
+                  <span>0{index + 1}</span>
+                  {section}
+                </li>
+              ))}
+            </ol>
+            <div className="competition-plan-note">
+              先确定模块布局，再逐项完善操作流程。
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
