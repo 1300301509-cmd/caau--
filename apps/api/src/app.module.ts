@@ -13,10 +13,12 @@ import { IndividualModule } from './modules/individual-materials/individual.modu
 import { HostingModule } from './modules/event-hosting-applications/hosting.module.js';
 import { TeamsModule } from './modules/teams/teams.module.js';
 import { SchedulingModule } from './modules/scheduling/scheduling.module.js';
+import { EventSuppliesModule } from './modules/event-supplies/event-supplies.module.js';
 @Module({
   imports: [
     TeamsModule,
     SchedulingModule,
+    EventSuppliesModule,
     HealthModule,
     MaterialsModule,
     IndividualModule,

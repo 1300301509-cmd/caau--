@@ -455,6 +455,63 @@
         "required": ["eventId", "key"],
         "type": "object"
       },
+      "CreateEventSupplyItemDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "notes": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "quantity": {
+            "maximum": 1000000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": ["id", "name", "quantity"],
+        "type": "object"
+      },
+      "CreateEventSupplyPhotoDto": {
+        "properties": {
+          "expectedBytes": {
+            "maximum": 10485760,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "extension": {
+            "enum": ["png", "jpg", "jpeg"],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "originalName": {
+            "maxLength": 180,
+            "type": "string"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "originalName",
+          "extension",
+          "expectedBytes",
+          "sha256"
+        ],
+        "type": "object"
+      },
       "CreateHostingApplicationDto": {
         "properties": {
           "applicantOrganizationId": {
@@ -753,6 +810,144 @@
           }
         },
         "required": ["name", "description"],
+        "type": "object"
+      },
+      "EventSupplyHistoryDto": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "action",
+          "snapshot",
+          "actorId",
+          "occurredAt"
+        ],
+        "type": "object"
+      },
+      "EventSupplyItemViewDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/EventSupplyPhotoViewDto"
+            },
+            "type": "array"
+          },
+          "quantity": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "revision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "status": {
+            "enum": ["TO_PREPARE", "PREPARING", "READY", "SHORTAGE"],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "eventId",
+          "name",
+          "quantity",
+          "notes",
+          "status",
+          "revision",
+          "photos",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "EventSupplyPhotoViewDto": {
+        "properties": {
+          "confirmedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "object"
+          },
+          "expectedBytes": {
+            "type": "integer"
+          },
+          "extension": {
+            "enum": ["png", "jpg", "jpeg"],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "state": {
+            "enum": ["PENDING", "CONFIRMED"],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "originalName",
+          "extension",
+          "expectedBytes",
+          "state",
+          "confirmedAt"
+        ],
         "type": "object"
       },
       "EventViewDto": {
@@ -2267,6 +2462,16 @@
         "required": ["userId", "organizationId", "role"],
         "type": "object"
       },
+      "MutateEventSupplyPhotoDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": ["expectedRevision"],
+        "type": "object"
+      },
       "NotReadyDto": {
         "properties": {
           "code": {
@@ -3080,6 +3285,33 @@
           "reviewerMemberId",
           "expectedRevision"
         ],
+        "type": "object"
+      },
+      "UpdateEventSupplyItemDto": {
+        "properties": {
+          "expectedRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "notes": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "quantity": {
+            "maximum": 1000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "status": {
+            "enum": ["TO_PREPARE", "PREPARING", "READY", "SHORTAGE"],
+            "type": "string"
+          }
+        },
+        "required": ["expectedRevision", "name", "quantity", "notes", "status"],
         "type": "object"
       },
       "UpdateTeamDto": {
@@ -5011,6 +5243,188 @@
         "tags": ["event-hosting-applications"]
       }
     },
+    "/api/v1/event-supply-photos/{id}/confirm": {
+      "post": {
+        "operationId": "confirmEventSupplyPhoto",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutateEventSupplyPhotoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventSupplyPhotoViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "confirmEventSupplyPhoto",
+        "tags": ["EventSupplies"]
+      }
+    },
+    "/api/v1/event-supply-photos/{id}/content": {
+      "get": {
+        "operationId": "EventSuppliesController_download",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["EventSupplies"]
+      },
+      "put": {
+        "operationId": "EventSuppliesController_upload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["EventSupplies"]
+      }
+    },
+    "/api/v1/event-supply-photos/{id}/remove": {
+      "post": {
+        "operationId": "removeEventSupplyPhoto",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutateEventSupplyPhotoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventSupplyPhotoViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "removeEventSupplyPhoto",
+        "tags": ["EventSupplies"]
+      }
+    },
     "/api/v1/events": {
       "get": {
         "operationId": "listEvents",
@@ -5304,6 +5718,249 @@
         ],
         "summary": "",
         "tags": ["event-scheduling"]
+      }
+    },
+    "/api/v1/events/{eventId}/supplies": {
+      "get": {
+        "operationId": "listEventSupplies",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventSupplyItemViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "listEventSupplies",
+        "tags": ["EventSupplies"]
+      },
+      "post": {
+        "operationId": "createEventSupply",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventSupplyItemDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventSupplyItemViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "createEventSupply",
+        "tags": ["EventSupplies"]
+      }
+    },
+    "/api/v1/events/{eventId}/supplies/{id}": {
+      "put": {
+        "operationId": "updateEventSupply",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEventSupplyItemDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventSupplyItemViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "updateEventSupply",
+        "tags": ["EventSupplies"]
+      }
+    },
+    "/api/v1/events/{eventId}/supplies/{id}/history": {
+      "get": {
+        "operationId": "getEventSupplyHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventSupplyHistoryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "getEventSupplyHistory",
+        "tags": ["EventSupplies"]
+      }
+    },
+    "/api/v1/events/{eventId}/supplies/{id}/photos": {
+      "post": {
+        "operationId": "createEventSupplyPhoto",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventSupplyPhotoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventSupplyPhotoViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "createEventSupplyPhoto",
+        "tags": ["EventSupplies"]
       }
     },
     "/api/v1/events/{eventId}/teams": {

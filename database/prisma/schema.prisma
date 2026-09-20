@@ -52,6 +52,19 @@ enum ScheduleStatus {
   PUBLISHED
 }
 
+enum EventSupplyStatus {
+  TO_PREPARE
+  PREPARING
+  READY
+  SHORTAGE
+}
+
+enum EventSupplyPhotoState {
+  PENDING
+  CONFIRMED
+  REMOVED
+}
+
 model InternalUser {
   teamMemberships TeamMembership[]
 
@@ -197,6 +210,7 @@ model AuditRecord {
 model Event {
   teams EventTeam[]
   schedule EventSchedule?
+  supplies EventSupplyItem[]
 
   materialDossier EventHostingApplication? @relation("EventMaterialDossier")
   id                    String                        @id @db.Uuid
@@ -248,6 +262,56 @@ model EventScheduleVersion {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@unique([eventId, revision])
+}
+
+model EventSupplyItem {
+  id String @id @db.Uuid
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  name String @db.VarChar(120)
+  quantity Int
+  notes String @default("") @db.VarChar(2000)
+  status EventSupplyStatus @default(TO_PREPARE)
+  revision Int @default(1)
+  createdBy String @db.Uuid
+  updatedBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  photos EventSupplyPhoto[]
+  history EventSupplyHistory[]
+
+  @@index([eventId, createdAt])
+}
+
+model EventSupplyPhoto {
+  id String @id @db.Uuid
+  itemId String @db.Uuid
+  item EventSupplyItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  originalName String @db.VarChar(180)
+  extension String @db.VarChar(8)
+  expectedBytes Int
+  sha256 String @db.Char(64)
+  objectKey String @unique @db.Uuid
+  state EventSupplyPhotoState @default(PENDING)
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  confirmedAt DateTime? @db.Timestamptz(3)
+  removedAt DateTime? @db.Timestamptz(3)
+
+  @@index([itemId, state])
+}
+
+model EventSupplyHistory {
+  id String @id @db.Uuid
+  itemId String @db.Uuid
+  item EventSupplyItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  revision Int
+  action String @db.VarChar(32)
+  snapshot Json
+  actorId String @db.Uuid
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([itemId, revision])
 }
 
 model HostingApplicationHandlerGrant {

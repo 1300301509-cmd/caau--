@@ -530,6 +530,56 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/event-supply-photos/{id}/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** confirmEventSupplyPhoto */
+    post: operations['confirmEventSupplyPhoto'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/event-supply-photos/{id}/content': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['EventSuppliesController_download'];
+    put: operations['EventSuppliesController_upload'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/event-supply-photos/{id}/remove': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** removeEventSupplyPhoto */
+    post: operations['removeEventSupplyPhoto'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events': {
     parameters: {
       query?: never;
@@ -604,6 +654,75 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations['publishEventSchedule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/supplies': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listEventSupplies */
+    get: operations['listEventSupplies'];
+    put?: never;
+    /** createEventSupply */
+    post: operations['createEventSupply'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/supplies/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** updateEventSupply */
+    put: operations['updateEventSupply'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/supplies/{id}/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** getEventSupplyHistory */
+    get: operations['getEventSupplyHistory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/supplies/{id}/photos': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** createEventSupplyPhoto */
+    post: operations['createEventSupplyPhoto'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1767,6 +1886,22 @@ export interface components {
       /** Format: uuid */
       key: string;
     };
+    CreateEventSupplyItemDto: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      notes?: string;
+      quantity: number;
+    };
+    CreateEventSupplyPhotoDto: {
+      expectedBytes: number;
+      /** @enum {string} */
+      extension: 'png' | 'jpg' | 'jpeg';
+      /** Format: uuid */
+      id: string;
+      originalName: string;
+      sha256: string;
+    };
     CreateHostingApplicationDto: {
       /** Format: uuid */
       applicantOrganizationId: string;
@@ -1865,6 +2000,52 @@ export interface components {
     EventInputDto: {
       description: string;
       name: string;
+    };
+    EventSupplyHistoryDto: {
+      action: string;
+      /** Format: uuid */
+      actorId: string;
+      /** Format: uuid */
+      id: string;
+      /** Format: date-time */
+      occurredAt: string;
+      revision: number;
+      snapshot: {
+        [key: string]: unknown;
+      };
+    };
+    EventSupplyItemViewDto: {
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: uuid */
+      createdBy: string;
+      /** Format: uuid */
+      eventId: string;
+      /** Format: uuid */
+      id: string;
+      name: string;
+      notes: string;
+      photos: components['schemas']['EventSupplyPhotoViewDto'][];
+      quantity: number;
+      revision: number;
+      /** @enum {string} */
+      status: 'TO_PREPARE' | 'PREPARING' | 'READY' | 'SHORTAGE';
+      /** Format: date-time */
+      updatedAt: string;
+      /** Format: uuid */
+      updatedBy: string;
+    };
+    EventSupplyPhotoViewDto: {
+      /** Format: date-time */
+      confirmedAt: Record<string, never> | null;
+      expectedBytes: number;
+      /** @enum {string} */
+      extension: 'png' | 'jpg' | 'jpeg';
+      /** Format: uuid */
+      id: string;
+      originalName: string;
+      /** @enum {string} */
+      state: 'PENDING' | 'CONFIRMED';
     };
     EventViewDto: {
       /** Format: date-time */
@@ -2367,6 +2548,9 @@ export interface components {
       /** Format: uuid */
       userId: string;
     };
+    MutateEventSupplyPhotoDto: {
+      expectedRevision: number;
+    };
     NotReadyDto: {
       /** @enum {string} */
       code: 'DATABASE_UNAVAILABLE';
@@ -2607,6 +2791,14 @@ export interface components {
       organizationId: string;
       /** Format: uuid */
       reviewerMemberId: string;
+    };
+    UpdateEventSupplyItemDto: {
+      expectedRevision: number;
+      name: string;
+      notes: string;
+      quantity: number;
+      /** @enum {string} */
+      status: 'TO_PREPARE' | 'PREPARING' | 'READY' | 'SHORTAGE';
     };
     UpdateTeamDto: {
       active: boolean;
@@ -4527,6 +4719,105 @@ export interface operations {
       };
     };
   };
+  confirmEventSupplyPhoto: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MutateEventSupplyPhotoDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSupplyPhotoViewDto'];
+        };
+      };
+    };
+  };
+  EventSuppliesController_download: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+    };
+  };
+  EventSuppliesController_upload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/octet-stream': string;
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: uuid */
+            id?: string;
+          };
+        };
+      };
+    };
+  };
+  removeEventSupplyPhoto: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MutateEventSupplyPhotoDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSupplyPhotoViewDto'];
+        };
+      };
+    };
+  };
   listEvents: {
     parameters: {
       query?: never;
@@ -4761,6 +5052,126 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  listEventSupplies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSupplyItemViewDto'][];
+        };
+      };
+    };
+  };
+  createEventSupply: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateEventSupplyItemDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSupplyItemViewDto'];
+        };
+      };
+    };
+  };
+  updateEventSupply: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateEventSupplyItemDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSupplyItemViewDto'];
+        };
+      };
+    };
+  };
+  getEventSupplyHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSupplyHistoryDto'][];
+        };
+      };
+    };
+  };
+  createEventSupplyPhoto: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateEventSupplyPhotoDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventSupplyPhotoViewDto'];
+        };
       };
     };
   };

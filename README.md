@@ -1,5 +1,7 @@
 # CAAU 正式工程
 
+CAAU-043 已完成【比赛管理中心 → 物料管理】后端本地交付：承办方按赛事维护名称、数量、照片和准备进度，总部只读追踪；当前不含小程序页面或总部审核动作。见 [赛事执行物料规则](docs/product/event-supplies.md)和[接口手册](docs/runbooks/event-supplies.md)。
+
 CAAU-042 新增【比赛管理中心 → 赛程编排】：单循环与单败淘汰候选赛程、时间/场地/休息约束、人工调整、冲突校验和版本化发布；未来智能体复用同一接口。见 [赛程编排操作](docs/runbooks/event-scheduling.md)，实际验证状态见 roadmap。
 
 CAAU-041 新增【比赛管理中心 → 球队管理】：手工录入球队档案与本赛事独立资料，任何一侧修改不自动同步；账号关系基础已预留，邀请认领及小程序球队页面后续实现。见 [球队管理操作](docs/runbooks/team-management.md)，实际验证状态见 roadmap。
