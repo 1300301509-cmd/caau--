@@ -52,12 +52,52 @@ export async function schedulingBrowserTest({ config, tokens, eventId }) {
       tokens.super,
     );
     await page.reload();
+    await expect(page.locator('.schedule-week')).toBeVisible({
+      timeout: 15000,
+    });
+    const settings = page.locator('.schedule-settings');
+    if ((await settings.getAttribute('open')) === null) {
+      await settings.locator('> summary').click();
+    }
     const generate = page.getByRole('button', {
       name: /按当前条件重新生成|生成候选赛程/,
     });
     await expect(generate).toBeEnabled({ timeout: 15000 });
+    await page.getByLabel('每日结束', { exact: true }).fill('09:10');
     await generate.click();
-    await expect(page.getByRole('row')).toHaveCount(7);
+    await expect(
+      page.locator('.schedule-pending .schedule-match-card'),
+    ).toHaveCount(6);
+    await expect(page.getByRole('button', { name: '发布赛程' })).toBeDisabled();
+    if ((await settings.getAttribute('open')) === null) {
+      await settings.locator('> summary').click();
+    }
+    await page.getByLabel('每日结束', { exact: true }).fill('18:00');
+    await generate.click();
+    await expect(
+      page.locator('.schedule-week-table .schedule-match-card'),
+    ).toHaveCount(6);
+    const range = await page.getByTestId('schedule-week-range').innerText();
+    await expect(page.locator('.schedule-week-table thead th')).toHaveCount(8);
+    await page.getByRole('button', { name: '下一周', exact: true }).click();
+    await expect(
+      page.locator('.schedule-week-table .schedule-match-card'),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText('本周暂无比赛', { exact: false }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: '上一周', exact: true }).click();
+    await expect(page.getByTestId('schedule-week-range')).toHaveText(range);
+    await expect(
+      page.locator('.schedule-week-table .schedule-match-card'),
+    ).toHaveCount(6);
+    await page
+      .locator('.schedule-week-table .schedule-match-card')
+      .first()
+      .click();
+    await expect(page.getByRole('dialog')).toContainText('调整比赛时间与场地');
+    await page.getByRole('button', { name: '保存调整' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByText('当前有')).toHaveCount(0);
     await page.getByRole('button', { name: '发布赛程' }).click();
     await page
@@ -66,12 +106,28 @@ export async function schedulingBrowserTest({ config, tokens, eventId }) {
       .click();
     await expect(page.getByText(/已发布 · V/)).toBeVisible();
     await expect(page.locator('.ant-modal-confirm')).toHaveCount(0);
+    if ((await settings.getAttribute('open')) !== null) {
+      await settings.locator('> summary').click();
+    }
     await mkdir('.local/caau-042', { recursive: true });
     await page.screenshot({
       path: '.local/caau-042/schedule-desktop.png',
       fullPage: true,
     });
     await page.setViewportSize({ width: 390, height: 844 });
+    const mobileSchedule = await page
+      .locator('.schedule-week-scroll')
+      .evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        cardWidth:
+          element.querySelector('.schedule-match-card')?.getBoundingClientRect()
+            .width ?? 0,
+      }));
+    expect(mobileSchedule.scrollWidth).toBeGreaterThan(
+      mobileSchedule.clientWidth,
+    );
+    expect(mobileSchedule.cardWidth).toBeGreaterThanOrEqual(100);
     await expect
       .poll(() =>
         page.evaluate(

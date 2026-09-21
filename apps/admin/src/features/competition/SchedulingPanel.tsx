@@ -10,12 +10,12 @@ import {
   Modal,
   Select,
   Space,
-  Table,
   Tag,
 } from 'antd';
 import { ApiError, type components } from '@caau/api-client';
 import { client } from '../materials/client';
 import { useAuth } from '../auth/AuthContext';
+import { ScheduleWeek } from './ScheduleWeek';
 
 type Schedule = components['schemas']['ScheduleViewDto'];
 type EventTeam = components['schemas']['TeamViewDto'];
@@ -242,112 +242,120 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
         />
       )}
       <div className="schedule-layout">
-        <Form<FormValues>
-          form={form}
-          layout="vertical"
-          className="schedule-config"
-          disabled={state.loading || state.saving}
-          onFinish={() => void generate()}
-        >
-          <h3>编排条件</h3>
-          <Form.Item
-            name="format"
-            label="比赛方式"
-            rules={[{ required: true }]}
+        <details className="schedule-settings" open={!schedule?.exists}>
+          <summary>编排条件 · 点击展开或收起</summary>
+          <Form<FormValues>
+            form={form}
+            layout="vertical"
+            className="schedule-config"
+            disabled={state.loading || state.saving}
+            onFinish={() => void generate()}
           >
-            <Select
-              options={[
-                { value: 'ROUND_ROBIN', label: '单循环' },
-                { value: 'SINGLE_ELIMINATION', label: '单败淘汰' },
+            <h3>编排条件</h3>
+            <Form.Item
+              name="format"
+              label="比赛方式"
+              rules={[{ required: true }]}
+            >
+              <Select
+                options={[
+                  { value: 'ROUND_ROBIN', label: '单循环' },
+                  { value: 'SINGLE_ELIMINATION', label: '单败淘汰' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item
+              name="teamIds"
+              label="参赛球队"
+              rules={[
+                {
+                  required: true,
+                  type: 'array',
+                  min: 2,
+                  message: '至少选择两支球队',
+                },
               ]}
-            />
-          </Form.Item>
-          <Form.Item
-            name="teamIds"
-            label="参赛球队"
-            rules={[
-              {
-                required: true,
-                type: 'array',
-                min: 2,
-                message: '至少选择两支球队',
-              },
-            ]}
-          >
-            <Checkbox.Group
-              options={teamOptions}
-              className="schedule-team-options"
-            />
-          </Form.Item>
-          <Form.Item
-            name="venues"
-            label="比赛场地"
-            rules={[{ required: true, message: '请至少填写一个场地' }]}
-          >
-            <Select
-              mode="tags"
-              tokenSeparators={[',', '，']}
-              placeholder="输入场地后回车"
-            />
-          </Form.Item>
-          <div className="schedule-form-grid">
-            <Form.Item
-              name="startDate"
-              label="开始日期"
-              rules={[{ required: true }]}
             >
-              <Input type="date" />
+              <Checkbox.Group
+                options={teamOptions}
+                className="schedule-team-options"
+              />
             </Form.Item>
             <Form.Item
-              name="endDate"
-              label="结束日期"
-              rules={[{ required: true }]}
+              name="venues"
+              label="比赛场地"
+              rules={[{ required: true, message: '请至少填写一个场地' }]}
             >
-              <Input type="date" />
+              <Select
+                mode="tags"
+                tokenSeparators={[',', '，']}
+                placeholder="输入场地后回车"
+              />
             </Form.Item>
-            <Form.Item
-              name="dailyStart"
-              label="每日开始"
-              rules={[{ required: true }]}
+            <div className="schedule-form-grid">
+              <Form.Item
+                name="startDate"
+                label="开始日期"
+                rules={[{ required: true }]}
+              >
+                <Input type="date" />
+              </Form.Item>
+              <Form.Item
+                name="endDate"
+                label="结束日期"
+                rules={[{ required: true }]}
+              >
+                <Input type="date" />
+              </Form.Item>
+              <Form.Item
+                name="dailyStart"
+                label="每日开始"
+                rules={[{ required: true }]}
+              >
+                <Input type="time" />
+              </Form.Item>
+              <Form.Item
+                name="dailyEnd"
+                label="每日结束"
+                rules={[{ required: true }]}
+              >
+                <Input type="time" />
+              </Form.Item>
+              <Form.Item
+                name="durationMinutes"
+                label="每场分钟"
+                rules={[{ required: true }]}
+              >
+                <InputNumber min={10} max={240} />
+              </Form.Item>
+              <Form.Item
+                name="bufferMinutes"
+                label="换场缓冲"
+                rules={[{ required: true }]}
+              >
+                <InputNumber min={0} max={120} />
+              </Form.Item>
+              <Form.Item
+                name="minRestMinutes"
+                label="最短休息"
+                rules={[{ required: true }]}
+              >
+                <InputNumber min={0} max={1440} />
+              </Form.Item>
+            </div>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={state.saving}
+              block
             >
-              <Input type="time" />
-            </Form.Item>
-            <Form.Item
-              name="dailyEnd"
-              label="每日结束"
-              rules={[{ required: true }]}
-            >
-              <Input type="time" />
-            </Form.Item>
-            <Form.Item
-              name="durationMinutes"
-              label="每场分钟"
-              rules={[{ required: true }]}
-            >
-              <InputNumber min={10} max={240} />
-            </Form.Item>
-            <Form.Item
-              name="bufferMinutes"
-              label="换场缓冲"
-              rules={[{ required: true }]}
-            >
-              <InputNumber min={0} max={120} />
-            </Form.Item>
-            <Form.Item
-              name="minRestMinutes"
-              label="最短休息"
-              rules={[{ required: true }]}
-            >
-              <InputNumber min={0} max={1440} />
-            </Form.Item>
-          </div>
-          <Button type="primary" htmlType="submit" loading={state.saving} block>
-            {schedule?.exists ? '按当前条件重新生成' : '生成候选赛程'}
-          </Button>
-          <p className="schedule-helper">
-            重新生成会建立新版本。已发布方案会回到待发布状态，原发布版本继续保留。
-          </p>
-        </Form>
+              {schedule?.exists ? '按当前条件重新生成' : '生成候选赛程'}
+            </Button>
+            <p className="schedule-helper">
+              重新生成会建立新版本。已发布方案会回到待发布状态，原发布版本继续保留。
+            </p>
+          </Form>
+        </details>
         <div className="schedule-result" aria-live="polite">
           <div className="schedule-result-heading">
             <div>
@@ -389,72 +397,31 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
               showIcon
               title={`当前有 ${schedule.issues.length} 项冲突，处理后才能发布`}
               description={
-                <ul className="schedule-issues">
-                  {schedule.issues.map((issue, index) => (
-                    <li key={`${issue.code}-${index}`}>{issue.message}</li>
-                  ))}
-                </ul>
+                <details>
+                  <summary>查看冲突明细</summary>
+                  <ul className="schedule-issues">
+                    {schedule.issues.map((issue, index) => (
+                      <li key={`${issue.code}-${index}`}>{issue.message}</li>
+                    ))}
+                  </ul>
+                </details>
               }
             />
           )}
-          <Table<Match>
-            rowKey="id"
-            loading={state.loading}
-            dataSource={schedule?.matches ?? []}
-            pagination={false}
-            scroll={{ x: 760 }}
-            locale={{
-              emptyText: (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="设置左侧条件后生成候选赛程"
-                />
-              ),
-            }}
-            columns={[
-              {
-                title: '轮次',
-                dataIndex: 'round',
-                width: 70,
-                render: (value) => `第${value}轮`,
-              },
-              {
-                title: '对阵',
-                render: (_, match) => (
-                  <strong>
-                    {match.homeLabel} vs {match.awayLabel}
-                  </strong>
-                ),
-              },
-              {
-                title: '比赛时间',
-                dataIndex: 'startAt',
-                render: (value) =>
-                  value ? (
-                    new Date(value).toLocaleString('zh-CN', {
-                      timeZone: 'Asia/Shanghai',
-                      hour12: false,
-                    })
-                  ) : (
-                    <Tag color="red">未安排</Tag>
-                  ),
-              },
-              {
-                title: '场地',
-                dataIndex: 'venue',
-                render: (value) => value || '—',
-              },
-              {
-                title: '操作',
-                width: 90,
-                render: (_, match) => (
-                  <Button type="link" onClick={() => edit(match)}>
-                    调整
-                  </Button>
-                ),
-              },
-            ]}
-          />
+          {schedule?.exists ? (
+            <ScheduleWeek
+              schedule={schedule}
+              disabled={state.loading || state.saving}
+              onEdit={edit}
+            />
+          ) : (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                state.loading ? '正在加载赛程' : '设置左侧条件后生成候选赛程'
+              }
+            />
+          )}
         </div>
       </div>
       <Modal
