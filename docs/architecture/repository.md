@@ -59,6 +59,8 @@ CAAU-029在同一authorization模块和`InternalUser`/`Session`上追加正式�
 
 ## 前端与测试
 
+CAAU-052 承办方小程序 `features/competition` 实现球队、赛程、物料和赛事情况界面，`pages/competition-*` 仅承载 Taro 路由，`shared.tsx` 管理本应用共同的请求互斥、会话清理与表单反馈。只消费生成客户端，不引用 Web 源码或数据库。人员管理保持现有独立模块，同属“我的比赛”。
+
 CAAU-050 在既有 `event-situation` 模块内加入赛事工作人员目录；目录与单场快照分开，仍由该模块管理来源核验及历史。Web `StaffManagementPanel` 仅消费生成客户端。见 [ADR-0020](../adr/0020-event-staff-directory.md)。
 
 前端按 `src/features/<domain>/` 放置业务功能；应用入口与路由放 `src/app/`，真正的通用组件放 `src/components/`。miniapp 保留 Taro 所需页面和配置目录，以实际脚手架约定为准。

@@ -1,0 +1,79 @@
+.competition-mobile .card {
+  margin-top: 24px;
+}
+.competition-mobile .subtitle,
+.competition-note,
+.competition-line {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.competition-note {
+  color: var(--muted);
+  font-size: 26px;
+  line-height: 1.6;
+  margin: 16px 0;
+}
+.competition-line {
+  margin: 12px 0;
+  font-size: 28px;
+}
+.competition-mobile button {
+  min-height: 88px;
+  margin: 16px 0;
+  font-size: 28px;
+}
+.competition-mobile .competition-primary,
+.competition-mobile .selected {
+  background: var(--primary);
+  color: white;
+}
+.competition-field {
+  margin: 22px 0;
+}
+.competition-field > text {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 28px;
+}
+.competition-field input,
+.competition-field textarea {
+  min-height: 88px;
+  box-sizing: border-box;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 28px;
+}
+.competition-field textarea {
+  width: 100%;
+  height: 180px;
+}
+.competition-error {
+  padding: 24px;
+  background: var(--danger-surface);
+  color: var(--danger);
+  border-radius: 16px;
+  margin: 20px 0;
+}
+.competition-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.competition-row button {
+  flex: 1;
+  min-width: 120px;
+}
+.competition-mobile picker {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 16px 0;
+}
+.competition-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+}
