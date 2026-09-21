@@ -11,7 +11,12 @@ import {
   text,
   uuid,
 } from '../authorization/authorization.service.js';
-import { type Actor, deny, eventOperations } from '../authorization/policy.js';
+import {
+  type Actor,
+  deny,
+  eventOperations,
+  eventOperationsScope,
+} from '../authorization/policy.js';
 import type { ScheduleMatchDto } from '../scheduling/scheduling.dto.js';
 import type { EventStaffProfileDto } from './event-staff.dto.js';
 import {
@@ -120,6 +125,21 @@ function profileName(profile: Prisma.JsonValue) {
 @Injectable()
 export class EventSituationService {
   constructor(private readonly auth: AuthorizationService) {}
+
+  listEvents(token: string) {
+    return this.auth.run(
+      token,
+      'eventSituation.events.list',
+      undefined,
+      {},
+      (tx, actor) =>
+        tx.event.findMany({
+          where: eventOperationsScope(actor),
+          select: { id: true, name: true },
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        }),
+    );
+  }
 
   private async readAccess(tx: Tx, actor: Actor, eventId: string) {
     uuid(eventId);

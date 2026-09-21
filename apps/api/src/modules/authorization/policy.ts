@@ -13,6 +13,48 @@ export function hasRole(actor: Actor, role: string) {
 export function isHeadquartersSuperAdmin(actor: Actor) {
   return hasRole(actor, 'HEADQUARTERS_SUPER_ADMIN');
 }
+
+/** Events where the actor can use the competition-operation modules. */
+export function eventOperationsScope(actor: Actor): Prisma.EventWhereInput {
+  if (isHeadquartersSuperAdmin(actor)) return {};
+  return {
+    OR: [
+      {
+        scope: {
+          grants: {
+            some: {
+              active: true,
+              member: {
+                userId: actor.id,
+                active: true,
+                role: 'EVENT_MANAGER',
+              },
+            },
+          },
+        },
+      },
+      {
+        organizerAppointments: {
+          some: {
+            active: true,
+            organization: {
+              hostingHandlerGrants: {
+                some: {
+                  active: true,
+                  member: {
+                    userId: actor.id,
+                    active: true,
+                    role: 'ORGANIZER',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+}
 export async function eventManager(
   tx: Prisma.TransactionClient,
   actor: Actor,
@@ -35,34 +77,11 @@ export async function eventOperations(
   actor: Actor,
   eventId: string,
 ) {
-  if (isHeadquartersSuperAdmin(actor)) return;
-  if (
-    await tx.eventGrant.findFirst({
-      where: {
-        eventId,
-        active: true,
-        member: { userId: actor.id, active: true, role: 'EVENT_MANAGER' },
-      },
-    })
-  )
-    return;
-  const handlers = await tx.hostingApplicationHandlerGrant.findMany({
-    where: {
-      active: true,
-      member: { userId: actor.id, active: true, role: 'ORGANIZER' },
-    },
-    select: { organizationId: true },
+  const event = await tx.event.findFirst({
+    where: { AND: [{ id: eventId }, eventOperationsScope(actor)] },
+    select: { id: true },
   });
-  if (
-    !(await tx.eventOrganizerAppointment.findFirst({
-      where: {
-        eventId,
-        active: true,
-        organizationId: { in: handlers.map((item) => item.organizationId) },
-      },
-    }))
-  )
-    deny();
+  if (!event) deny();
 }
 export async function taskPolicy(
   tx: Prisma.TransactionClient,

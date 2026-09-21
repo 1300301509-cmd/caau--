@@ -382,6 +382,19 @@
         "required": ["expectedRevision", "reason"],
         "type": "object"
       },
+      "CompetitionEventViewDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
       "ConfigureTaskDto": {
         "properties": {
           "expectedRevision": {
@@ -5406,6 +5419,37 @@
         ],
         "summary": "",
         "tags": ["Authorization"]
+      }
+    },
+    "/api/v1/competition-events": {
+      "get": {
+        "operationId": "listCompetitionEvents",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CompetitionEventViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "listCompetitionEvents",
+        "tags": ["CompetitionEvents"]
       }
     },
     "/api/v1/event-grants/{id}/active": {

@@ -44,7 +44,7 @@ const entries = [
   },
 ];
 type Overview = {
-  events: S['EventViewDto'][];
+  events: S['CompetitionEventViewDto'][];
   schedule: S['ScheduleViewDto'];
   teams: number;
   staff: number;
@@ -59,8 +59,24 @@ export default function CompetitionHub() {
   function load() {
     return ctx.run(async (token, valid) => {
       setData(undefined);
-      const [events, schedule, teams, staff, supplies] = await Promise.all([
-        client.request('listEvents', { token }),
+      const events = await client.request('listCompetitionEvents', { token });
+      if (!valid()) return;
+      const resolvedEventId =
+        events.find((item) => item.id === eventId)?.id ?? events[0]?.id ?? '';
+      if (!resolvedEventId) {
+        session.eventId = '';
+        setData(undefined);
+        ctx.setError('当前账号暂无可管理的赛事，请先完成赛事获批与承办指派。');
+        return;
+      }
+      if (resolvedEventId !== eventId) {
+        session.eventId = resolvedEventId;
+        void Taro.redirectTo({
+          url: `/pages/competition-hub/index?event=${encodeURIComponent(resolvedEventId)}`,
+        });
+        return;
+      }
+      const [schedule, teams, staff, supplies] = await Promise.all([
         client.request('getEventSchedule', { token, path: { eventId } }),
         client.request('listEventTeams', { token, path: { eventId } }),
         client.request('listEventStaff', { token, path: { eventId } }),

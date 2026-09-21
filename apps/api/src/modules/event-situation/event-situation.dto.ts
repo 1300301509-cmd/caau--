@@ -8,6 +8,11 @@ export const eventParticipantRoles = [
   'OTHER',
 ] as const;
 
+export class CompetitionEventViewDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() name!: string;
+}
+
 export class EventParticipantDto {
   @ApiProperty() id!: string;
   @ApiProperty() name!: string;

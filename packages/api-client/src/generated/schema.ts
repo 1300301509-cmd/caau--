@@ -482,6 +482,23 @@ export interface paths {
     patch: operations['setUserActive'];
     trace?: never;
   };
+  '/api/v1/competition-events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listCompetitionEvents */
+    get: operations['listCompetitionEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/event-grants/{id}/active': {
     parameters: {
       query?: never;
@@ -1962,6 +1979,11 @@ export interface components {
     CloseDto: {
       expectedRevision: number;
       reason: string;
+    };
+    CompetitionEventViewDto: {
+      /** Format: uuid */
+      id: string;
+      name: string;
     };
     ConfigureTaskDto: {
       expectedRevision: number;
@@ -4736,6 +4758,25 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  listCompetitionEvents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompetitionEventViewDto'][];
+        };
       };
     };
   };

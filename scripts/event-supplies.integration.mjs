@@ -38,6 +38,22 @@ export async function eventSuppliesIntegration(t, context) {
     [randomUUID(), eventId, members.manager],
   );
 
+  await t.test(
+    'competition event picker matches the event-operation permission scope',
+    async () => {
+      const [superEvents, managerEvents, organizerEvents, outsideEvents] =
+        await Promise.all([
+          call('super', 'GET', 'competition-events'),
+          call('manager', 'GET', 'competition-events'),
+          call('a', 'GET', 'competition-events'),
+          call('b', 'GET', 'competition-events'),
+        ]);
+      for (const events of [superEvents, managerEvents, organizerEvents])
+        assert.ok(events.some((event) => event.id === eventId));
+      assert.ok(!outsideEvents.some((event) => event.id === eventId));
+    },
+  );
+
   let item;
   await t.test(
     'event supplies: organizer writes while headquarters only tracks and events stay isolated',

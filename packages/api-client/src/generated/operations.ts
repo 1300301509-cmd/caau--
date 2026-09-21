@@ -928,6 +928,28 @@ export const operations = {
     },
     authenticated: true,
   },
+  listCompetitionEvents: {
+    path: '/api/v1/competition-events',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            id: { format: 'uuid', type: 'string' },
+            name: { type: 'string' },
+          },
+          required: ['id', 'name'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
   setEventGrantActive: {
     path: '/api/v1/event-grants/{id}/active',
     method: 'PATCH',

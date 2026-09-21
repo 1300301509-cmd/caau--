@@ -13,7 +13,7 @@ import logo from '../../assets/caau-logo.jpg';
 type S = components['schemas'];
 
 export default function Home() {
-  const [events, setEvents] = useState<S['EventViewDto'][]>([]);
+  const [events, setEvents] = useState<S['CompetitionEventViewDto'][]>([]);
   const [selectedEventId, setSelectedEventId] = useState(session.eventId);
   const [eventExpanded, setEventExpanded] = useState(false);
   const [eventStatus, setEventStatus] = useState<'loading' | 'ready' | 'error'>(
@@ -30,7 +30,9 @@ export default function Home() {
     setEventError('');
     setEventExpanded(false);
     try {
-      const eventRows = await client.request('listEvents', { token });
+      const eventRows = await client.request('listCompetitionEvents', {
+        token,
+      });
       if (token !== session.token) return;
       session.eventId = resolveEventId(eventRows, session.eventId);
       setSelectedEventId(session.eventId);

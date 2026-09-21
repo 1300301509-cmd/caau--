@@ -8,12 +8,31 @@ import {
 import { Permission } from '../authorization/authorization.guard.js';
 import type { AuthRequest } from '../authorization/authorization.service.js';
 import {
+  CompetitionEventViewDto,
   EventSituationViewDto,
   EventTeamRosterViewDto,
   ReplaceEventTeamRosterDto,
   ReplaceMatchStaffDto,
 } from './event-situation.dto.js';
 import { EventSituationService } from './event-situation.service.js';
+
+@ApiBearerAuth()
+@ApiCookieAuth('webSession')
+@Controller('competition-events')
+export class CompetitionEventsController {
+  constructor(private readonly situation: EventSituationService) {}
+
+  @Get()
+  @Permission('event-situation')
+  @ApiOperation({
+    operationId: 'listCompetitionEvents',
+    summary: 'listCompetitionEvents',
+  })
+  @ApiOkResponse({ type: CompetitionEventViewDto, isArray: true })
+  list(@Req() request: AuthRequest) {
+    return this.situation.listEvents(request.token ?? '');
+  }
+}
 
 @ApiBearerAuth()
 @ApiCookieAuth('webSession')
