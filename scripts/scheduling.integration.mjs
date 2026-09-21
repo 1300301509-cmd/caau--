@@ -255,15 +255,45 @@ export async function schedulingIntegration(t, context) {
         ),
       );
       const team = eventTeams[0];
+      const publishedBeforeExit = schedule;
       await call('super', 'PUT', `events/${event.id}/teams/${team.id}`, {
         expectedRevision: team.revision,
         active: false,
         profile: team.profile,
       });
+      const scheduleAfterExit = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      assert.equal(scheduleAfterExit.status, 'PUBLISHED');
+      assert.equal(scheduleAfterExit.revision, publishedBeforeExit.revision);
+      assert.deepEqual(scheduleAfterExit.matches, publishedBeforeExit.matches);
       assert.ok(
-        (
-          await call('manager', 'GET', `events/${event.id}/schedule`)
-        ).issues.some((item) => item.code === 'TEAM_UNAVAILABLE'),
+        scheduleAfterExit.issues.some(
+          (item) => item.code === 'TEAM_UNAVAILABLE',
+        ),
+      );
+      const storedAfterExit = (
+        await sql.query(
+          'SELECT status, revision, matches, issues FROM "EventSchedule" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0];
+      assert.equal(storedAfterExit.status, 'PUBLISHED');
+      assert.equal(storedAfterExit.revision, publishedBeforeExit.revision);
+      assert.deepEqual(storedAfterExit.matches, publishedBeforeExit.matches);
+      assert.deepEqual(storedAfterExit.issues, []);
+      await call(
+        'manager',
+        'POST',
+        `events/${event.id}/schedule/generate`,
+        {
+          commandId: randomUUID(),
+          format: 'ROUND_ROBIN',
+          config,
+        },
+        409,
       );
       await call('super', 'PUT', `events/${event.id}/teams/${team.id}`, {
         expectedRevision: team.revision + 1,

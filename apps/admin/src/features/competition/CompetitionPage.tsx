@@ -207,6 +207,7 @@ export function CompetitionPage() {
         <TeamManagementPanel
           key={`${auth.identity?.id}-${eventId}`}
           eventId={eventId}
+          eventName={events.find((event) => event.id === eventId)?.name ?? ''}
         />
       ) : active === 'schedule' ? (
         <SchedulingPanel

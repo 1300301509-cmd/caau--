@@ -240,11 +240,66 @@ export async function teamsIntegration(t, ctx) {
         (await call('super', 'GET', `events/${e1.id}/teams`))[0].active,
         true,
       );
+      const masterBeforeExit = (await call('super', 'GET', 'teams')).find(
+        (item) => item.id === team.id,
+      );
+      await call(
+        'b',
+        'PUT',
+        `events/${e1.id}/teams/${entry.id}`,
+        {
+          expectedRevision: entry.revision,
+          active: false,
+          profile: entry.profile,
+        },
+        403,
+      );
       entry = await call('super', 'PUT', `events/${e1.id}/teams/${entry.id}`, {
         expectedRevision: entry.revision,
         active: false,
         profile: entry.profile,
       });
+      assert.equal(entry.active, false);
+      await call(
+        'super',
+        'PUT',
+        `events/${e1.id}/teams/${entry.id}`,
+        {
+          expectedRevision: entry.revision - 1,
+          active: false,
+          profile: entry.profile,
+        },
+        409,
+      );
+      const eventTeamWrite = (
+        await sql.query(
+          'SELECT "updatedBy", "updatedAt" FROM "EventTeam" WHERE id=$1',
+          [entry.id],
+        )
+      ).rows[0];
+      assert.equal(eventTeamWrite.updatedBy, users.super);
+      assert.ok(eventTeamWrite.updatedAt);
+      const exitVersion = (
+        await sql.query(
+          'SELECT active, "actorId", "createdAt" FROM "EventTeamVersion" WHERE "eventTeamId"=$1 AND revision=$2',
+          [entry.id, entry.revision],
+        )
+      ).rows[0];
+      assert.equal(exitVersion.active, false);
+      assert.equal(exitVersion.actorId, users.super);
+      assert.ok(exitVersion.createdAt);
+      const exitAudit = (
+        await sql.query(
+          'SELECT "actorId", "occurredAt" FROM "AuditRecord" WHERE action=$1 AND "resourceId"=$2 AND outcome=$3 ORDER BY "occurredAt" DESC LIMIT 1',
+          ['eventTeams.update', entry.id, 'ALLOWED'],
+        )
+      ).rows[0];
+      assert.equal(exitAudit.actorId, users.super);
+      assert.ok(exitAudit.occurredAt);
+      const masterAfterExit = (await call('super', 'GET', 'teams')).find(
+        (item) => item.id === team.id,
+      );
+      assert.deepEqual(masterAfterExit, masterBeforeExit);
       assert.equal(
         (await call('super', 'GET', `events/${e2.id}/teams`))[0].active,
         true,

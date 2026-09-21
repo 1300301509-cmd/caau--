@@ -19,6 +19,12 @@ import { useAuth } from '../auth/AuthContext';
 type Team = components['schemas']['TeamViewDto'];
 type Profile = components['schemas']['TeamProfileDto'];
 type Organization = components['schemas']['TeamOrganizationDto'];
+type Schedule = components['schemas']['ScheduleViewDto'];
+type Removal = {
+  team: Team;
+  scheduled: boolean;
+  scheduleStatus: Schedule['status'];
+};
 const fields: {
   name: keyof Profile;
   label: string;
@@ -47,7 +53,13 @@ function failure(error: unknown) {
   }
   return '操作未完成，请稍后重试。填写内容已保留。';
 }
-export function TeamManagementPanel({ eventId }: { eventId: string }) {
+export function TeamManagementPanel({
+  eventId,
+  eventName,
+}: {
+  eventId: string;
+  eventName: string;
+}) {
   const auth = useAuth();
   const token =
     auth.mode === 'local'
@@ -62,6 +74,11 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
   const [eventError, setEventError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState('');
+  const [participation, setParticipation] = useState('active');
+  const [removing, setRemoving] = useState<Removal | null>(null);
+  const [checkingRemovalId, setCheckingRemovalId] = useState('');
+  const [removeError, setRemoveError] = useState('');
+  const [notice, setNotice] = useState('');
   const [editor, setEditor] = useState<{
     id: string;
     scope: string;
@@ -135,7 +152,7 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
       if (editor.row) {
         const body = {
           profile,
-          active: values.active,
+          active: values.active ?? editor.row.active,
           expectedRevision: editor.row.revision,
         };
         if (editor.scope === 'event')
@@ -186,10 +203,76 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
       setSaving(false);
     }
   }
-  const rows = (tab === 'event' ? entries : teams).filter((row) =>
-    Object.values(row.profile).some((value) =>
-      value.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
-    ),
+  async function prepareRemoval(team: Team) {
+    if (checkingRemovalId || saving) return;
+    setCheckingRemovalId(team.id);
+    setRemoveError('');
+    setNotice('');
+    try {
+      const schedule = await client.request('getEventSchedule', {
+        token,
+        path: { eventId },
+      });
+      setRemoving({
+        team,
+        scheduleStatus: schedule.status,
+        scheduled:
+          schedule.exists &&
+          schedule.matches.some(
+            (match) =>
+              match.homeEventTeamId === team.id ||
+              match.awayEventTeamId === team.id,
+          ),
+      });
+    } catch (cause) {
+      setEventError(
+        cause instanceof ApiError && cause.status === 403
+          ? '当前账号已无此赛事的球队管理权限，无法检查赛程影响。'
+          : '暂时无法检查球队是否已进入赛程，请刷新后再试。',
+      );
+    } finally {
+      setCheckingRemovalId('');
+    }
+  }
+  async function remove() {
+    if (!removing || saving) return;
+    setSaving(true);
+    setRemoveError('');
+    try {
+      await client.request('updateEventTeam', {
+        token,
+        path: { eventId, id: removing.team.id },
+        body: {
+          profile: removing.team.profile,
+          active: false,
+          expectedRevision: removing.team.revision,
+        },
+      });
+      setNotice(
+        `已将“${removing.team.profile.name}”移出本赛事，可在“已退出”中查看。`,
+      );
+      setRemoving(null);
+      setAttempt((value) => value + 1);
+    } catch (cause) {
+      setRemoveError(
+        cause instanceof ApiError && cause.status === 409
+          ? '球队资料或状态已变化，请取消并刷新列表，核对后重新操作。'
+          : cause instanceof ApiError && cause.status === 403
+            ? '当前账号已无此赛事的球队管理权限，请取消并刷新列表。'
+            : '未能确认移出结果，请取消并刷新列表核对后再试。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  const rows = (tab === 'event' ? entries : teams).filter(
+    (row) =>
+      (tab !== 'event' ||
+        participation === 'all' ||
+        row.active === (participation === 'active')) &&
+      Object.values(row.profile).some((value) =>
+        value.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+      ),
   );
   const name = Form.useWatch('name', form);
   const duplicate = teams.some(
@@ -227,6 +310,7 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
       {(error || (tab === 'event' && eventError)) && (
         <Alert type="error" showIcon title={error || eventError} />
       )}
+      {notice && <Alert type="success" showIcon title={notice} />}
       <div className="team-toolbar">
         <Input.Search
           aria-label="搜索球队"
@@ -236,6 +320,19 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
           allowClear
         />
         <Space wrap>
+          {tab === 'event' && (
+            <Select
+              aria-label="参赛状态"
+              value={participation}
+              onChange={setParticipation}
+              style={{ minWidth: 120 }}
+              options={[
+                { value: 'active', label: '参赛中' },
+                { value: 'inactive', label: '已退出' },
+                { value: 'all', label: '全部状态' },
+              ]}
+            />
+          )}
           <Button onClick={() => setAttempt((v) => v + 1)} disabled={loading}>
             刷新
           </Button>
@@ -280,7 +377,9 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
                   ? '请处理上方提示后重试'
                   : tab === 'event' && !eventId
                     ? '请先选择赛事'
-                    : '暂无球队，可手动录入资料'
+                    : tab === 'event' && participation === 'inactive'
+                      ? '暂无已退出球队'
+                      : '暂无球队，可手动录入资料'
               }
             />
           ),
@@ -309,7 +408,13 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
             render: (_, row) => (
               <>
                 <Tag color={row.active ? 'green' : 'default'}>
-                  {row.active ? '正常' : tab === 'event' ? '已退出' : '已归档'}
+                  {row.active
+                    ? tab === 'event'
+                      ? '参赛中'
+                      : '正常'
+                    : tab === 'event'
+                      ? '已退出'
+                      : '已归档'}
                 </Tag>
                 {tab === 'master' && (
                   <div className="team-secondary">
@@ -322,17 +427,73 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
           {
             title: '操作',
             render: (_, row) => (
-              <Button
-                type="link"
-                disabled={!row.canEdit}
-                onClick={() => edit(row)}
-              >
-                编辑资料
-              </Button>
+              <Space wrap>
+                <Button
+                  type="link"
+                  disabled={!row.canEdit}
+                  onClick={() => edit(row)}
+                >
+                  编辑资料
+                </Button>
+                {tab === 'event' && row.active && (
+                  <Button
+                    type="link"
+                    danger
+                    loading={checkingRemovalId === row.id}
+                    disabled={
+                      !row.canEdit ||
+                      loading ||
+                      !!checkingRemovalId ||
+                      !!eventError ||
+                      !!error
+                    }
+                    onClick={() => void prepareRemoval(row)}
+                  >
+                    移出本赛事
+                  </Button>
+                )}
+              </Space>
             ),
           },
         ]}
       />
+      <Modal
+        open={!!removing}
+        title="移出本赛事"
+        okText="确认移出"
+        cancelText="取消"
+        okButtonProps={{ danger: true, disabled: !!removeError }}
+        confirmLoading={saving}
+        cancelButtonProps={{ disabled: saving }}
+        closable={!saving}
+        maskClosable={false}
+        onOk={() => void remove()}
+        onCancel={() => {
+          if (!saving) setRemoving(null);
+        }}
+      >
+        <p>
+          确认将球队“{removing?.team.profile.name}”移出赛事“
+          {eventName || eventId}”？
+        </p>
+        <p>只移出当前赛事，不删除球队档案和历史。</p>
+        {removing?.scheduled ? (
+          <Alert
+            type="warning"
+            showIcon
+            title={`该球队已进入${removing.scheduleStatus === 'PUBLISHED' ? '已发布' : '当前候选'}赛程`}
+            description="确认移出后，现有赛程和已发布历史不会被删除或改写，但当前赛程会提示球队不可用；重新编排或处理冲突前不能再次发布。"
+          />
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            title="当前赛程未使用该球队"
+            description="移出操作仍只改变本赛事球队状态，不影响其他赛事或球队档案。"
+          />
+        )}
+        {removeError && <Alert type="error" showIcon title={removeError} />}
+      </Modal>
       <Modal
         open={!!editor}
         title={
@@ -425,6 +586,7 @@ export function TeamManagementPanel({ eventId }: { eventId: string }) {
           {editor?.row && (
             <Form.Item
               name="active"
+              hidden={editor.scope === 'event' && editor.row.active}
               label={
                 editor.scope === 'event' ? '继续参加本赛事' : '球队档案启用'
               }

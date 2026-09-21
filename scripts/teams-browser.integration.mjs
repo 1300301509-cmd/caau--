@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { chromium, expect } from '@playwright/test';
@@ -98,10 +99,111 @@ export async function teamsBrowserTest({ config, tokens, eventId }) {
       .fill('合成浏览器赛事修改');
     await page.getByRole('button', { name: /^保\s*存$/ }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    const activeTeams = (
+      await fetch(`http://127.0.0.1:3000/api/v1/events/${eventId}/teams`, {
+        headers: { Authorization: `Bearer ${tokens.super}` },
+      }).then((response) => response.json())
+    ).filter((team) => team.active);
+    assert.ok(activeTeams.length >= 2);
+    const day = new Date(Date.now() + 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const scheduleResponse = await fetch(
+      `http://127.0.0.1:3000/api/v1/events/${eventId}/schedule/generate`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${tokens.super}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commandId: crypto.randomUUID(),
+          format: 'ROUND_ROBIN',
+          config: {
+            teamIds: activeTeams.map((team) => team.id),
+            venues: ['合成测试场地'],
+            startDate: day,
+            endDate: day,
+            dailyStart: '09:00',
+            dailyEnd: '20:00',
+            durationMinutes: 40,
+            bufferMinutes: 10,
+            minRestMinutes: 30,
+          },
+        }),
+      },
+    );
+    assert.equal(scheduleResponse.status, 200);
+    const generatedSchedule = await scheduleResponse.json();
+    assert.equal(generatedSchedule.issues.length, 0);
+    const publishResponse = await fetch(
+      `http://127.0.0.1:3000/api/v1/events/${eventId}/schedule/publish`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${tokens.super}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commandId: crypto.randomUUID(),
+          expectedRevision: generatedSchedule.revision,
+        }),
+      },
+    );
+    assert.equal(publishResponse.status, 200);
+    const scheduleBefore = await publishResponse.json();
+    assert.equal(scheduleBefore.status, 'PUBLISHED');
+    const eventRow = page
+      .getByRole('row')
+      .filter({ hasText: '合成浏览器赛事修改' });
+    await expect(eventRow).toBeVisible();
+    await eventRow.getByRole('button', { name: '移出本赛事' }).click();
+    const removal = page.getByRole('dialog', { name: '移出本赛事' });
+    await expect(removal).toContainText('合成浏览器赛事修改');
+    await expect(removal).toContainText('合成球队赛事二');
+    await expect(removal).toContainText('只移出当前赛事，不删除球队档案和历史');
+    await expect(removal).toContainText('该球队已进入已发布赛程');
+    await expect(removal).toContainText('现有赛程和已发布历史不会被删除或改写');
+    await removal.getByRole('button', { name: /^取\s*消$/ }).click();
+    await expect(eventRow).toBeVisible();
+    await eventRow.getByRole('button', { name: '移出本赛事' }).click();
+    await removal.getByRole('button', { name: /^确\s*认\s*移\s*出$/ }).click();
+    await expect(removal).toHaveCount(0);
+    await expect(eventRow).toHaveCount(0);
+    await expect(
+      page.getByText('已将“合成浏览器赛事修改”移出本赛事'),
+    ).toBeVisible();
+    const participationFilter = page.getByRole('combobox', {
+      name: '参赛状态',
+    });
+    await participationFilter.click();
+    await participationFilter.press('ArrowDown');
+    await participationFilter.press('Enter');
     await expect(
       page.getByRole('row').filter({ hasText: '合成浏览器赛事修改' }),
-    ).toBeVisible();
+    ).toContainText('已退出');
+    const scheduleAfter = await fetch(
+      `http://127.0.0.1:3000/api/v1/events/${eventId}/schedule`,
+      { headers: { Authorization: `Bearer ${tokens.super}` } },
+    ).then((response) => response.json());
+    assert.equal(scheduleAfter.revision, scheduleBefore.revision);
+    assert.deepEqual(scheduleAfter.matches, scheduleBefore.matches);
+    assert.ok(
+      scheduleAfter.issues.some((issue) => issue.code === 'TEAM_UNAVAILABLE'),
+    );
     await mkdir('.local/caau-041', { recursive: true });
+    await expect(eventRow).toBeVisible();
+    await expect(eventRow).toContainText('已退出');
+    await expect(
+      eventRow.getByRole('button', { name: '移出本赛事' }),
+    ).toHaveCount(0);
+    await page.getByRole('tab', { name: '球队档案', exact: true }).click();
+    const masterRow = page
+      .getByRole('row')
+      .filter({ hasText: '合成浏览器主档案修改' });
+    await expect(masterRow).toBeVisible();
+    await expect(masterRow).toContainText('正常');
+    await page.getByRole('tab', { name: '本赛事球队', exact: true }).click();
     await page.screenshot({
       path: '.local/caau-041/teams-desktop.png',
       fullPage: true,
