@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export const eventParticipantRoles = [
   'PLAYER',
@@ -20,6 +20,8 @@ export class EventParticipantDto {
 }
 
 export class MatchStaffMemberDto {
+  @ApiPropertyOptional() sourceStaffId?: string;
+  @ApiPropertyOptional() sourceStaffRevision?: number;
   @ApiProperty() id!: string;
   @ApiProperty() name!: string;
   @ApiProperty() role!: string;

@@ -133,7 +133,7 @@ export async function eventSituationIntegration(t, context) {
   );
 
   await t.test(
-    'event situation: headquarters reads only, other organizer denied and revisions conflict safely',
+    'event situation: headquarters roster stays read-only, other organizer denied and revisions conflict safely',
     async () => {
       const situation = await call(
         'super',
@@ -179,6 +179,179 @@ export async function eventSituationIntegration(t, context) {
         player,
         official,
       });
+    },
+  );
+  await t.test(
+    'event staff: shared management, idempotency, CAS, source snapshots and isolation',
+    async () => {
+      const payload = {
+        id: randomUUID(),
+        profile: {
+          name: '合成名单裁判',
+          roles: ['裁判', '技术代表'],
+          duties: '负责执裁',
+          contactPhone: '',
+          organization: '合成单位',
+          notes: '',
+        },
+      };
+      const created = await call(
+        'super',
+        'POST',
+        `events/${eventId}/staff`,
+        payload,
+      );
+      assert.deepEqual(
+        await call('super', 'POST', `events/${eventId}/staff`, payload),
+        created,
+      );
+      assert.equal(
+        (await call('a', 'GET', `events/${eventId}/staff`)).some(
+          (r) => r.id === created.id,
+        ),
+        true,
+      );
+      await call('b', 'GET', `events/${eventId}/staff`, undefined, 403);
+      await call(
+        'b',
+        'POST',
+        `events/${eventId}/staff`,
+        { ...payload, id: randomUUID() },
+        403,
+      );
+      await call(
+        'super',
+        'POST',
+        `events/${eventId}/staff`,
+        { ...payload, profile: { ...payload.profile, name: '不同请求' } },
+        409,
+      );
+      let staff = await call(
+        'a',
+        'PUT',
+        `events/${eventId}/staff/${created.id}`,
+        {
+          expectedRevision: 1,
+          active: true,
+          profile: { ...payload.profile, duties: '承办方补充职责' },
+        },
+      );
+      await call(
+        'super',
+        'PUT',
+        `events/${eventId}/staff/${created.id}`,
+        { expectedRevision: 1, active: false, profile: payload.profile },
+        409,
+      );
+      const other = await call('super', 'POST', 'events', {
+        name: '合成人员隔离赛事',
+        description: '本地测试',
+      });
+      await call(
+        'super',
+        'PUT',
+        `events/${other.id}/staff/${created.id}`,
+        {
+          expectedRevision: staff.revision,
+          active: false,
+          profile: payload.profile,
+        },
+        403,
+      );
+      const foreign = await call('super', 'POST', `events/${other.id}/staff`, {
+        ...payload,
+        id: randomUUID(),
+      });
+      const sourceMember = {
+        ...official,
+        sourceStaffId: staff.id,
+        sourceStaffRevision: staff.revision,
+        name: '伪造姓名',
+      };
+      const assignment = {
+        expectedScheduleRevision: schedule.revision,
+        expectedRevision: 1,
+        staff: [sourceMember],
+      };
+      await call(
+        'super',
+        'PUT',
+        `events/${eventId}/matches/${match.id}/staff`,
+        {
+          ...assignment,
+          staff: [
+            {
+              ...sourceMember,
+              sourceStaffId: foreign.id,
+              sourceStaffRevision: 1,
+            },
+          ],
+        },
+        403,
+      );
+      const bound = await call(
+        'super',
+        'PUT',
+        `events/${eventId}/matches/${match.id}/staff`,
+        assignment,
+      );
+      assert.equal(bound.matches[0].staff[0].name, payload.profile.name);
+      assert.equal(bound.matches[0].staff[0].sourceStaffId, staff.id);
+      staff = await call('a', 'PUT', `events/${eventId}/staff/${staff.id}`, {
+        expectedRevision: staff.revision,
+        active: false,
+        profile: { ...payload.profile, name: '合成更新姓名' },
+      });
+      const retained = await call(
+        'super',
+        'GET',
+        `events/${eventId}/situation`,
+      );
+      assert.deepEqual(retained.matches[0].staff, bound.matches[0].staff);
+      await call(
+        'super',
+        'PUT',
+        `events/${eventId}/matches/${match.id}/staff`,
+        {
+          ...assignment,
+          expectedRevision: 2,
+          staff: [{ ...sourceMember, sourceStaffRevision: staff.revision }],
+        },
+        409,
+      );
+      const history = await call(
+        'a',
+        'GET',
+        `events/${eventId}/staff/${staff.id}/history`,
+      );
+      assert.equal(history.length, 3);
+      assert.equal(history[2].profile.name, payload.profile.name);
+      assert.equal(history[0].actorId, users.a);
+      assert.ok(history[0].createdAt);
+      assert.ok(history[0].actorName);
+      await assert.rejects(
+        runtime.query(
+          'UPDATE "EventStaffVersion" SET revision=99 WHERE "staffId"=$1',
+          [staff.id],
+        ),
+      );
+      const concurrent = await Promise.all(
+        [true, false].map((active) =>
+          fetch(`${base}/api/v1/events/${eventId}/staff/${staff.id}`, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${tokens.super}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              expectedRevision: staff.revision,
+              active,
+              profile: payload.profile,
+            }),
+          }).then((r) => r.status),
+        ),
+      );
+      assert.deepEqual(concurrent.sort(), [200, 409]);
     },
   );
 }

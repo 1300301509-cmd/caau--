@@ -13,6 +13,7 @@ import {
 } from '../authorization/authorization.service.js';
 import { type Actor, deny, eventOperations } from '../authorization/policy.js';
 import type { ScheduleMatchDto } from '../scheduling/scheduling.dto.js';
+import type { EventStaffProfileDto } from './event-staff.dto.js';
 import {
   eventParticipantRoles,
   type EventParticipantDto,
@@ -71,6 +72,8 @@ function participant(value: unknown): EventParticipantDto {
 
 function staffMember(value: unknown): MatchStaffMemberDto {
   const body = bodyObject(value, [
+    'sourceStaffId',
+    'sourceStaffRevision',
     'id',
     'name',
     'role',
@@ -79,6 +82,12 @@ function staffMember(value: unknown): MatchStaffMemberDto {
     'notes',
   ]);
   return {
+    ...(body.sourceStaffId !== undefined
+      ? {
+          sourceStaffId: uuid(body.sourceStaffId),
+          sourceStaffRevision: integer(body.sourceStaffRevision),
+        }
+      : {}),
     id: uuid(body.id),
     name: text(body.name, 80),
     role: text(body.role, 80),
@@ -312,7 +321,7 @@ export class EventSituationService {
       matchId,
       input,
       async (tx, actor) => {
-        await this.writeAccess(tx, actor, eventId);
+        await this.readAccess(tx, actor, eventId);
         const body = bodyObject(input, [
           'expectedScheduleRevision',
           'expectedRevision',
@@ -321,6 +330,19 @@ export class EventSituationService {
         const scheduleRevision = integer(body.expectedScheduleRevision);
         const expectedRevision = integer(body.expectedRevision, true);
         const staff = list(body.staff, 30, staffMember);
+        for (const member of staff) {
+          if (!member.sourceStaffId) continue;
+          const source = await tx.eventStaff.findFirst({
+            where: { id: member.sourceStaffId, eventId },
+          });
+          if (!source) deny();
+          if (!source.active || source.revision !== member.sourceStaffRevision)
+            throw new ConflictException('人员已停用或资料已更新，请重新选择');
+          const profile = source.profile as unknown as EventStaffProfileDto;
+          member.name = profile.name;
+          member.contactPhone = profile.contactPhone;
+          member.organization = profile.organization;
+        }
         const schedule = await tx.eventSchedule.findUnique({
           where: { eventId },
         });

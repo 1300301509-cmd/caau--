@@ -455,6 +455,18 @@
         "required": ["eventId", "key"],
         "type": "object"
       },
+      "CreateEventStaffDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/EventStaffProfileDto"
+          }
+        },
+        "required": ["id", "profile"],
+        "type": "object"
+      },
       "CreateEventSupplyItemDto": {
         "properties": {
           "id": {
@@ -949,6 +961,102 @@
           "scheduleStatus",
           "scheduleRevision",
           "matches",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "EventStaffHistoryDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/EventStaffProfileDto"
+          },
+          "revision": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "profile",
+          "active",
+          "revision",
+          "actorId",
+          "actorName",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "EventStaffProfileDto": {
+        "properties": {
+          "contactPhone": {
+            "type": "string"
+          },
+          "duties": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "organization": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "roles",
+          "duties",
+          "contactPhone",
+          "organization",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "EventStaffViewDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/EventStaffProfileDto"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "eventId",
+          "profile",
+          "active",
+          "revision",
           "updatedAt"
         ],
         "type": "object"
@@ -2545,6 +2653,12 @@
           },
           "role": {
             "type": "string"
+          },
+          "sourceStaffId": {
+            "type": "string"
+          },
+          "sourceStaffRevision": {
+            "type": "number"
           }
         },
         "required": [
@@ -3520,6 +3634,21 @@
           "reviewerMemberId",
           "expectedRevision"
         ],
+        "type": "object"
+      },
+      "UpdateEventStaffDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "number"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/EventStaffProfileDto"
+          }
+        },
+        "required": ["expectedRevision", "active", "profile"],
         "type": "object"
       },
       "UpdateEventSupplyItemDto": {
@@ -6045,6 +6174,194 @@
         ],
         "summary": "getEventSituation",
         "tags": ["EventSituation"]
+      }
+    },
+    "/api/v1/events/{eventId}/staff": {
+      "get": {
+        "operationId": "listEventStaff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventStaffViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["EventStaff"]
+      },
+      "post": {
+        "operationId": "createEventStaff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventStaffDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventStaffViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["EventStaff"]
+      }
+    },
+    "/api/v1/events/{eventId}/staff/{id}": {
+      "put": {
+        "operationId": "updateEventStaff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEventStaffDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventStaffViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["EventStaff"]
+      }
+    },
+    "/api/v1/events/{eventId}/staff/{id}/history": {
+      "get": {
+        "operationId": "getEventStaffHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventStaffHistoryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["EventStaff"]
       }
     },
     "/api/v1/events/{eventId}/supplies": {

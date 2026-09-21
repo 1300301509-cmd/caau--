@@ -694,6 +694,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/events/{eventId}/staff': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listEventStaff'];
+    put?: never;
+    post: operations['createEventStaff'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/staff/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['updateEventStaff'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/staff/{id}/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getEventStaffHistory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events/{eventId}/supplies': {
     parameters: {
       query?: never;
@@ -1937,6 +1985,10 @@ export interface components {
       /** Format: uuid */
       key: string;
     };
+    CreateEventStaffDto: {
+      id: string;
+      profile: components['schemas']['EventStaffProfileDto'];
+    };
     CreateEventSupplyItemDto: {
       /** Format: uuid */
       id: string;
@@ -2083,6 +2135,30 @@ export interface components {
       scheduleRevision: number;
       /** @enum {string} */
       scheduleStatus: 'DRAFT' | 'PUBLISHED';
+      updatedAt: string;
+    };
+    EventStaffHistoryDto: {
+      active: boolean;
+      actorId: string;
+      actorName: string;
+      createdAt: string;
+      profile: components['schemas']['EventStaffProfileDto'];
+      revision: number;
+    };
+    EventStaffProfileDto: {
+      contactPhone: string;
+      duties: string;
+      name: string;
+      notes: string;
+      organization: string;
+      roles: string[];
+    };
+    EventStaffViewDto: {
+      active: boolean;
+      eventId: string;
+      id: string;
+      profile: components['schemas']['EventStaffProfileDto'];
+      revision: number;
       updatedAt: string;
     };
     EventSupplyHistoryDto: {
@@ -2605,6 +2681,8 @@ export interface components {
       notes: string;
       organization: string;
       role: string;
+      sourceStaffId?: string;
+      sourceStaffRevision?: number;
     };
     MaterialRequirementDto: {
       acceptanceStandard: string;
@@ -2899,6 +2977,11 @@ export interface components {
       organizationId: string;
       /** Format: uuid */
       reviewerMemberId: string;
+    };
+    UpdateEventStaffDto: {
+      active: boolean;
+      expectedRevision: number;
+      profile: components['schemas']['EventStaffProfileDto'];
     };
     UpdateEventSupplyItemDto: {
       expectedRevision: number;
@@ -5206,6 +5289,100 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['EventSituationViewDto'];
+        };
+      };
+    };
+  };
+  listEventStaff: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventStaffViewDto'][];
+        };
+      };
+    };
+  };
+  createEventStaff: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateEventStaffDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventStaffViewDto'];
+        };
+      };
+    };
+  };
+  updateEventStaff: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateEventStaffDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventStaffViewDto'];
+        };
+      };
+    };
+  };
+  getEventStaffHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventStaffHistoryDto'][];
         };
       };
     };

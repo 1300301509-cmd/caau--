@@ -42,7 +42,7 @@
 }
 .competition-modules {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 20px;
 }
 .competition-module {
@@ -580,6 +580,22 @@
   }
 }
 
+.staff-panel {
+  padding: 24px;
+}
+.staff-panel > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.staff-panel > header p {
+  color: var(--hq-muted);
+}
+.staff-panel > .ant-alert {
+  margin-bottom: 16px;
+}
 .schedule-panel {
   padding: 24px;
 }

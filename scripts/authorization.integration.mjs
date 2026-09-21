@@ -112,6 +112,7 @@ export async function authorizationIntegration(t) {
                   '202609200002_event_scheduling',
                   '202609200003_event_supplies',
                   '202609200004_event_situation',
+                  '202609210001_event_staff',
                 ],
               ],
             )
@@ -823,7 +824,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          15,
+          16,
         );
       },
     );

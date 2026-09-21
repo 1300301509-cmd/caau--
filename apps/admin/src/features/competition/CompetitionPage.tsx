@@ -9,8 +9,19 @@ import { TeamManagementPanel } from './TeamManagementPanel';
 import { SchedulingPanel } from './SchedulingPanel';
 import { SuppliesPanel } from './SuppliesPanel';
 import { EventSituationPanel } from './EventSituationPanel';
+import { StaffManagementPanel } from './StaffManagementPanel';
 
 const modules = [
+  {
+    key: 'staff',
+    title: '人员管理',
+    english: 'STAFF',
+    icon: 'account',
+    note: '管理裁判及赛事工作人员。',
+    columns: ['姓名', '岗位', '联系方式'],
+    sections: ['人员名单', '人员历史'],
+    description: '维护本赛事的工作人员名单。',
+  },
   {
     key: 'teams',
     title: '球队管理',
@@ -131,7 +142,7 @@ export function CompetitionPage() {
           </span>
           <div>
             <label htmlFor="competition-event">当前赛事</label>
-            <p>四个模块共用同一场赛事</p>
+            <p>各模块共用同一场赛事</p>
           </div>
         </div>
         <Select
@@ -208,6 +219,11 @@ export function CompetitionPage() {
           key={`${auth.identity?.id}-${eventId}`}
           eventId={eventId}
           eventName={events.find((event) => event.id === eventId)?.name ?? ''}
+        />
+      ) : active === 'staff' ? (
+        <StaffManagementPanel
+          key={`${auth.identity?.id}-${eventId}`}
+          eventId={eventId}
         />
       ) : active === 'schedule' ? (
         <SchedulingPanel

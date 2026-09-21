@@ -208,6 +208,7 @@ model AuditRecord {
 }
 
 model Event {
+  staff EventStaff[]
   teams EventTeam[]
   schedule EventSchedule?
   supplies EventSupplyItem[]
@@ -263,6 +264,33 @@ model EventScheduleVersion {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@unique([eventId, revision])
+}
+
+model EventStaff {
+  id String @id @db.Uuid
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  profile Json
+  active Boolean @default(true)
+  revision Int @default(1)
+  createdBy String @db.Uuid
+  updatedBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  versions EventStaffVersion[]
+  @@index([eventId, active])
+}
+
+model EventStaffVersion {
+  id String @id @db.Uuid
+  staffId String @db.Uuid
+  staff EventStaff @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  profile Json
+  active Boolean
+  revision Int
+  actorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([staffId, revision])
 }
 
 model EventMatchStaff {
