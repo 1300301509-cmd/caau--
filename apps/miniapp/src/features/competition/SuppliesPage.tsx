@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Text, View, Picker } from '@tarojs/components';
 import Taro, { useDidShow } from '@tarojs/taro';
 import { ApiError, sha256 } from '@caau/api-client';
-import { client, newKey, readBytes } from '../materials/session';
+import { client, newKey, readBytes, session } from '../materials/session';
 import { Action, Field, Shell, confirm, saved, useCompetition } from './shared';
 import { supplyStatuses, supplyPhotoExtension, type S } from './model';
 type Item = S['EventSupplyItemViewDto'];
@@ -41,6 +41,7 @@ export default function SuppliesPage() {
     [filter, setFilter] = useState('');
   const [frozen, setFrozen] = useState(false),
     [uploading, setUploading] = useState(false);
+  const [uploadStage, setUploadStage] = useState('');
   const creation = useRef<S['CreateEventSupplyItemDto']>(),
     upload = useRef<Upload>();
   const files = useRef<string[]>([]);
@@ -60,6 +61,7 @@ export default function SuppliesPage() {
     creation.current = undefined;
     upload.current = undefined;
     setUploading(false);
+    setUploadStage('');
     setFrozen(false);
     cleanFiles();
   }, !!edit || uploading);
@@ -97,8 +99,11 @@ export default function SuppliesPage() {
       }
     });
   }
-  async function save() {
+  async function save(withPhoto = false) {
     if (!edit) return;
+    let savedItem: Item | undefined;
+    const tokenBeforeSave = session.token;
+    const epochBeforeSave = session.epoch;
     const quantity = Number(edit.quantity);
     if (
       !edit.name.trim() ||
@@ -147,18 +152,30 @@ export default function SuppliesPage() {
         }
       }
       if (valid()) {
+        savedItem = next;
         setItems((v) => [next, ...v.filter((i) => i.id !== next.id)]);
+        setQuery('');
+        setFilter('');
         setEdit(undefined);
         creation.current = undefined;
         setFrozen(false);
         saved();
       }
     });
+    if (
+      withPhoto &&
+      savedItem &&
+      session.token === tokenBeforeSave &&
+      session.epoch === epochBeforeSave
+    ) {
+      await photo(savedItem);
+    }
   }
   async function photo(item?: Item, existing?: S['EventSupplyPhotoViewDto']) {
     await ctx.run(async (token, valid) => {
       if (!upload.current) {
         if (!item) return;
+        setUploadStage('选择图片');
         const result = await Taro.chooseImage({
           count: 1,
           sizeType: ['original'],
@@ -167,6 +184,7 @@ export default function SuppliesPage() {
         if (!valid()) return;
         const file = result.tempFilePaths[0];
         if (!file) return;
+        setUploadStage('正在检查图片格式和大小');
         const bytes = await readBytes(file);
         if (!valid()) return;
         const extension = supplyPhotoExtension(bytes);
@@ -191,6 +209,7 @@ export default function SuppliesPage() {
       }
       const current = upload.current;
       if (current.phase === 0) {
+        setUploadStage('正在准备上传');
         await client.request('createEventSupplyPhoto', {
           token,
           path: { eventId: ctx.eventId, id: current.itemId },
@@ -200,6 +219,7 @@ export default function SuppliesPage() {
         current.phase = 1;
       }
       if (current.phase === 1) {
+        setUploadStage('正在上传图片，请勿离开');
         await client.request('EventSuppliesController_upload', {
           token,
           path: { id: current.meta.id },
@@ -208,6 +228,7 @@ export default function SuppliesPage() {
         if (!valid()) return;
         current.phase = 2;
       }
+      setUploadStage('正在校验并保存图片');
       await client.request('confirmEventSupplyPhoto', {
         token,
         path: { id: current.meta.id },
@@ -216,7 +237,8 @@ export default function SuppliesPage() {
       if (!valid()) return;
       upload.current = undefined;
       setUploading(false);
-      saved();
+      setUploadStage('');
+      void Taro.showToast({ title: '图片已上传', icon: 'success' });
       await read(token, valid);
     });
   }
@@ -235,6 +257,7 @@ export default function SuppliesPage() {
       if (valid()) {
         upload.current = undefined;
         setUploading(false);
+        setUploadStage('');
         await read(token, valid);
       }
     });
@@ -281,7 +304,14 @@ export default function SuppliesPage() {
     <Shell title="物料管理" ctx={ctx}>
       {uploading && (
         <View className="card">
-          <Text>照片上传尚未确认，失败可继续原上传。</Text>
+          <Text className="subtitle">
+            {ctx.busy ? uploadStage : '图片尚未确认上传成功'}
+          </Text>
+          <Text className="competition-note">
+            {ctx.busy
+              ? '完成校验后才会显示“已上传”。'
+              : '物料已保存。可重试当前图片，不会重复添加；也可暂停后再继续。'}
+          </Text>
           <Action disabled={ctx.busy} onClick={() => void photo()}>
             重试上传 / 确认
           </Action>
@@ -334,8 +364,27 @@ export default function SuppliesPage() {
               <Text>准备状态：{supplyStatuses[edit.status]}</Text>
             </Picker>
           )}
+          <View className="supply-image-entry">
+            <Text className="subtitle">物料图片 · 选填</Text>
+            <Text className="competition-note">
+              拍摄实物或从相册选择，支持 JPG / PNG，每张最多 10 MB，每项最多 20
+              张。
+            </Text>
+            <Text className="competition-note">
+              {edit.row
+                ? `已有 ${edit.row.photos.filter((p) => p.state === 'CONFIRMED').length} 张图片。保存资料后可继续添加或在清单中预览、移除。`
+                : '先保存物料，再选择图片；取消选图不会删除已保存的物料。'}
+            </Text>
+            <Action
+              primary
+              disabled={ctx.busy || (edit.row?.photos.length ?? 0) >= 20}
+              onClick={() => void save(true)}
+            >
+              {frozen ? '确认保存后上传图片' : '保存并上传图片'}
+            </Action>
+          </View>
           <Action primary disabled={ctx.busy} onClick={() => void save()}>
-            {frozen ? '重试原请求' : '保存物料'}
+            {frozen ? '重试原请求' : '仅保存物料'}
           </Action>
           <Action
             disabled={ctx.busy}
@@ -455,10 +504,22 @@ export default function SuppliesPage() {
                     历史
                   </Action>
                 </View>
-                {item.photos.map((p) => (
-                  <View key={p.id}>
+                <View className="supply-image-heading">
+                  <Text className="subtitle">物料图片</Text>
+                  <Text className="competition-note">
+                    {item.photos.filter((p) => p.state === 'CONFIRMED').length}{' '}
+                    张已上传 / 最多 20 张
+                  </Text>
+                </View>
+                {!item.photos.length && (
+                  <Text className="competition-note">
+                    暂无图片，可拍照或从相册上传物料实物图。
+                  </Text>
+                )}
+                {item.photos.map((p, index) => (
+                  <View className="supply-image-file" key={p.id}>
                     <Text className="competition-note">
-                      {p.originalName} ·{' '}
+                      图片 {index + 1} · {p.originalName} ·{' '}
                       {p.state === 'CONFIRMED' ? '已上传' : '待确认'}
                     </Text>
                     <View className="competition-row">
@@ -492,7 +553,9 @@ export default function SuppliesPage() {
                   disabled={ctx.busy || uploading || item.photos.length >= 20}
                   onClick={() => void photo(item)}
                 >
-                  上传照片（JPG / PNG，最多 10 MB）
+                  {item.photos.length >= 20
+                    ? '图片数量已达上限'
+                    : '＋ 上传图片 / 拍照'}
                 </Action>
               </View>
             ))}

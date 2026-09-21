@@ -272,3 +272,21 @@
   font-size: 24px;
   border-radius: 14px;
 }
+.supply-image-entry {
+  margin: 28px 0;
+  padding: 24px;
+  background: #edf5f1;
+  border: 1px dashed #668f7e;
+  border-radius: 18px;
+}
+.supply-image-heading {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #e2e9e5;
+}
+.supply-image-file {
+  padding: 16px 20px;
+  background: #f3f6f7;
+  border-radius: 14px;
+  margin: 16px 0;
+}
