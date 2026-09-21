@@ -72,12 +72,13 @@ export function ScheduleWeek({
           <span className="schedule-vs">vs</span>
           {match.awayLabel}
         </strong>
-        <span>
+        <span className="schedule-card-detail">
           {start
             ? `${start.slice(11)}–${end.slice(0, 10) !== start.slice(0, 10) ? '次日 ' : ''}${end.slice(11)}`
             : '时间待安排'}
+          <span aria-hidden="true"> · </span>
+          {match.venue || '场地待安排'}
         </span>
-        <span>{match.venue || '场地待安排'}</span>
       </button>
     );
   }

@@ -633,13 +633,13 @@
 }
 .schedule-week-scroll {
   overflow: auto;
-  max-height: 720px;
+  max-height: 600px;
   border: 1px solid var(--hq-border);
   border-radius: 12px;
 }
 .competition-panel .schedule-week-table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 920px;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -652,8 +652,8 @@
 }
 .schedule-week-table th {
   background: #f7f9f8;
-  padding: 14px 6px;
-  font-size: 13px;
+  padding: 9px 5px;
+  font-size: 12px;
 }
 .schedule-week-table thead th {
   position: sticky;
@@ -661,7 +661,7 @@
   z-index: 2;
 }
 .schedule-week-table th:first-child {
-  width: 64px;
+  width: 56px;
   position: sticky;
   left: 0;
   z-index: 1;
@@ -671,7 +671,7 @@
 }
 .schedule-week-table th span {
   display: block;
-  margin-top: 5px;
+  margin-top: 3px;
   font-weight: 400;
 }
 .schedule-week-table .is-today {
@@ -679,28 +679,28 @@
   background: #e9f4ef;
 }
 .schedule-week-table td {
-  height: 104px;
-  padding: 6px;
+  height: 76px;
+  padding: 4px;
 }
 .schedule-match-card {
   display: flex;
   flex-direction: column;
   width: 100%;
-  gap: 5px;
+  gap: 3px;
   border: 1px solid #c3ddd2;
   border-left: 3px solid #286b60;
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 7px;
+  padding: 7px;
   background: #edf6f1;
   color: #234d44;
   text-align: left;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 .schedule-match-card + .schedule-match-card {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .schedule-match-card:hover {
   background: #e0eee7;
@@ -715,16 +715,19 @@
   opacity: 0.6;
 }
 .schedule-match-card strong {
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.4;
 }
 .schedule-card-meta {
-  font-size: 11px;
+  font-size: 10px;
 }
 .schedule-vs {
-  display: block;
+  margin: 0 3px;
   font-weight: 400;
-  font-size: 11px;
+  font-size: 10px;
+}
+.schedule-card-detail {
+  line-height: 1.4;
 }
 .schedule-match-card.has-conflict {
   border-color: #b77b26;
