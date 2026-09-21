@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { Picker, Text, View } from '@tarojs/components';
-import Taro, { useDidShow } from '@tarojs/taro';
+import Taro, { useDidShow, useRouter } from '@tarojs/taro';
 import { client, newKey } from '../materials/session';
 import { Action, Field, Shell, confirm, saved, useCompetition } from './shared';
 import { bj, participantRoles, type S } from './model';
 type Team = S['EventTeamRosterViewDto'];
 type Member = S['EventParticipantDto'];
 export default function SituationPage() {
+  const initialMatch = useRouter().params.match ?? '';
   const [data, setData] = useState<S['EventSituationViewDto']>(),
     [date, setDate] = useState(''),
-    [matchId, setMatchId] = useState('');
+    [matchId, setMatchId] = useState(initialMatch);
   const [edit, setEdit] = useState<Team>();
   const ctx = useCompetition(() => {
     setData(undefined);
@@ -294,11 +295,17 @@ export default function SituationPage() {
                 <Action onClick={() => setMatchId(m.id)}>查看场次详情</Action>
               </View>
             ))}
-          {data && !data.matches.length && (
-            <View className="competition-empty">
-              暂无比赛，请先完成赛程编排。
-            </View>
-          )}
+          {data &&
+            !data.matches.some(
+              (m) =>
+                !date || (m.startAt && bj(m.startAt).slice(0, 10) === date),
+            ) && (
+              <View className="competition-empty">
+                {date
+                  ? '当天没有比赛，可切换日期或查看全部日期。'
+                  : '暂无比赛，请先完成赛程编排。'}
+              </View>
+            )}
         </View>
       )}
     </Shell>

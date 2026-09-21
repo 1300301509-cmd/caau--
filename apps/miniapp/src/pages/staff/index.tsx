@@ -322,7 +322,7 @@ export default function StaffPage() {
   );
   return (
     <View className="page staff-page">
-      <Text className="eyebrow">CAAU · 赛事协作</Text>
+      <Text className="eyebrow">我的比赛</Text>
       <View className="staff-heading">
         <Text className="title">
           {editor

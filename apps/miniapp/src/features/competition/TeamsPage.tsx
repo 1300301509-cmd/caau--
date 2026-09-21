@@ -263,19 +263,32 @@ export default function TeamsPage() {
             </Picker>
           )}
           {teamFields.map(([key, label, max]) => (
-            <Field
-              key={key}
-              label={label}
-              max={max}
-              value={editor.profile[key]}
-              disabled={ctx.busy || frozen}
-              onChange={(v) =>
-                setEditor({
-                  ...editor,
-                  profile: { ...editor.profile, [key]: v },
-                })
-              }
-            />
+            <View key={key}>
+              {key === 'name' && (
+                <Text className="competition-form-section">基本资料</Text>
+              )}
+              {key === 'province' && (
+                <Text className="competition-form-section">所在地区</Text>
+              )}
+              {key === 'shortName' && (
+                <Text className="competition-form-section">
+                  补充信息 · 选填
+                </Text>
+              )}
+              <Field
+                key={key}
+                label={label}
+                max={max}
+                value={editor.profile[key]}
+                disabled={ctx.busy || frozen}
+                onChange={(v) =>
+                  setEditor({
+                    ...editor,
+                    profile: { ...editor.profile, [key]: v },
+                  })
+                }
+              />
+            </View>
           ))}
           <Action
             primary

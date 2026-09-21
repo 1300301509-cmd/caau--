@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   bj,
+  scheduleDay,
+  upcomingMatches,
   shift,
   monday,
   inWeek,
@@ -48,4 +50,41 @@ test('photo preflight checks actual signature and byte limit, not filename exten
   assert.throws(() =>
     supplyPhotoExtension(new TextEncoder().encode('fake image').buffer),
   );
+});
+
+test('day filter keeps unscheduled matches and clears stale day when week changes', () => {
+  const matches = [
+    { id: 'mon', startAt: '2026-09-21T01:00:00Z' },
+    { id: 'tue', startAt: '2026-09-21T16:00:00Z' },
+    { id: 'later', startAt: '2026-09-28T01:00:00Z' },
+    { id: 'pending', startAt: '' },
+  ];
+  assert.deepEqual(
+    scheduleDay(matches, '2026-09-21', '2026-09-22').map((m) => m.id),
+    ['tue', 'pending'],
+  );
+  assert.deepEqual(
+    scheduleDay(matches, '2026-09-28', '2026-09-22').map((m) => m.id),
+    ['later', 'pending'],
+  );
+  assert.deepEqual(
+    scheduleDay(matches, '2026-09-21', '').map((m) => m.id),
+    ['mon', 'tue', 'pending'],
+  );
+});
+test('upcoming matches sort by absolute time and exclude past or unscheduled without mutating input', () => {
+  const matches = [
+    { startAt: '2026-09-22T10:00:00+08:00' },
+    { startAt: '' },
+    { startAt: '2026-09-22T01:00:00Z' },
+    { startAt: '2026-09-20T00:00:00Z' },
+  ];
+  const original = JSON.stringify(matches);
+  assert.deepEqual(
+    upcomingMatches(matches, Date.parse('2026-09-22T01:00:00Z')).map(
+      (m) => m.startAt,
+    ),
+    ['2026-09-22T01:00:00Z', '2026-09-22T10:00:00+08:00'],
+  );
+  assert.equal(JSON.stringify(matches), original);
 });

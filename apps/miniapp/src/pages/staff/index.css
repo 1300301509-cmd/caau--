@@ -103,3 +103,88 @@
   padding: 48px 24px;
   line-height: 1.7;
 }
+.staff-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: #f3f6f7;
+  padding: 24px 32px calc(48px + env(safe-area-inset-bottom));
+  color: #172d29;
+}
+.staff-page .title {
+  font-size: 42px;
+  line-height: 1.35;
+  letter-spacing: -1px;
+}
+.staff-page .eyebrow {
+  font-size: 24px;
+  color: #596b65;
+  letter-spacing: 0;
+}
+.staff-page .description {
+  font-size: 24px;
+  color: #596b65;
+  margin-bottom: 24px;
+}
+.staff-page .card {
+  border: 0;
+  box-shadow: none;
+  border-radius: 22px;
+  background: #fff;
+  padding: 28px;
+  margin-top: 20px;
+}
+.staff-page .subtitle {
+  font-size: 30px;
+  line-height: 1.5;
+}
+.staff-page button {
+  background: #eaf1ed;
+  color: #195e50;
+  border-radius: 14px;
+  padding: 20px 24px;
+  line-height: 1.65;
+  white-space: normal;
+}
+.staff-page button::after {
+  border: 0;
+}
+.staff-page button[disabled] {
+  opacity: 0.48;
+}
+.staff-page button:active {
+  opacity: 0.7;
+}
+.staff-page .staff-primary,
+.staff-page .selected {
+  background: #195e50;
+  color: #fff;
+}
+.staff-page .staff-hint {
+  color: #596b65;
+  font-size: 24px;
+}
+.staff-tabs {
+  background: #e2eae5;
+  border-radius: 18px;
+  padding: 6px;
+}
+.staff-tabs button {
+  background: transparent;
+}
+.staff-page .staff-tabs .selected {
+  background: #fff;
+  color: #195e50;
+  box-shadow: 0 2px 8px #173a2910;
+}
+.staff-form input,
+.staff-form textarea,
+.staff-search {
+  border-color: #cbd8d2;
+  background: #f8faf9;
+}
+.staff-empty {
+  background: #fff;
+  border-radius: 20px;
+  color: #596b65;
+  font-size: 27px;
+}

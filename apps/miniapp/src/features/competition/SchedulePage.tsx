@@ -3,7 +3,7 @@ import { Button, Picker, Text, View } from '@tarojs/components';
 import { useDidShow } from '@tarojs/taro';
 import { client, newKey } from '../materials/session';
 import { Action, Field, Shell, confirm, saved, useCompetition } from './shared';
-import { bj, inWeek, monday, shift, type S } from './model';
+import { bj, inWeek, monday, shift, scheduleDay, type S } from './model';
 type Schedule = S['ScheduleViewDto'];
 type Generate = S['GenerateScheduleDto'];
 type Adjust = S['AdjustScheduleMatchDto'];
@@ -26,6 +26,7 @@ export default function SchedulePage() {
   const [data, setData] = useState<Schedule>(),
     [teams, setTeams] = useState<S['TeamViewDto'][]>([]);
   const [week, setWeek] = useState(monday(bj(Date.now()).slice(0, 10)));
+  const [selectedDay, setSelectedDay] = useState('');
   const [generate, setGenerate] = useState<{
     format: Generate['format'];
     config: S['ScheduleConfigDto'];
@@ -193,7 +194,13 @@ export default function SchedulePage() {
       void load();
     }
   }
-  const shown = data?.matches.filter((m) => inWeek(m.startAt, week)) ?? [];
+  const weekMatches =
+    data?.matches.filter((m) => inWeek(m.startAt, week)) ?? [];
+  const activeDay =
+    selectedDay >= week && selectedDay <= shift(week, 6) ? selectedDay : '';
+  const shown = weekMatches.filter(
+    (m) => !activeDay || bj(m.startAt).slice(0, 10) === activeDay,
+  );
   const inputDate = (
     label: string,
     value: string,
@@ -231,7 +238,7 @@ export default function SchedulePage() {
   return (
     <Shell title="赛程编排" ctx={ctx}>
       <Text className="competition-note">
-        比赛时间均为北京时间。生成、调整和发布由后端校验。
+        比赛时间均为北京时间；处理全部冲突后可发布赛程。
       </Text>
       {frozen && (
         <View className="card">
@@ -443,42 +450,72 @@ export default function SchedulePage() {
                   {week} 至 {shift(week, 6)}
                 </Text>
               </Picker>
-              {[...shown, ...data.matches.filter((m) => !m.startAt)].map(
-                (m) => (
-                  <View className="card" key={m.id}>
-                    <Text className="competition-note">
-                      {m.startAt ? bj(m.startAt).replace('T', ' ') : '待安排'} ·
-                      第 {m.round} 轮
-                    </Text>
-                    <Text className="subtitle">
-                      {m.homeLabel} vs {m.awayLabel}
-                    </Text>
-                    <Text className="competition-line">
-                      {m.venue || '场地待安排'}
-                    </Text>
-                    <Action
-                      disabled={ctx.busy || frozen}
-                      onClick={() => {
-                        const date = m.startAt
-                          ? bj(m.startAt)
-                          : `${week}T09:00`;
-                        setAdjust({
-                          id: m.id,
-                          revision: data.revision,
-                          date: date.slice(0, 10),
-                          time: date.slice(11, 16),
-                          venue: m.venue,
-                        });
-                      }}
-                    >
-                      调整比赛
-                    </Action>
+              <View className="competition-day-strip">
+                {['一', '二', '三', '四', '五', '六', '日'].map(
+                  (label, index) => {
+                    const date = shift(week, index);
+                    const count = weekMatches.filter(
+                      (m) => bj(m.startAt).slice(0, 10) === date,
+                    ).length;
+                    return (
+                      <Button
+                        key={date}
+                        className={activeDay === date ? 'selected' : ''}
+                        ariaLabel={`${date}，${count}场，${activeDay === date ? '再次点击查看全周' : '查看当天'}`}
+                        onClick={() =>
+                          setSelectedDay(activeDay === date ? '' : date)
+                        }
+                      >
+                        <Text>{label}</Text>
+                        <Text className="competition-day-number">
+                          {date.slice(8)}
+                        </Text>
+                        <Text className="competition-day-count">{count}场</Text>
+                      </Button>
+                    );
+                  },
+                )}
+              </View>
+              <Text className="competition-note">
+                {activeDay
+                  ? `${activeDay} · 点击已选日期返回全周`
+                  : '全周赛程 · 点击日期查看当天'}
+              </Text>
+              {scheduleDay(data.matches, week, activeDay).map((m) => (
+                <View className="card match-schedule-card" key={m.id}>
+                  <Text className="competition-note">
+                    {m.startAt ? bj(m.startAt).replace('T', ' ') : '待安排'} ·
+                    第 {m.round} 轮
+                  </Text>
+                  <View className="competition-match-teams">
+                    <Text>{m.homeLabel}</Text>
+                    <Text className="competition-versus">VS</Text>
+                    <Text>{m.awayLabel}</Text>
                   </View>
-                ),
-              )}
+                  <Text className="competition-line">
+                    {m.venue || '场地待安排'}
+                  </Text>
+                  <Action
+                    disabled={ctx.busy || frozen}
+                    onClick={() => {
+                      const date = m.startAt ? bj(m.startAt) : `${week}T09:00`;
+                      setAdjust({
+                        id: m.id,
+                        revision: data.revision,
+                        date: date.slice(0, 10),
+                        time: date.slice(11, 16),
+                        venue: m.venue,
+                      });
+                    }}
+                  >
+                    调整比赛
+                  </Action>
+                </View>
+              ))}
               {!shown.length && (
                 <Text className="competition-note">
-                  本周暂无已安排比赛；待安排场次仍显示在上方。
+                  {activeDay ? '当天' : '本周'}
+                  暂无已安排比赛；待安排场次仍显示在上方。
                 </Text>
               )}
               <Action

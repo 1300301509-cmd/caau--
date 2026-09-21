@@ -399,16 +399,22 @@ export default function SuppliesPage() {
             </Action>
           </View>
           <Field label="搜索物料" value={query} onChange={setQuery} />
-          <Picker
-            range={['全部状态', ...Object.values(supplyStatuses)]}
-            onChange={(e) =>
-              setFilter(
-                Object.keys(supplyStatuses)[Number(e.detail.value) - 1] ?? '',
-              )
-            }
-          >
-            <Text>状态：{supplyStatuses[filter as Status] ?? '全部'}</Text>
-          </Picker>
+          <View className="competition-filter-chips">
+            {[['', '全部'], ...Object.entries(supplyStatuses)].map(
+              ([key, label]) => (
+                <Action
+                  key={key}
+                  primary={filter === key}
+                  onClick={() => setFilter(key ?? '')}
+                >
+                  {label}
+                  {ready
+                    ? ` ${items.filter((i) => !key || i.status === key).length}`
+                    : ''}
+                </Action>
+              ),
+            )}
+          </View>
           {items
             .filter(
               (i) =>
@@ -490,9 +496,18 @@ export default function SuppliesPage() {
                 </Action>
               </View>
             ))}
-          {ready && !items.length && (
-            <View className="competition-empty">暂无物料，请新增清单。</View>
-          )}
+          {ready &&
+            !items.some(
+              (i) =>
+                i.name.includes(query.trim()) &&
+                (!filter || i.status === filter),
+            ) && (
+              <View className="competition-empty">
+                {items.length
+                  ? '没有符合筛选条件的物料，试试其他状态或关键词。'
+                  : '还没有物料清单，点击“新增物料”开始准备。'}
+              </View>
+            )}
         </View>
       )}
     </Shell>

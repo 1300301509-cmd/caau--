@@ -77,3 +77,198 @@
   text-align: center;
   color: var(--muted);
 }
+/* CAAU competition workspace: quiet surfaces, compact mobile hierarchy. */
+.competition-mobile {
+  --primary: #195e50;
+  --muted: #586b65;
+  --border: #cbd8d2;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: #f3f6f7;
+  padding: 24px 32px calc(48px + env(safe-area-inset-bottom));
+  color: #172d29;
+}
+.competition-page-heading {
+  padding: 12px 0 24px;
+}
+.competition-mobile .eyebrow {
+  font-size: 24px;
+  color: #596b65;
+  letter-spacing: 0;
+  margin: 0 0 6px;
+}
+.competition-mobile .title {
+  font-size: 42px;
+  line-height: 1.35;
+  margin: 0;
+  letter-spacing: -1px;
+}
+.competition-mobile .subtitle {
+  font-size: 30px;
+  line-height: 1.5;
+  margin: 0;
+  color: #172d29;
+}
+.competition-mobile .card {
+  padding: 28px;
+  border: 0;
+  border-radius: 22px;
+  box-shadow: none;
+  background: #fff;
+  margin-top: 20px;
+}
+.competition-mobile button {
+  padding: 20px 24px;
+  border-radius: 14px;
+  background: #eaf1ed;
+  color: #195e50;
+  line-height: 1.65;
+  font-weight: 550;
+  white-space: normal;
+}
+.competition-mobile button::after {
+  border: 0;
+}
+.competition-mobile .competition-primary,
+.competition-mobile .selected {
+  background: #195e50;
+  color: #fff;
+}
+.competition-mobile button[disabled] {
+  opacity: 0.48;
+}
+.competition-mobile .competition-pressed {
+  opacity: 0.7;
+}
+.competition-mobile .competition-row {
+  margin: 16px 0;
+  gap: 8px;
+}
+.competition-mobile .competition-row button {
+  margin: 0;
+  padding: 20px 12px;
+  min-width: 0;
+  font-size: 25px;
+}
+.competition-mobile .competition-note {
+  font-size: 24px;
+  margin: 12px 0;
+  line-height: 1.7;
+}
+.competition-mobile .competition-line {
+  font-size: 27px;
+  line-height: 1.65;
+}
+.competition-mobile .competition-field {
+  margin: 24px 0;
+}
+.competition-field > text {
+  font-size: 26px;
+  font-weight: 550;
+  color: #334e45;
+}
+.competition-field input,
+.competition-field textarea {
+  background: #f8faf9;
+  border-color: #cbd8d2;
+  padding: 22px;
+  font-size: 28px;
+  border-radius: 14px;
+}
+.competition-mobile picker {
+  background: #fff;
+  border-color: #cbd8d2;
+  font-size: 27px;
+  padding: 24px;
+}
+.competition-mobile .competition-empty {
+  margin-top: 24px;
+  padding: 64px 32px;
+  background: #fff;
+  border-radius: 20px;
+  font-size: 27px;
+  line-height: 1.8;
+}
+.competition-loading {
+  padding: 16px 24px;
+  border-left: 4px solid #195e50;
+  background: #e7f0eb;
+  color: #195e50;
+  font-size: 25px;
+  border-radius: 8px;
+}
+.competition-form-section {
+  display: block;
+  border-top: 1px solid #e2e9e5;
+  padding-top: 28px;
+  margin-top: 32px;
+  font-weight: 650;
+  font-size: 29px;
+}
+.competition-day-strip {
+  display: flex;
+  gap: 6px;
+  margin: 20px 0;
+}
+.competition-mobile .competition-day-strip button {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 16px 0;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 24px;
+}
+.competition-day-strip text {
+  display: block;
+}
+.competition-mobile .competition-day-strip .selected {
+  background: #195e50;
+  color: #fff;
+}
+.competition-day-number {
+  font-size: 31px;
+  font-weight: 650;
+}
+.competition-day-count {
+  font-size: 20px;
+  margin-top: 4px;
+}
+.competition-mobile .match-schedule-card {
+  border-left: 5px solid #195e50;
+}
+.competition-mobile .match-schedule-card .competition-row {
+  align-items: center;
+}
+.competition-match-teams {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 0;
+}
+.competition-match-teams > text {
+  flex: 1;
+  font-size: 29px;
+  font-weight: 600;
+}
+.competition-match-teams .competition-versus {
+  flex: 0 0 40px;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 22px;
+  color: #596b65;
+}
+.competition-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 24px 0;
+}
+.competition-mobile .competition-filter-chips button {
+  flex: 0 0 auto;
+  margin: 0;
+  min-height: 88px;
+  padding: 20px;
+  font-size: 24px;
+  border-radius: 14px;
+}

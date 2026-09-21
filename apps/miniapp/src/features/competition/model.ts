@@ -18,6 +18,28 @@ export function inWeek(value: string, week: string) {
   const date = bj(value).slice(0, 10);
   return date >= week && date < shift(week, 7);
 }
+export function scheduleDay<T extends { startAt: string }>(
+  matches: T[],
+  week: string,
+  selectedDay: string,
+) {
+  const day =
+    selectedDay >= week && selectedDay <= shift(week, 6) ? selectedDay : '';
+  return matches.filter(
+    (m) =>
+      !m.startAt ||
+      (inWeek(m.startAt, week) && (!day || bj(m.startAt).slice(0, 10) === day)),
+  );
+}
+export function upcomingMatches<T extends { startAt: string }>(
+  matches: T[],
+  now: number,
+) {
+  return matches
+    .filter((m) => m.startAt && Date.parse(m.startAt) >= now)
+    .sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt))
+    .slice(0, 3);
+}
 export const teamFields = [
   ['name', '球队名称 *', 120],
   ['contactName', '负责人 *', 80],

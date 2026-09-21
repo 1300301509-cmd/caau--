@@ -99,14 +99,20 @@ export function Shell({
 }) {
   return (
     <View className="page competition-mobile">
-      <Text className="eyebrow">我的比赛</Text>
-      <Text className="title">{title}</Text>
+      <View className="competition-page-heading">
+        <Text className="eyebrow">我的比赛</Text>
+        <Text className="title">{title}</Text>
+      </View>
       {ctx.error && (
         <View className="competition-error" role="alert">
           {ctx.error}
         </View>
       )}
-      {ctx.busy && <Text className="competition-note">正在处理…</Text>}
+      {ctx.busy && (
+        <View className="competition-loading" role="status">
+          正在更新，请稍候…
+        </View>
+      )}
       {children}
     </View>
   );
@@ -164,6 +170,7 @@ export function Action({
   return (
     <Button
       className={primary ? 'competition-primary' : ''}
+      hoverClass="competition-pressed"
       disabled={disabled}
       onClick={onClick}
     >
