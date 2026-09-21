@@ -12,7 +12,7 @@ export class EventSupplyPhotoViewDto {
   @ApiProperty() originalName!: string;
   @ApiProperty({ enum: ['png', 'jpg', 'jpeg'] }) extension!: string;
   @ApiProperty({ type: 'integer' }) expectedBytes!: number;
-  @ApiProperty({ enum: ['PENDING', 'CONFIRMED'] }) state!: string;
+  @ApiProperty({ enum: ['PENDING', 'CONFIRMED', 'REMOVED'] }) state!: string;
   @ApiProperty({ type: String, format: 'date-time', nullable: true })
   confirmedAt!: string | null;
 }

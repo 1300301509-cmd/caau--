@@ -2205,7 +2205,7 @@ export interface components {
       id: string;
       originalName: string;
       /** @enum {string} */
-      state: 'PENDING' | 'CONFIRMED';
+      state: 'PENDING' | 'CONFIRMED' | 'REMOVED';
     };
     EventTeamRosterViewDto: {
       eventTeamId: string;

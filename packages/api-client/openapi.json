@@ -1185,7 +1185,7 @@
             "type": "string"
           },
           "state": {
-            "enum": ["PENDING", "CONFIRMED"],
+            "enum": ["PENDING", "CONFIRMED", "REMOVED"],
             "type": "string"
           }
         },

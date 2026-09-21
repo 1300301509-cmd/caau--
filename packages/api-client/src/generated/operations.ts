@@ -1189,7 +1189,7 @@ export const operations = {
           extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
           id: { format: 'uuid', type: 'string' },
           originalName: { type: 'string' },
-          state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+          state: { enum: ['PENDING', 'CONFIRMED', 'REMOVED'], type: 'string' },
         },
         required: [
           'id',
@@ -1254,7 +1254,7 @@ export const operations = {
           extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
           id: { format: 'uuid', type: 'string' },
           originalName: { type: 'string' },
-          state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+          state: { enum: ['PENDING', 'CONFIRMED', 'REMOVED'], type: 'string' },
         },
         required: [
           'id',
@@ -2408,7 +2408,10 @@ export const operations = {
                   extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
                   id: { format: 'uuid', type: 'string' },
                   originalName: { type: 'string' },
-                  state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+                  state: {
+                    enum: ['PENDING', 'CONFIRMED', 'REMOVED'],
+                    type: 'string',
+                  },
                 },
                 required: [
                   'id',
@@ -2487,7 +2490,10 @@ export const operations = {
                 extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
                 id: { format: 'uuid', type: 'string' },
                 originalName: { type: 'string' },
-                state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+                state: {
+                  enum: ['PENDING', 'CONFIRMED', 'REMOVED'],
+                  type: 'string',
+                },
               },
               required: [
                 'id',
@@ -2573,7 +2579,10 @@ export const operations = {
                 extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
                 id: { format: 'uuid', type: 'string' },
                 originalName: { type: 'string' },
-                state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+                state: {
+                  enum: ['PENDING', 'CONFIRMED', 'REMOVED'],
+                  type: 'string',
+                },
               },
               required: [
                 'id',
@@ -2696,7 +2705,7 @@ export const operations = {
           extension: { enum: ['png', 'jpg', 'jpeg'], type: 'string' },
           id: { format: 'uuid', type: 'string' },
           originalName: { type: 'string' },
-          state: { enum: ['PENDING', 'CONFIRMED'], type: 'string' },
+          state: { enum: ['PENDING', 'CONFIRMED', 'REMOVED'], type: 'string' },
         },
         required: [
           'id',

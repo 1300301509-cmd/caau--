@@ -170,3 +170,43 @@ test('authorization responses validate required fields and array item shapes', a
   await assert.rejects(client.request('getSecurityAudit'), /生成契约/);
   await assert.rejects(client.request('getIdentity'), /生成契约/);
 });
+
+test('photo removal accepts REMOVED including retry and allows the following list refresh', async () => {
+  const photo = {
+    id: '00000000-0000-4000-8000-000000000001',
+    originalName: 'test.png',
+    extension: 'png',
+    expectedBytes: 99,
+    state: 'REMOVED',
+    confirmedAt: '2026-09-21T00:00:00.000Z',
+  };
+  const calls = [];
+  const client = createApiClient('http://localhost', async (request) => {
+    calls.push(request.method);
+    return { status: 200, data: request.method === 'POST' ? photo : [] };
+  });
+  const input = { path: { id: photo.id }, body: { expectedRevision: 2 } };
+  assert.equal(
+    (await client.request('removeEventSupplyPhoto', input)).state,
+    'REMOVED',
+  );
+  assert.deepEqual(
+    await client.request('listEventSupplies', {
+      path: { eventId: '00000000-0000-4000-8000-000000000002' },
+    }),
+    [],
+  );
+  assert.equal(
+    (await client.request('removeEventSupplyPhoto', input)).state,
+    'REMOVED',
+  );
+  assert.deepEqual(calls, ['POST', 'GET', 'POST']);
+  const invalid = createApiClient('http://localhost', async () => ({
+    status: 200,
+    data: { ...photo, state: 'UNKNOWN' },
+  }));
+  await assert.rejects(
+    invalid.request('removeEventSupplyPhoto', input),
+    /生成契约/,
+  );
+});
