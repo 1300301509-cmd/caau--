@@ -2,6 +2,7 @@ export default {
   pages: [
     'pages/login/index',
     'pages/home/index',
+    'pages/staff/index',
     'pages/hosting/index',
     'pages/hosting-hub/index',
     'pages/hosting-progress/index',

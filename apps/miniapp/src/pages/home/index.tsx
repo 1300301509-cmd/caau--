@@ -176,6 +176,22 @@ export default function Home() {
             </View>
             <Text className="home-module-name">我要办赛</Text>
           </Button>
+          <Button
+            className="home-module-item"
+            disabled={eventStatus !== 'ready' || !currentEvent}
+            ariaLabel="人员管理"
+            onClick={() =>
+              currentEvent &&
+              void Taro.navigateTo({
+                url: `/pages/staff/index?event=${encodeURIComponent(currentEvent.id)}`,
+              })
+            }
+          >
+            <View className="home-module-icon">
+              <Text>人员</Text>
+            </View>
+            <Text className="home-module-name">人员管理</Text>
+          </Button>
         </View>
       </View>
     </View>
