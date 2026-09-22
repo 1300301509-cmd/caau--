@@ -34,7 +34,10 @@ export async function materialBrowserTest({ config, tokens, sql }) {
   let browser;
   let webListening = false;
   try {
-    await app.listen(3000, '127.0.0.1');
+    await app.listen(
+      Number(process.env.CAAU_BROWSER_API_PORT ?? 3000),
+      '127.0.0.1',
+    );
     await new Promise((resolve, reject) => {
       web.once('error', reject);
       web.listen(4173, '127.0.0.1', resolve);
@@ -141,7 +144,10 @@ export async function materialBrowserTest({ config, tokens, sql }) {
     assert.equal(row.state, 'PUBLISHED');
     await app.close();
     app = await createApplication(config);
-    await app.listen(3000, '127.0.0.1');
+    await app.listen(
+      Number(process.env.CAAU_BROWSER_API_PORT ?? 3000),
+      '127.0.0.1',
+    );
     await page.getByRole('button', { name: '刷新数据', exact: true }).click();
     await expect(
       page.getByText('已刷新当前权限与数据', { exact: true }),

@@ -42,7 +42,10 @@ export async function eventSuppliesBrowserTest({
   let browser;
   let page;
   try {
-    await app.listen(3000, '127.0.0.1');
+    await app.listen(
+      Number(process.env.CAAU_BROWSER_API_PORT ?? 3000),
+      '127.0.0.1',
+    );
     await new Promise((resolve, reject) => {
       web.once('error', reject);
       web.listen(4173, '127.0.0.1', resolve);

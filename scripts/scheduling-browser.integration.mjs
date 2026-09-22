@@ -37,7 +37,10 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
   let browser;
   let page;
   try {
-    await app.listen(3000, '127.0.0.1');
+    await app.listen(
+      Number(process.env.CAAU_BROWSER_API_PORT ?? 3000),
+      '127.0.0.1',
+    );
     await new Promise((resolve, reject) => {
       web.once('error', reject);
       web.listen(4173, '127.0.0.1', resolve);
@@ -135,6 +138,34 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await expect(page.locator('.schedule-agent-preview')).toContainText(
       '此操作尚未保存',
     );
+    await expect(page.locator('.schedule-agent-confirmation')).toContainText(
+      'schedule.draft.adjust@v1',
+    );
+    await expect(page.locator('.schedule-agent-confirmation')).toContainText(
+      '执行人',
+    );
+    await page.getByRole('button', { name: /取\s*消/ }).click();
+    await expect(page.locator('.schedule-agent-preview')).toHaveCount(0);
+    await page.getByLabel('调整要求').fill('把周二第二场比赛改到周三十点');
+    await page.getByRole('button', { name: '生成调整预览' }).click();
+    await expect(page.locator('.schedule-agent-preview')).toBeVisible({
+      timeout: 15000,
+    });
+    await page.getByRole('button', { name: '确认保存草稿' }).click();
+    await expect(page.getByText(/草稿已保存 · V/)).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.locator('.schedule-agent-result-details')).toContainText(
+      '首次执行回执',
+    );
+    await expect(page.locator('.schedule-agent-result-details')).toContainText(
+      '命令：',
+    );
+    if ((await settings.getAttribute('open')) === null) {
+      await settings.locator('> summary').click();
+    }
+    await generate.click();
+    await expect(page.getByText('当前有')).toHaveCount(0);
     await page
       .locator('.schedule-week-table .schedule-match-card')
       .first()

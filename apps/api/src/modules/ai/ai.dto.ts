@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ScheduleAdjustmentPreviewDto } from '../scheduling/scheduling.dto.js';
+import {
+  ScheduleAdjustmentPreviewDto,
+  ScheduleIssueDto,
+} from '../scheduling/scheduling.dto.js';
 
 export class AgentModelConnectionResultDto {
   @ApiProperty({
@@ -53,6 +56,49 @@ export class AgentTaskParametersDto {
   @ApiPropertyOptional() venue?: string;
 }
 
+export class AgentConfirmationSummaryDto {
+  @ApiProperty() homeLabel!: string;
+  @ApiProperty() awayLabel!: string;
+  @ApiProperty() beforeStartAt!: string;
+  @ApiProperty() beforeVenue!: string;
+  @ApiProperty() afterStartAt!: string;
+  @ApiProperty() afterVenue!: string;
+}
+
+export class AgentConfirmationTicketViewDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() actorId!: string;
+  @ApiProperty() actorDisplayName!: string;
+  @ApiProperty() eventId!: string;
+  @ApiProperty() eventName!: string;
+  @ApiProperty() matchId!: string;
+  @ApiProperty() expectedRevision!: number;
+  @ApiProperty() parameterHash!: string;
+  @ApiProperty() toolVersion!: string;
+  @ApiProperty() expiresAt!: string;
+  @ApiProperty({ enum: ['PENDING', 'EXECUTED', 'CANCELLED'] })
+  state!: 'PENDING' | 'EXECUTED' | 'CANCELLED';
+  @ApiProperty({ type: AgentConfirmationSummaryDto })
+  parameterSummary!: AgentConfirmationSummaryDto;
+}
+
+export class ConfirmAgentScheduleAdjustmentDto {
+  @ApiProperty() eventId!: string;
+  @ApiProperty() matchId!: string;
+  @ApiProperty() parameterHash!: string;
+}
+
+export class AgentScheduleAdjustmentResultDto {
+  @ApiProperty() ticketId!: string;
+  @ApiProperty() commandId!: string;
+  @ApiProperty() replayed!: boolean;
+  @ApiProperty() eventId!: string;
+  @ApiProperty() matchId!: string;
+  @ApiProperty() revision!: number;
+  @ApiProperty({ enum: ['DRAFT'] }) status!: 'DRAFT';
+  @ApiProperty({ type: [ScheduleIssueDto] }) issues!: ScheduleIssueDto[];
+}
+
 export class AgentTaskViewDto {
   @ApiProperty() id!: string;
   @ApiProperty() goal!: string;
@@ -64,6 +110,8 @@ export class AgentTaskViewDto {
       'PREVIEW_READY',
       'STALE',
       'FAILED',
+      'EXECUTED',
+      'CANCELLED',
     ],
   })
   step!:
@@ -72,7 +120,9 @@ export class AgentTaskViewDto {
     | 'WAITING_PARAMETERS'
     | 'PREVIEW_READY'
     | 'STALE'
-    | 'FAILED';
+    | 'FAILED'
+    | 'EXECUTED'
+    | 'CANCELLED';
   @ApiPropertyOptional({ type: String, nullable: true }) eventId!:
     | string
     | null;
@@ -87,6 +137,11 @@ export class AgentTaskViewDto {
   @ApiProperty({ type: [String] }) pendingFields!: string[];
   @ApiPropertyOptional({ type: ScheduleAdjustmentPreviewDto, nullable: true })
   preview!: ScheduleAdjustmentPreviewDto | null;
+  @ApiPropertyOptional({
+    type: AgentConfirmationTicketViewDto,
+    nullable: true,
+  })
+  confirmation!: AgentConfirmationTicketViewDto | null;
   @ApiPropertyOptional({ type: String, nullable: true }) expiresAt!:
     | string
     | null;

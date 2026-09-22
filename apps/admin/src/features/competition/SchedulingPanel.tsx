@@ -96,6 +96,13 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
       ? (sessionStorage.getItem('caau.local-test-session') ?? '')
       : '';
   const [state, dispatch] = useReducer(reducer, initial);
+  const roles = auth.identity?.roles ?? [];
+  const canDraftAdjust = roles.some((role) =>
+    ['HEADQUARTERS_SUPER_ADMIN', 'EVENT_MANAGER', 'ORGANIZER'].includes(role),
+  );
+  const canPublish = roles.some((role) =>
+    ['HEADQUARTERS_SUPER_ADMIN', 'EVENT_MANAGER', 'ORGANIZER'].includes(role),
+  );
   const [form] = Form.useForm<FormValues>();
   const [editForm] = Form.useForm<{ startAt: string; venue: string }>();
   async function load() {
@@ -105,10 +112,18 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
     }
     dispatch({ type: 'loading' });
     try {
-      const [schedule, teams] = await Promise.all([
-        client.request('getEventSchedule', { token, path: { eventId } }),
-        client.request('listEventTeams', { token, path: { eventId } }),
-      ]);
+      const schedule = await client.request('getEventSchedule', {
+        token,
+        path: { eventId },
+      });
+      const teams = canDraftAdjust
+        ? await client
+            .request('listEventTeams', { token, path: { eventId } })
+            .catch((cause) => {
+              if (cause instanceof ApiError && cause.status === 403) return [];
+              throw cause;
+            })
+        : [];
       dispatch({ type: 'loaded', schedule, teams });
       const activeIds = teams
         .filter((item) => item.active)
@@ -230,6 +245,13 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
           </Tag>
         )}
       </header>
+      {!canDraftAdjust && (
+        <Alert
+          type="info"
+          showIcon
+          title="当前身份为赛程只读权限，不能生成、调整或发布。"
+        />
+      )}
       {state.error && (
         <Alert
           type="error"
@@ -242,7 +264,7 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
           }
         />
       )}
-      <ScheduleAgent eventId={eventId} />
+      <ScheduleAgent eventId={eventId} onDraftSaved={load} />
       <div className="schedule-layout">
         <details className="schedule-settings" open={!schedule?.exists}>
           <summary>编排条件 · 点击展开或收起</summary>
@@ -250,7 +272,7 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
             form={form}
             layout="vertical"
             className="schedule-config"
-            disabled={state.loading || state.saving}
+            disabled={state.loading || state.saving || !canDraftAdjust}
             onFinish={() => void generate()}
           >
             <h3>编排条件</h3>
@@ -374,6 +396,7 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
               <Button
                 type="primary"
                 disabled={
+                  !canPublish ||
                   !schedule?.exists ||
                   schedule.status === 'PUBLISHED' ||
                   !!schedule.issues.length
@@ -413,7 +436,7 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
           {schedule?.exists ? (
             <ScheduleWeek
               schedule={schedule}
-              disabled={state.loading || state.saving}
+              disabled={state.loading || state.saving || !canDraftAdjust}
               onEdit={edit}
             />
           ) : (

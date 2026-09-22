@@ -4,6 +4,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { chromium, expect } from '@playwright/test';
 import { createApplication } from '../apps/api/dist/application.js';
 export async function teamsBrowserTest({ config, tokens, eventId }) {
+  const apiOrigin = `http://127.0.0.1:${process.env.CAAU_BROWSER_API_PORT ?? 3000}`;
   const web = createServer(async (request, response) => {
     const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
     const asset = /^\/assets\/[a-zA-Z0-9_.-]+\.(js|css|jpg|png|svg)$/.test(
@@ -38,7 +39,10 @@ export async function teamsBrowserTest({ config, tokens, eventId }) {
   let browser;
   let page;
   try {
-    await app.listen(3000, '127.0.0.1');
+    await app.listen(
+      Number(process.env.CAAU_BROWSER_API_PORT ?? 3000),
+      '127.0.0.1',
+    );
     await new Promise((resolve, reject) => {
       web.once('error', reject);
       web.listen(4173, '127.0.0.1', resolve);
@@ -100,7 +104,7 @@ export async function teamsBrowserTest({ config, tokens, eventId }) {
     await page.getByRole('button', { name: /^保\s*存$/ }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const activeTeams = (
-      await fetch(`http://127.0.0.1:3000/api/v1/events/${eventId}/teams`, {
+      await fetch(`${apiOrigin}/api/v1/events/${eventId}/teams`, {
         headers: { Authorization: `Bearer ${tokens.super}` },
       }).then((response) => response.json())
     ).filter((team) => team.active);
@@ -109,7 +113,7 @@ export async function teamsBrowserTest({ config, tokens, eventId }) {
       .toISOString()
       .slice(0, 10);
     const scheduleResponse = await fetch(
-      `http://127.0.0.1:3000/api/v1/events/${eventId}/schedule/generate`,
+      `${apiOrigin}/api/v1/events/${eventId}/schedule/generate`,
       {
         method: 'POST',
         headers: {
@@ -137,7 +141,7 @@ export async function teamsBrowserTest({ config, tokens, eventId }) {
     const generatedSchedule = await scheduleResponse.json();
     assert.equal(generatedSchedule.issues.length, 0);
     const publishResponse = await fetch(
-      `http://127.0.0.1:3000/api/v1/events/${eventId}/schedule/publish`,
+      `${apiOrigin}/api/v1/events/${eventId}/schedule/publish`,
       {
         method: 'POST',
         headers: {
@@ -183,7 +187,7 @@ export async function teamsBrowserTest({ config, tokens, eventId }) {
       page.getByRole('row').filter({ hasText: '合成浏览器赛事修改' }),
     ).toContainText('已退出');
     const scheduleAfter = await fetch(
-      `http://127.0.0.1:3000/api/v1/events/${eventId}/schedule`,
+      `${apiOrigin}/api/v1/events/${eventId}/schedule`,
       { headers: { Authorization: `Bearer ${tokens.super}` } },
     ).then((response) => response.json());
     assert.equal(scheduleAfter.revision, scheduleBefore.revision);

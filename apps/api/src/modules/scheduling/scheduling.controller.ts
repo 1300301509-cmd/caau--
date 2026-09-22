@@ -39,7 +39,7 @@ export class SchedulingController {
   constructor(private readonly scheduling: SchedulingService) {}
 
   @Get()
-  @Permission('schedules')
+  @Permission('schedule.read')
   @ApiOperation({ operationId: 'getEventSchedule' })
   @ApiOkResponse({ type: ScheduleViewDto })
   get(@Param('eventId') eventId: string, @Req() request: AuthRequest) {
@@ -48,7 +48,7 @@ export class SchedulingController {
 
   @Post('preview-adjustment')
   @HttpCode(200)
-  @Permission('schedules')
+  @Permission('schedule.read')
   @ApiOperation({ operationId: 'previewEventScheduleAdjustment' })
   @ApiOkResponse({ type: ScheduleAdjustmentPreviewDto })
   preview(
@@ -64,7 +64,7 @@ export class SchedulingController {
   }
 
   @Post('generate')
-  @Permission('schedules')
+  @Permission('schedule.draft.adjust')
   @HttpCode(200)
   @ApiOperation({ operationId: 'generateEventSchedule' })
   @ApiOkResponse({ type: ScheduleViewDto })
@@ -77,7 +77,7 @@ export class SchedulingController {
   }
 
   @Put('matches/:matchId')
-  @Permission('schedules')
+  @Permission('schedule.draft.adjust')
   @HttpCode(200)
   @ApiOperation({ operationId: 'adjustEventScheduleMatch' })
   @ApiOkResponse({ type: ScheduleViewDto })
@@ -91,7 +91,7 @@ export class SchedulingController {
   }
 
   @Post('publish')
-  @Permission('schedules')
+  @Permission('schedule.publish')
   @HttpCode(200)
   @ApiOperation({ operationId: 'publishEventSchedule' })
   @ApiOkResponse({ type: ScheduleViewDto })

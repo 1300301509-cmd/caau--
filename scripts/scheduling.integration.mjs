@@ -710,6 +710,308 @@ export async function schedulingIntegration(t, context) {
   );
 
   await t.test(
+    'agent C1: permission split, bound confirmation and exactly-once draft adjustment',
+    async () => {
+      const weekendConfig = {
+        ...config,
+        startDate: '2027-06-05',
+        endDate: '2027-06-06',
+      };
+      schedule = await call(
+        'manager',
+        'POST',
+        `events/${event.id}/schedule/generate`,
+        {
+          commandId: randomUUID(),
+          format: 'ROUND_ROBIN',
+          config: weekendConfig,
+        },
+      );
+      await sql.query(
+        'INSERT INTO "EventGrant" (id,"eventId","memberId",active) VALUES ($1,$2,$3,true) ON CONFLICT ("eventId","memberId") DO UPDATE SET active=true',
+        [randomUUID(), event.id, members.reviewer],
+      );
+      await call('reviewer', 'GET', `events/${event.id}/schedule`);
+      await call(
+        'reviewer',
+        'POST',
+        `events/${event.id}/schedule/preview-adjustment`,
+        {
+          expectedRevision: schedule.revision,
+          matchId: schedule.matches[0].id,
+          startAt: schedule.matches[0].startAt,
+          venue: schedule.matches[0].venue,
+        },
+      );
+      await call(
+        'reviewer',
+        'PUT',
+        `events/${event.id}/schedule/matches/${schedule.matches[0].id}`,
+        {
+          commandId: randomUUID(),
+          expectedRevision: schedule.revision,
+          startAt: schedule.matches[0].startAt,
+          venue: schedule.matches[0].venue,
+        },
+        403,
+      );
+      await call(
+        'reviewer',
+        'POST',
+        `events/${event.id}/schedule/publish`,
+        { commandId: randomUUID(), expectedRevision: schedule.revision },
+        403,
+      );
+
+      const agentSession = await call('manager', 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const beforeModelFailure = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      const ticketsBeforeModelFailure = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "AgentConfirmationTicket" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        {
+          message: '__CAAU_SYNTHETIC_MODEL_TIMEOUT__',
+          eventId: event.id,
+          newTask: true,
+        },
+        503,
+      );
+      assert.equal(
+        (await call('manager', 'GET', `events/${event.id}/schedule`)).revision,
+        beforeModelFailure.revision,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentConfirmationTicket" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        ticketsBeforeModelFailure,
+      );
+      const issue = async () => {
+        const response = await call(
+          'manager',
+          'POST',
+          `agent/sessions/${agentSession.id}/messages`,
+          {
+            message: '把周六第二场比赛改到周日十点',
+            eventId: event.id,
+            newTask: true,
+          },
+        );
+        assert.equal(response.status, 'PREVIEW');
+        assert.equal(response.task.confirmation.state, 'PENDING');
+        assert.equal(response.task.confirmation.actorId, users.manager);
+        assert.equal(response.task.confirmation.eventId, event.id);
+        assert.equal(
+          response.task.confirmation.matchId,
+          response.task.preview.before.id,
+        );
+        assert.equal(
+          response.task.confirmation.expectedRevision,
+          response.task.preview.baselineRevision,
+        );
+        assert.equal(response.task.confirmation.toolVersion, 'v1');
+        assert.equal(response.task.confirmation.parameterHash.length, 64);
+        return response;
+      };
+      const confirmBody = (response) => ({
+        eventId: response.task.confirmation.eventId,
+        matchId: response.task.confirmation.matchId,
+        parameterHash: response.task.confirmation.parameterHash,
+      });
+
+      const bound = await issue();
+      const boundId = bound.task.confirmation.id;
+      await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${boundId}/confirm`,
+        { ...confirmBody(bound), eventId: randomUUID() },
+        409,
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${boundId}/confirm`,
+        { ...confirmBody(bound), parameterHash: '0'.repeat(64) },
+        409,
+      );
+      await call(
+        'reviewer',
+        'POST',
+        `agent/confirmation-tickets/${boundId}/confirm`,
+        confirmBody(bound),
+        403,
+      );
+      const expiredId = randomUUID();
+      await sql.query(
+        `INSERT INTO "AgentConfirmationTicket" (id,"taskId","ownerId","actorDisplayName","eventId","eventName","matchId","startAt",venue,"expectedRevision","parameterSummary","parameterHash","toolName","toolVersion","commandId",state,"expiresAt","createdAt")
+         SELECT $1,"taskId","ownerId","actorDisplayName","eventId","eventName","matchId","startAt",venue,"expectedRevision","parameterSummary","parameterHash","toolName","toolVersion",$2,'PENDING',now()-interval '1 minute',now()
+         FROM "AgentConfirmationTicket" WHERE id=$3`,
+        [expiredId, randomUUID(), boundId],
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${expiredId}/confirm`,
+        confirmBody(bound),
+        409,
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${boundId}/cancel`,
+        {},
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${boundId}/confirm`,
+        confirmBody(bound),
+        409,
+      );
+
+      const revoked = await issue();
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${revoked.task.confirmation.id}/confirm`,
+        confirmBody(revoked),
+        403,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+
+      const stale = await issue();
+      const current = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      const other = current.matches.find(
+        (match) => match.id !== stale.task.confirmation.matchId,
+      );
+      await call(
+        'manager',
+        'PUT',
+        `events/${event.id}/schedule/matches/${other.id}`,
+        {
+          commandId: randomUUID(),
+          expectedRevision: current.revision,
+          startAt: other.startAt,
+          venue: other.venue,
+        },
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${stale.task.confirmation.id}/confirm`,
+        confirmBody(stale),
+        409,
+      );
+
+      const executable = await issue();
+      const before = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      const versionsBefore = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      const url = `${base}/api/v1/agent/confirmation-tickets/${executable.task.confirmation.id}/confirm`;
+      const responses = await Promise.all(
+        [0, 1].map(() =>
+          fetch(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${tokens.manager}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(confirmBody(executable)),
+          }),
+        ),
+      );
+      assert.deepEqual(
+        responses.map((response) => response.status),
+        [200, 200],
+      );
+      const results = await Promise.all(
+        responses.map((response) => response.json()),
+      );
+      assert.equal(new Set(results.map((result) => result.revision)).size, 1);
+      assert.equal(new Set(results.map((result) => result.commandId)).size, 1);
+      assert.deepEqual(results.map((result) => result.replayed).sort(), [
+        false,
+        true,
+      ]);
+      const saved = await call('manager', 'GET', `events/${event.id}/schedule`);
+      assert.equal(saved.revision, before.revision + 1);
+      assert.equal(saved.status, 'DRAFT');
+      assert.equal(
+        saved.matches.find(
+          (match) => match.id === executable.task.confirmation.matchId,
+        ).startAt,
+        executable.task.confirmation.parameterSummary.afterStartAt,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        versionsBefore + 1,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentCommandReceipt" WHERE "ticketId"=$1',
+            [executable.task.confirmation.id],
+          )
+        ).rows[0].n,
+        1,
+      );
+      base = await restartApi();
+      const replay = await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${executable.task.confirmation.id}/confirm`,
+        confirmBody(executable),
+      );
+      assert.equal(replay.replayed, true);
+      assert.equal(replay.revision, saved.revision);
+      assert.equal(
+        (await call('manager', 'GET', `events/${event.id}/schedule`)).revision,
+        saved.revision,
+      );
+    },
+  );
+
+  await t.test(
     'scheduling: elimination dependencies and immediate grant revocation',
     async () => {
       schedule = await call(

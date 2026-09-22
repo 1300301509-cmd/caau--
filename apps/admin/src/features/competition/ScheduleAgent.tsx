@@ -8,6 +8,8 @@ type Session = components['schemas']['AgentSessionViewDto'];
 type Reply = components['schemas']['AgentReplyDto'];
 type Candidate = components['schemas']['AgentCandidateDto'];
 type ModelStatus = components['schemas']['AgentModelStatusDto'];
+type AdjustmentResult =
+  components['schemas']['AgentScheduleAdjustmentResultDto'];
 
 function localTime(value: string) {
   return new Date(Date.parse(value) + 8 * 60 * 60 * 1000)
@@ -16,7 +18,13 @@ function localTime(value: string) {
     .replace('T', ' ');
 }
 
-export function ScheduleAgent({ eventId }: { eventId: string }) {
+export function ScheduleAgent({
+  eventId,
+  onDraftSaved,
+}: {
+  eventId: string;
+  onDraftSaved?: () => void | Promise<void>;
+}) {
   const auth = useAuth();
   const token =
     auth.mode === 'local'
@@ -29,6 +37,7 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(false);
   const [modelStatus, setModelStatus] = useState<ModelStatus>();
   const [modelStatusLoading, setModelStatusLoading] = useState(false);
+  const [result, setResult] = useState<AdjustmentResult>();
   const [error, setError] = useState('');
   const isSuperAdmin = auth.identity?.roles.includes(
     'HEADQUARTERS_SUPER_ADMIN',
@@ -38,6 +47,7 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
     let alive = true;
     setSession(undefined);
     setReply(undefined);
+    setResult(undefined);
     setError('');
     if (!eventId) return;
     setLoading(true);
@@ -109,6 +119,7 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
     const message = input.trim() || lastMessage;
     setLoading(true);
     setError('');
+    setResult(undefined);
     try {
       const activeTask = reply?.task ?? session.task;
       const shouldContinue =
@@ -152,16 +163,84 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
     }
   }
 
-  const preview = reply?.task?.preview ?? session?.task?.preview;
+  async function reloadSession() {
+    if (!session) return;
+    setSession(
+      await client.request('getAgentSession', {
+        token,
+        path: { sessionId: session.id },
+      }),
+    );
+  }
+
+  async function confirmAdjustment() {
+    const confirmation =
+      reply?.task?.confirmation ?? session?.task?.confirmation;
+    if (!confirmation || confirmation.state !== 'PENDING') return;
+    setLoading(true);
+    setError('');
+    try {
+      const executed = await client.request('confirmAgentScheduleAdjustment', {
+        token,
+        path: { ticketId: confirmation.id },
+        body: {
+          eventId: confirmation.eventId,
+          matchId: confirmation.matchId,
+          parameterHash: confirmation.parameterHash,
+        },
+      });
+      setResult(executed);
+      setReply(undefined);
+      await reloadSession();
+      await onDraftSaved?.();
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError && cause.status === 403
+          ? '当前账号没有保存赛程草稿的权限，未执行调整。'
+          : cause instanceof ApiError && cause.status === 409
+            ? '确认已失效或赛程版本已变化，请重新生成预览。'
+            : '保存草稿未完成；系统不会自动重复修改，请重试确认。',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cancelAdjustment() {
+    const confirmation =
+      reply?.task?.confirmation ?? session?.task?.confirmation;
+    if (!confirmation || confirmation.state !== 'PENDING') return;
+    setLoading(true);
+    setError('');
+    try {
+      await client.request('cancelAgentScheduleAdjustment', {
+        token,
+        path: { ticketId: confirmation.id },
+      });
+      setReply(undefined);
+      await reloadSession();
+    } catch {
+      setError('取消未完成，请刷新后核对确认状态。');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const task = reply?.task ?? session?.task;
+  const preview = task?.preview;
+  const confirmation = task?.confirmation;
+  const canDraftAdjust = auth.identity?.roles.some((role) =>
+    ['HEADQUARTERS_SUPER_ADMIN', 'EVENT_MANAGER', 'ORGANIZER'].includes(role),
+  );
   return (
     <section className="schedule-agent" aria-labelledby="schedule-agent-title">
       <div className="schedule-agent-heading">
         <div>
           <span className="competition-kicker">AI ASSISTANT</span>
-          <h3 id="schedule-agent-title">赛程调整预览</h3>
-          <p>用自然语言定位比赛并检查调整结果；本入口不会保存或发布赛程。</p>
+          <h3 id="schedule-agent-title">赛程调整助手</h3>
+          <p>先生成确定性预览，经人工确认后只保存草稿；智能体不会发布赛程。</p>
         </div>
-        <Tag color="blue">智能体生成 · 仅预览</Tag>
+        <Tag color="blue">预览 → 确认 → 草稿</Tag>
       </div>
       {error && <Alert type="warning" showIcon title={error} />}
       {isSuperAdmin && modelStatus && (
@@ -234,6 +313,27 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
           ))}
         </div>
       )}
+      {result && (
+        <Alert
+          type={result.issues.length ? 'warning' : 'success'}
+          showIcon
+          title={`草稿已保存 · V${result.revision}`}
+          description={
+            <div className="schedule-agent-result-details">
+              <span>状态：{result.status}</span>
+              <span>赛事：{result.eventId}</span>
+              <span>比赛：{result.matchId}</span>
+              <span>命令：{result.commandId}</span>
+              <span>{result.replayed ? '持久回执回放' : '首次执行回执'}</span>
+              <span>
+                {result.issues.length
+                  ? `${result.issues.length} 项确定性冲突，发布前需处理`
+                  : '未发现确定性冲突'}
+              </span>
+            </div>
+          }
+        />
+      )}
       {preview && (
         <article className="schedule-agent-preview" aria-live="polite">
           <header>
@@ -272,6 +372,64 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
             此操作尚未保存。预览有效至 {localTime(preview.expiresAt)}
             ；版本变化或过期后必须重新预览。
           </p>
+          {confirmation && (
+            <div className="schedule-agent-confirmation">
+              <dl>
+                <div>
+                  <dt>执行人</dt>
+                  <dd>{confirmation.actorDisplayName}</dd>
+                </div>
+                <div>
+                  <dt>赛事</dt>
+                  <dd>{confirmation.eventName}</dd>
+                </div>
+                <div>
+                  <dt>比赛</dt>
+                  <dd>
+                    {confirmation.parameterSummary.homeLabel} vs{' '}
+                    {confirmation.parameterSummary.awayLabel}
+                  </dd>
+                </div>
+                <div>
+                  <dt>命令</dt>
+                  <dd>
+                    schedule.draft.adjust@{confirmation.toolVersion} · 预期 V
+                    {confirmation.expectedRevision}
+                  </dd>
+                </div>
+                <div>
+                  <dt>调整</dt>
+                  <dd>
+                    {localTime(confirmation.parameterSummary.afterStartAt)} ·{' '}
+                    {confirmation.parameterSummary.afterVenue}
+                  </dd>
+                </div>
+                <div>
+                  <dt>到期</dt>
+                  <dd>{localTime(confirmation.expiresAt)}</dd>
+                </div>
+              </dl>
+              {confirmation.state === 'PENDING' && (
+                <div className="schedule-agent-confirm-actions">
+                  <Button
+                    type="primary"
+                    loading={loading}
+                    disabled={!canDraftAdjust}
+                    onClick={() => void confirmAdjustment()}
+                  >
+                    确认保存草稿
+                  </Button>
+                  <Button
+                    disabled={loading}
+                    onClick={() => void cancelAdjustment()}
+                  >
+                    取消
+                  </Button>
+                  {!canDraftAdjust && <small>当前身份仅可读取预览。</small>}
+                </div>
+              )}
+            </div>
+          )}
         </article>
       )}
     </section>

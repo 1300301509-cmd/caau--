@@ -7,7 +7,10 @@ import { createFetchTransport } from '../packages/api-client/dist/fetch.js';
 // Uses only the db:test-owned disposable database. SQL below bootstraps local
 // test sessions, exactly like authorization.integration; all business writes use APIs/UI.
 export async function webPolishBrowserFlows({ browser, tokens, sql }) {
-  const sdk = createApiClient('http://127.0.0.1:3000', createFetchTransport()),
+  const sdk = createApiClient(
+      `http://127.0.0.1:${process.env.CAAU_BROWSER_API_PORT ?? 3000}`,
+      createFetchTransport(),
+    ),
     out = '.local/evidence/caau-005-polish';
   await mkdir(out, { recursive: true });
   const people = Object.fromEntries(

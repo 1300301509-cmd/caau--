@@ -1,6 +1,6 @@
 # ADR-0019：业务智能体编排、工具与授权边界
 
-状态：2026-09-22 架构确认；CAAU-049 B1 已实现 NestJS + LangGraph.js、千问适配层、PostgreSQL checkpoint、会话/任务记忆和不落库的单场调整预览。赛程写入、发布、长期记忆及小程序入口仍未实施。
+状态：2026-09-23 CAAU-049 C1 已实现单场赛程草稿的“预览—确认—执行”、持久一次性票据与恰好一次命令回执；Agent 发布、整套重排写入、长期记忆及小程序入口仍未实施。
 
 ## 决策
 
@@ -22,14 +22,13 @@ Agent 工具适配器调用业务模块公开 service 或同等受控用例，�
 
 ## 权限演进
 
-当前 `scheduling` 模块使用一个赛事操作策略覆盖读取、生成、调整和发布。进入 Agent 写入阶段前拆分为至少：
+C1 已将 `scheduling` 控制器和业务审计拆分为：
 
 - `schedule.read`
-- `schedule.draft.generate`
-- `schedule.draft.adjust`
+- `schedule.draft.adjust`（C1 同时承载既有人工生成候选和单场草稿调整；Agent 只开放后者）
 - `schedule.publish`
 
-这些能力结合用户有效状态、角色/关系、eventId 范围和业务状态判断。已有 Web 操作同步消费相同能力，避免 Agent 与页面产生两套权限结果。
+这些能力结合用户有效状态、角色/关系、eventId 范围和业务状态判断。已有 Web 操作同步消费相同能力，避免 Agent 与页面产生两套权限结果。持有效赛事 grant 的低权限成员可读取和预览但不能调整或发布；总部超级管理员、有效赛事经理及有效承办经办人保持既有操作范围。`schedule.publish` 是独立人工能力，未注册为 Agent 工具。若后续开放 Agent 整套重排，再从 `schedule.draft.adjust` 独立拆出 `schedule.draft.generate` 并补 expectedRevision。
 
 ## 模型与供应商边界
 
@@ -43,7 +42,13 @@ B1 实际图流程为：鉴权与上下文 → 模型增量解析意图 → 赛�
 
 LangGraph interrupt 恢复会重新执行节点；checkpoint 不提供业务命令恰好执行一次的保证。确认状态、固定 commandId、持久命令回执和业务事务必须协作：业务已提交而图状态未保存时，应返回原结果，不能再次修改。现有赛程仅保存 lastCommandId，接入写工具前需补足跨后续命令的重放保护。
 
-现有 generate 会直接保存草稿且没有 expectedRevision，不可作为无副作用预览。先复用原算法和冲突校验新增纯预览；生成写工具接入前补齐版本保护。单场调整先接入，整套重排和发布后续分阶段开放。
+现有 generate 会直接保存草稿且没有 expectedRevision，不可作为无副作用预览。B1 已复用原算法和冲突校验新增纯预览；C1 只接入有 expectedRevision 的单场调整，整套重排和 Agent 发布后续分阶段开放。
+
+## C1 确认与恰好一次语义
+
+预览成功后由固定程序持久化 `AgentConfirmationTicket`，绑定当前 actor/task/event/match、调整后的时间和场地、expectedRevision、规范化参数摘要及 SHA-256、工具名/版本、服务端固定 commandId 与过期时间。客户端确认只回显 ticket ID、event/match 上下文和参数哈希，不能提交新业务参数；票据绑定字段由数据库触发器保护。新预览会取消同任务旧票据，取消、过期、参数变化或 revision 变化均要求重新预览。
+
+确认端点不调用模型。在一个 Serializable 事务中，它锁定票据、重新认证当前 actor、重新执行 `schedule.draft.adjust` 赛事权限、校验票据，再以固定 commandId 调用 scheduling 的受控事务内用例；赛程版本、票据消费和不可变 `AgentCommandReceipt` 同事务提交。并发双击依靠行锁、Serializable 重试和 ticket/command 双唯一约束只产生一个赛程版本。提交后响应中断或 API 重启时，从持久回执返回原 revision、状态和冲突结果，不再次修改。详细接口与权限矩阵见 [C1 设计](../planning/caau-049-c1-agent-confirmation.md)。
 
 选型依据：[LangGraph 概览](https://docs.langchain.com/oss/javascript/langgraph/overview)、[中断与恢复](https://docs.langchain.com/oss/javascript/langgraph/interrupts)、[持久化](https://docs.langchain.com/oss/javascript/langgraph/add-memory)。
 

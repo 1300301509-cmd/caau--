@@ -18,9 +18,12 @@ import type { AuthRequest } from '../authorization/authorization.service.js';
 import { Permission } from '../authorization/authorization.guard.js';
 import { AiService } from './ai.service.js';
 import {
+  AgentConfirmationTicketViewDto,
   AgentMessageInputDto,
   AgentModelStatusDto,
   AgentReplyDto,
+  AgentScheduleAdjustmentResultDto,
+  ConfirmAgentScheduleAdjustmentDto,
   AgentSessionInputDto,
   AgentSessionViewDto,
 } from './ai.dto.js';
@@ -47,6 +50,35 @@ export class AiController {
   @ApiOkResponse({ type: AgentModelStatusDto })
   testModel(@Req() request: AuthRequest) {
     return this.service.testModelConnection(request.token ?? '');
+  }
+
+  @Post('confirmation-tickets/:ticketId/confirm')
+  @HttpCode(200)
+  @Permission('agent.schedule.confirm')
+  @ApiOperation({ operationId: 'confirmAgentScheduleAdjustment' })
+  @ApiOkResponse({ type: AgentScheduleAdjustmentResultDto })
+  confirmScheduleAdjustment(
+    @Req() request: AuthRequest,
+    @Param('ticketId') ticketId: string,
+    @Body() body: ConfirmAgentScheduleAdjustmentDto,
+  ) {
+    return this.service.confirmScheduleAdjustment(
+      request.token ?? '',
+      ticketId,
+      body,
+    );
+  }
+
+  @Post('confirmation-tickets/:ticketId/cancel')
+  @HttpCode(200)
+  @Permission('agent.schedule.cancel')
+  @ApiOperation({ operationId: 'cancelAgentScheduleAdjustment' })
+  @ApiOkResponse({ type: AgentConfirmationTicketViewDto })
+  cancelScheduleAdjustment(
+    @Req() request: AuthRequest,
+    @Param('ticketId') ticketId: string,
+  ) {
+    return this.service.cancelScheduleAdjustment(request.token ?? '', ticketId);
   }
 
   @Post('sessions')

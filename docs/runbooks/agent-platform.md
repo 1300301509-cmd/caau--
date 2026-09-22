@@ -1,4 +1,4 @@
-# 业务智能体赛程预览（CAAU-049 B1）
+# 业务智能体赛程预览与草稿确认（CAAU-049 C1）
 
 ## 已实现范围
 
@@ -12,7 +12,13 @@ Nest `ai` 模块使用 LangGraph.js 编排并在 PostgreSQL `caau_agent` schema 
 - 使用实际业务图节点完成“鉴权与上下文 → 意图增量解析 → 赛事/场次定位 → 缺参等待 → 确定性预览 → 返回结果”，而不是用单一节点包装 service；
 - 服务重启后从同一 LangGraph thread 恢复缺参状态；恢复时重新检查当前用户、历史任务涉及的赛事权限、赛程 revision 和预览有效期。
 
-本批没有赛程写工具，不调用会保存草稿的 `generate`，也不发布赛程。预览过期或 revision 变化后标记为 `STALE` 并清除响应中的旧预览；它不会自动取得未来写入授权。
+C1 在上述真实模型理解与纯预览后增加单场草稿确认。预览成功时签发一次性票据；只有当前 owner 显式确认、重新鉴权且赛程 revision 未变时，固定程序才调用现有单场调整用例。它不调用会整套重排的 `generate`，也没有 Agent 发布入口。预览过期或 revision 变化后标记为 `STALE` 并取消待确认票据，必须重新预览。
+
+## 确认、取消与回执
+
+票据持久绑定 actor/task/event/match、调整后的时间与场地、expectedRevision、参数摘要/哈希、`schedule.draft.adjust@v1`、服务端固定 commandId 及 30 分钟有效期。Web 卡片显示执行人、赛事、比赛、修改结果、基线版本、工具版本和到期时间，并提供“确认保存草稿”与“取消”；低权限读取身份不显示可用写操作。
+
+确认不会再次调用模型，也不接受新时间或场地。服务在 Serializable 事务内重新鉴权并校验票据、执行 scheduling CAS、消费票据并写不可变命令回执。双击、网络重试、API 重启及提交后响应中断都使用原 commandId 和回执返回原 revision/冲突结果；不会重复增加赛程 revision。票据过期、取消、参数/event/match 不匹配或 revision 变化返回 409；撤权、跨账号和跨范围访问返回 403。保存结果始终为 `DRAFT`，发布仍是独立人工操作。
 
 ## 三级记忆边界
 
@@ -38,7 +44,9 @@ LangGraph checkpoint 只保存结构化流程/资源/版本状态，不保存 Co
 - `GET /api/v1/agent/sessions`：列出当前仍有权恢复的会话；
 - `GET /api/v1/agent/sessions/:sessionId`：恢复并重新校验会话/任务；
 - `POST /api/v1/agent/sessions/:sessionId/messages`：提交消息或结构化的 event/match 选择；可带 `taskId` 继续任务，或带 `newTask=true` 显式新建任务，两者不可同时提供；
-- `POST /api/v1/events/:eventId/schedule/preview-adjustment`：纯调整预览，无业务写入。
+- `POST /api/v1/events/:eventId/schedule/preview-adjustment`：纯调整预览，无业务写入；
+- `POST /api/v1/agent/confirmation-tickets/:ticketId/confirm`：回显 ticket 的 eventId、matchId、parameterHash 后确认单场草稿调整；
+- `POST /api/v1/agent/confirmation-tickets/:ticketId/cancel`：取消当前 owner 的待确认票据。
 
 前端只通过生成的 `@caau/api-client` 调用这些接口。小程序继续复用同一 API 的方案不变，但本批未增加小程序入口。
 
@@ -52,7 +60,7 @@ CAAU_QWEN_MODEL=qwen-plus             # 可选，默认 qwen-plus
 CAAU_QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1 # 可选
 ```
 
-不要把密钥放在前端、数据库、checkpoint、日志、提交或聊天中。模型状态接口和总部 Web 只返回 `SIMULATED/QWEN`、模型名称、Base URL 主机、是否配置凭据，以及当前 API 进程内最近一次脱敏连接测试结果；永不返回 API Key、完整供应商响应或请求头。连接测试只在总部超级管理员明确点击时执行，进程重启后结果恢复为“尚未测试”。设置 `CAAU_QWEN_API_KEY` 后模型异常返回 503，不降级为可能改变理解结果的静默模拟；无论模型是否可用都不会写赛程，原赛程页面仍可使用。
+不要把密钥放在前端、数据库、checkpoint、日志、提交或聊天中。模型状态接口和总部 Web 只返回 `SIMULATED/QWEN`、模型名称、Base URL 主机、是否配置凭据，以及当前 API 进程内最近一次脱敏连接测试结果；永不返回 API Key、完整供应商响应或请求头。连接测试只在总部超级管理员明确点击时执行，进程重启后结果恢复为“尚未测试”。设置 `CAAU_QWEN_API_KEY` 后模型异常返回 503，不降级为可能改变理解结果的静默模拟；模型异常不会签发新票据或写赛程。模型只参与确认前的理解，确认执行完全由固定程序完成；原赛程页面仍可使用。
 
 千问结构化 schema 对来源星期、来源当天序号、目标星期、明确日期、北京时间小时/分钟和相对分钟偏移分别提供字段说明。系统提示明确区分“来源比赛在哪一天的第几场”和“目标改到哪一天几点”，只提取本轮新增或修改，不选择赛事、不执行修改。
 
@@ -96,4 +104,12 @@ corepack pnpm test
 corepack pnpm db:test
 ```
 
-真实模型、模拟模型、浏览器、小程序和真机必须分别报告。浏览器源码构建或既有 scheduling 浏览器回归不等于真实模型、小程序或真机验收。
+数据库浏览器套件默认使用 3000。若该端口承载不能中断的本仓库 API，可让测试构建和所有浏览器夹具共同使用另一空闲端口，例如：
+
+```sh
+CAAU_BROWSER_API_PORT=3100 \
+VITE_API_BASE_URL=http://127.0.0.1:3100 \
+corepack pnpm db:test
+```
+
+这只改变隔离测试服务，不重用或修改 3000 上的进程。真实模型、模拟模型、浏览器、小程序和真机必须分别报告；数据库浏览器回归不等于真实模型、小程序或真机验收。

@@ -9,7 +9,10 @@ import path from 'node:path';
 import pg from 'pg';
 import { createApplication } from '../apps/api/dist/application.js';
 import { readConfig } from '../apps/api/dist/config.js';
-import { RuleAgentModelAdapter } from '../apps/api/dist/modules/ai/model-adapter.js';
+import {
+  agentModelUnavailable,
+  RuleAgentModelAdapter,
+} from '../apps/api/dist/modules/ai/model-adapter.js';
 import { createApiClient } from '../packages/api-client/dist/index.js';
 import { createFetchTransport } from '../packages/api-client/dist/fetch.js';
 import {
@@ -116,6 +119,7 @@ export async function authorizationIntegration(t) {
                   '202609210001_event_staff',
                   '202609220001_agent_platform',
                   '202609220002_agent_workflow_state',
+                  '202609230001_agent_schedule_confirmation',
                 ],
               ],
             )
@@ -245,6 +249,8 @@ export async function authorizationIntegration(t) {
         mode: 'SIMULATED',
         parse(message, known) {
           agentModelCalls += 1;
+          if (message === '__CAAU_SYNTHETIC_MODEL_TIMEOUT__')
+            throw agentModelUnavailable();
           return simulatedAgentModel.parse(message, known);
         },
         status() {
@@ -917,7 +923,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          18,
+          19,
         );
       },
     );

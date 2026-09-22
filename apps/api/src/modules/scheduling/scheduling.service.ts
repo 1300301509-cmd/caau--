@@ -11,7 +11,13 @@ import {
   text,
   uuid,
 } from '../authorization/authorization.service.js';
-import { deny, eventOperations } from '../authorization/policy.js';
+import {
+  deny,
+  scheduleDraftAdjust,
+  schedulePublish,
+  scheduleRead,
+  type Actor,
+} from '../authorization/policy.js';
 import type {
   ScheduleConfigDto,
   ScheduleMatchDto,
@@ -62,14 +68,19 @@ export class SchedulingService {
     });
   }
 
-  private async access(
-    tx: Tx,
-    actor: Parameters<typeof eventOperations>[1],
-    eventId: string,
-  ) {
+  private async readAccess(tx: Tx, actor: Actor, eventId: string) {
     uuid(eventId);
-    if (!(await tx.event.findUnique({ where: { id: eventId } }))) deny();
-    await eventOperations(tx, actor, eventId);
+    await scheduleRead(tx, actor, eventId);
+  }
+
+  private async draftAccess(tx: Tx, actor: Actor, eventId: string) {
+    uuid(eventId);
+    await scheduleDraftAdjust(tx, actor, eventId);
+  }
+
+  private async publishAccess(tx: Tx, actor: Actor, eventId: string) {
+    uuid(eventId);
+    await schedulePublish(tx, actor, eventId);
   }
 
   private async teams(tx: Tx, eventId: string) {
@@ -115,11 +126,11 @@ export class SchedulingService {
   get(token: string, eventId: string) {
     return this.auth.run(
       token,
-      'schedules.read',
+      'schedule.read',
       eventId,
       {},
       async (tx, actor) => {
-        await this.access(tx, actor, eventId);
+        await this.readAccess(tx, actor, eventId);
         const row = await tx.eventSchedule.findUnique({ where: { eventId } });
         if (row) return this.view(tx, row);
         return {
@@ -151,11 +162,11 @@ export class SchedulingService {
   previewAdjustment(token: string, eventId: string, input: unknown) {
     return this.auth.run(
       token,
-      'schedules.preview',
+      'schedule.read',
       eventId,
       input,
       async (tx, actor) => {
-        await this.access(tx, actor, eventId);
+        await this.readAccess(tx, actor, eventId);
         const body = bodyObject(input, [
           'expectedRevision',
           'matchId',
@@ -199,11 +210,11 @@ export class SchedulingService {
   generate(token: string, eventId: string, input: unknown) {
     return this.auth.run(
       token,
-      'schedules.generate',
+      'schedule.draft.adjust',
       eventId,
       input,
       async (tx, actor) => {
-        await this.access(tx, actor, eventId);
+        await this.draftAccess(tx, actor, eventId);
         const body = bodyObject(input, ['commandId', 'format', 'config']);
         const commandId = uuid(body.commandId);
         if (
@@ -256,76 +267,87 @@ export class SchedulingService {
     );
   }
 
+  async adjustInTransaction(
+    tx: Tx,
+    actor: Actor,
+    eventId: string,
+    matchId: string,
+    input: unknown,
+  ) {
+    await this.draftAccess(tx, actor, eventId);
+    const body = bodyObject(input, [
+      'commandId',
+      'expectedRevision',
+      'startAt',
+      'venue',
+    ]);
+    const commandId = uuid(body.commandId);
+    const expectedRevision = Number(body.expectedRevision);
+    const startAt = text(body.startAt, 40);
+    const venue = text(body.venue, 80);
+    const selectedMatchId = uuid(matchId);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+      throw new BadRequestException('Invalid revision');
+    if (!Number.isFinite(Date.parse(startAt)))
+      throw new BadRequestException('Invalid start time');
+    const current = await tx.eventSchedule.findUnique({ where: { eventId } });
+    if (!current) throw new ConflictException('Schedule not generated');
+    const commandHash = hash({
+      expectedRevision,
+      matchId: selectedMatchId,
+      startAt,
+      venue,
+    });
+    if (current.lastCommandId === commandId) {
+      if (current.lastCommandHash !== commandHash)
+        throw new ConflictException('Command conflict');
+      return this.view(tx, current);
+    }
+    if (current.revision !== expectedRevision)
+      throw new ConflictException('Schedule revision changed');
+    const config = current.config as unknown as ScheduleConfigDto;
+    if (!config.venues.includes(venue))
+      throw new BadRequestException('Venue is not configured');
+    const matches = (current.matches as unknown as ScheduleMatchDto[]).map(
+      (match) =>
+        match.id === selectedMatchId ? { ...match, startAt, venue } : match,
+    );
+    if (!matches.some((match) => match.id === selectedMatchId)) deny();
+    const issues = validateSchedule(
+      config,
+      matches,
+      await this.teams(tx, eventId),
+    );
+    const changed = await tx.eventSchedule.updateMany({
+      where: { eventId, revision: expectedRevision },
+      data: {
+        status: 'DRAFT',
+        matches: json(matches),
+        issues: json(issues),
+        revision: { increment: 1 },
+        lastCommandId: commandId,
+        lastCommandHash: commandHash,
+        updatedBy: actor.id,
+        updatedAt: new Date(),
+        publishedBy: null,
+        publishedAt: null,
+      },
+    });
+    if (changed.count !== 1)
+      throw new ConflictException('Schedule revision changed');
+    const row = (await tx.eventSchedule.findUnique({ where: { eventId } }))!;
+    await this.version(tx, row, actor.id);
+    return this.view(tx, row);
+  }
+
   adjust(token: string, eventId: string, matchId: string, input: unknown) {
     return this.auth.run(
       token,
-      'schedules.adjust',
+      'schedule.draft.adjust',
       eventId,
       input,
-      async (tx, actor) => {
-        await this.access(tx, actor, eventId);
-        const body = bodyObject(input, [
-          'commandId',
-          'expectedRevision',
-          'startAt',
-          'venue',
-        ]);
-        const commandId = uuid(body.commandId);
-        const expectedRevision = Number(body.expectedRevision);
-        const startAt = text(body.startAt, 40);
-        const venue = text(body.venue, 80);
-        if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
-          throw new BadRequestException('Invalid revision');
-        if (!Number.isFinite(Date.parse(startAt)))
-          throw new BadRequestException('Invalid start time');
-        const current = await tx.eventSchedule.findUnique({
-          where: { eventId },
-        });
-        if (!current) throw new ConflictException('Schedule not generated');
-        const commandHash = hash({ expectedRevision, matchId, startAt, venue });
-        if (current.lastCommandId === commandId) {
-          if (current.lastCommandHash !== commandHash)
-            throw new ConflictException('Command conflict');
-          return this.view(tx, current);
-        }
-        if (current.revision !== expectedRevision)
-          throw new ConflictException('Schedule revision changed');
-        const config = current.config as unknown as ScheduleConfigDto;
-        if (!config.venues.includes(venue))
-          throw new BadRequestException('Venue is not configured');
-        const matches = (current.matches as unknown as ScheduleMatchDto[]).map(
-          (match) =>
-            match.id === uuid(matchId) ? { ...match, startAt, venue } : match,
-        );
-        if (!matches.some((match) => match.id === matchId)) deny();
-        const issues = validateSchedule(
-          config,
-          matches,
-          await this.teams(tx, eventId),
-        );
-        const changed = await tx.eventSchedule.updateMany({
-          where: { eventId, revision: expectedRevision },
-          data: {
-            status: 'DRAFT',
-            matches: json(matches),
-            issues: json(issues),
-            revision: { increment: 1 },
-            lastCommandId: commandId,
-            lastCommandHash: commandHash,
-            updatedBy: actor.id,
-            updatedAt: new Date(),
-            publishedBy: null,
-            publishedAt: null,
-          },
-        });
-        if (changed.count !== 1)
-          throw new ConflictException('Schedule revision changed');
-        const row = (await tx.eventSchedule.findUnique({
-          where: { eventId },
-        }))!;
-        await this.version(tx, row, actor.id);
-        return this.view(tx, row);
-      },
+      (tx, actor) =>
+        this.adjustInTransaction(tx, actor, eventId, matchId, input),
       { retries: 2, retryUnique: true },
     );
   }
@@ -333,11 +355,11 @@ export class SchedulingService {
   publish(token: string, eventId: string, input: unknown) {
     return this.auth.run(
       token,
-      'schedules.publish',
+      'schedule.publish',
       eventId,
       input,
       async (tx, actor) => {
-        await this.access(tx, actor, eventId);
+        await this.publishAccess(tx, actor, eventId);
         const body = bodyObject(input, ['commandId', 'expectedRevision']);
         const commandId = uuid(body.commandId);
         const expectedRevision = Number(body.expectedRevision);

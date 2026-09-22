@@ -59,7 +59,7 @@ export async function individualBrowserTest({
     webListening = false;
   const samples = [],
     pageErrors = [];
-  const base = 'http://127.0.0.1:3000/api/v1';
+  const base = `http://127.0.0.1:${process.env.CAAU_BROWSER_API_PORT ?? 3000}/api/v1`;
   async function api(key, method, path, body, expected = 200) {
     const r = await fetch(`${base}/${path}`, {
       method,
@@ -209,7 +209,10 @@ export async function individualBrowserTest({
   }
   let taskId, org, a, b;
   try {
-    await app.listen(3000, '127.0.0.1');
+    await app.listen(
+      Number(process.env.CAAU_BROWSER_API_PORT ?? 3000),
+      '127.0.0.1',
+    );
     await new Promise((resolve, reject) => {
       web.once('error', reject);
       web.listen(4173, '127.0.0.1', resolve);

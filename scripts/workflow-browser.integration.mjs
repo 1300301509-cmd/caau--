@@ -25,14 +25,17 @@ export async function workflowBrowserFlows({ browser, tokens, sql }) {
     await expect(p.getByText('本地身份已载入', { exact: true })).toBeVisible();
   };
   async function api(key, method, path, body) {
-    const r = await fetch(`http://127.0.0.1:3000/api/v1/${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${tokens[key]}`,
-        'Content-Type': 'application/json',
+    const r = await fetch(
+      `http://127.0.0.1:${process.env.CAAU_BROWSER_API_PORT ?? 3000}/api/v1/${path}`,
+      {
+        method,
+        headers: {
+          Authorization: `Bearer ${tokens[key]}`,
+          'Content-Type': 'application/json',
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
+    );
     assert.equal(r.status, 200);
     return r.json();
   }

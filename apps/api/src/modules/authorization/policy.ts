@@ -14,6 +14,30 @@ export function isHeadquartersSuperAdmin(actor: Actor) {
   return hasRole(actor, 'HEADQUARTERS_SUPER_ADMIN');
 }
 
+export function scheduleReadScope(actor: Actor): Prisma.EventWhereInput {
+  if (isHeadquartersSuperAdmin(actor)) return {};
+  const operations = eventOperationsScope(actor);
+  return {
+    OR: [
+      {
+        scope: {
+          grants: {
+            some: {
+              active: true,
+              member: {
+                userId: actor.id,
+                active: true,
+                role: { not: 'SYSTEM_ADMIN' },
+              },
+            },
+          },
+        },
+      },
+      ...((operations.OR as Prisma.EventWhereInput[]) ?? []),
+    ],
+  };
+}
+
 /** Events where the actor can use the competition-operation modules. */
 export function eventOperationsScope(actor: Actor): Prisma.EventWhereInput {
   if (isHeadquartersSuperAdmin(actor)) return {};
@@ -69,6 +93,34 @@ export async function eventManager(
     },
   });
   if (!grant) deny();
+}
+
+export async function scheduleRead(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  eventId: string,
+) {
+  const event = await tx.event.findFirst({
+    where: { AND: [{ id: eventId }, scheduleReadScope(actor)] },
+    select: { id: true },
+  });
+  if (!event) deny();
+}
+
+export async function scheduleDraftAdjust(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  eventId: string,
+) {
+  await eventOperations(tx, actor, eventId);
+}
+
+export async function schedulePublish(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  eventId: string,
+) {
+  await eventOperations(tx, actor, eventId);
 }
 
 /** Write access for event-operation domains such as teams and scheduling. */

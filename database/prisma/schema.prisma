@@ -69,6 +69,8 @@ model InternalUser {
   teamMemberships TeamMembership[]
   agentSessions AgentSession[]
   agentTasks AgentTask[]
+  agentConfirmationTickets AgentConfirmationTicket[]
+  agentCommandReceipts AgentCommandReceipt[]
 
   id                     String                         @id @default(uuid()) @db.Uuid
   displayName            String                         @db.VarChar(80)
@@ -232,6 +234,8 @@ model Event {
   organizerAppointments EventOrganizerAppointment[]
   informationGrants     EventInformationAccessGrant[]
   approvedApplication   EventHostingApplication?      @relation("ApprovedHostingEvent")
+  agentConfirmationTickets AgentConfirmationTicket[]
+  agentCommandReceipts AgentCommandReceipt[]
 }
 
 model EventSchedule {
@@ -304,9 +308,57 @@ model AgentTask {
   revision Int @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  confirmationTickets AgentConfirmationTicket[]
 
   @@index([ownerId, updatedAt])
   @@index([sessionId, updatedAt])
+}
+
+model AgentConfirmationTicket {
+  id String @id @db.Uuid
+  taskId String @db.Uuid
+  task AgentTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  actorDisplayName String @db.VarChar(80)
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventName String @db.VarChar(120)
+  matchId String @db.Uuid
+  startAt DateTime @db.Timestamptz(3)
+  venue String @db.VarChar(80)
+  expectedRevision Int
+  parameterSummary Json
+  parameterHash String @db.Char(64)
+  toolName String @db.VarChar(80)
+  toolVersion String @db.VarChar(16)
+  commandId String @unique @db.Uuid
+  state String @db.VarChar(16)
+  expiresAt DateTime @db.Timestamptz(3)
+  consumedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  receipt AgentCommandReceipt?
+
+  @@index([taskId, createdAt])
+  @@index([ownerId, state, expiresAt])
+}
+
+model AgentCommandReceipt {
+  id String @id @db.Uuid
+  ticketId String @unique @db.Uuid
+  ticket AgentConfirmationTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  commandId String @unique @db.Uuid
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  matchId String @db.Uuid
+  parameterHash String @db.Char(64)
+  result Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([ownerId, createdAt])
+  @@index([eventId, createdAt])
 }
 
 model EventScheduleVersion {

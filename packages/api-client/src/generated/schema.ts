@@ -65,6 +65,38 @@ export interface paths {
     patch: operations['HostingController_reviewGrantActive'];
     trace?: never;
   };
+  '/api/v1/agent/confirmation-tickets/{ticketId}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['cancelAgentScheduleAdjustment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/confirmation-tickets/{ticketId}/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['confirmAgentScheduleAdjustment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/agent/model-status': {
     parameters: {
       query?: never;
@@ -2070,6 +2102,29 @@ export interface components {
       id: string;
       label: string;
     };
+    AgentConfirmationSummaryDto: {
+      afterStartAt: string;
+      afterVenue: string;
+      awayLabel: string;
+      beforeStartAt: string;
+      beforeVenue: string;
+      homeLabel: string;
+    };
+    AgentConfirmationTicketViewDto: {
+      actorDisplayName: string;
+      actorId: string;
+      eventId: string;
+      eventName: string;
+      expectedRevision: number;
+      expiresAt: string;
+      id: string;
+      matchId: string;
+      parameterHash: string;
+      parameterSummary: components['schemas']['AgentConfirmationSummaryDto'];
+      /** @enum {string} */
+      state: 'PENDING' | 'EXECUTED' | 'CANCELLED';
+      toolVersion: string;
+    };
     AgentMessageInputDto: {
       eventId?: string;
       matchId?: string;
@@ -2105,6 +2160,17 @@ export interface components {
         | 'ERROR';
       task?: components['schemas']['AgentTaskViewDto'] | null;
     };
+    AgentScheduleAdjustmentResultDto: {
+      commandId: string;
+      eventId: string;
+      issues: components['schemas']['ScheduleIssueDto'][];
+      matchId: string;
+      replayed: boolean;
+      revision: number;
+      /** @enum {string} */
+      status: 'DRAFT';
+      ticketId: string;
+    };
     AgentSessionInputDto: {
       currentEventId?: string;
     };
@@ -2130,6 +2196,9 @@ export interface components {
     };
     AgentTaskViewDto: {
       baselineRevision?: number | null;
+      confirmation?:
+        | components['schemas']['AgentConfirmationTicketViewDto']
+        | null;
       eventId?: string | null;
       expiresAt?: string | null;
       goal: string;
@@ -2145,7 +2214,9 @@ export interface components {
         | 'WAITING_PARAMETERS'
         | 'PREVIEW_READY'
         | 'STALE'
-        | 'FAILED';
+        | 'FAILED'
+        | 'EXECUTED'
+        | 'CANCELLED';
     };
     AgentTurnViewDto: {
       content: string;
@@ -2206,6 +2277,11 @@ export interface components {
     ConfigureTaskDto: {
       expectedRevision: number;
       requirements: components['schemas']['RequirementsDto'];
+    };
+    ConfirmAgentScheduleAdjustmentDto: {
+      eventId: string;
+      matchId: string;
+      parameterHash: string;
     };
     ConfirmHostingPermitDto: {
       /** Format: uuid */
@@ -3459,6 +3535,52 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  cancelAgentScheduleAdjustment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentConfirmationTicketViewDto'];
+        };
+      };
+    };
+  };
+  confirmAgentScheduleAdjustment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConfirmAgentScheduleAdjustmentDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentScheduleAdjustmentResultDto'];
+        };
       };
     };
   };

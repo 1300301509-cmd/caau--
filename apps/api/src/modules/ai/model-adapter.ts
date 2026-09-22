@@ -71,6 +71,9 @@ function host(baseURL?: string) {
   }
 }
 
+export const agentModelUnavailable = () =>
+  new ServiceUnavailableException('Agent model unavailable');
+
 export interface AgentModelAdapter {
   readonly mode: 'SIMULATED' | 'QWEN';
   parse(message: string, known: AgentTaskParameters): Promise<AgentIntentPatch>;
@@ -259,7 +262,7 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
         { role: 'user', content: message },
       ]);
     } catch {
-      throw new ServiceUnavailableException('Agent model unavailable');
+      throw agentModelUnavailable();
     }
   }
   status(): AgentModelStatus {

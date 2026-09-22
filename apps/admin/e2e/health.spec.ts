@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+const apiOrigin = `http://127.0.0.1:${process.env.CAAU_BROWSER_API_PORT ?? 3000}`;
+
 test('built Web page reaches the live API over browser CORS', async ({
   page,
 }) => {
@@ -7,7 +9,7 @@ test('built Web page reaches the live API over browser CORS', async ({
   await expect(
     page.getByRole('heading', { name: 'CAAU 工程连接检查' }),
   ).toBeVisible();
-  const response = page.waitForResponse('http://127.0.0.1:3000/api/v1/health');
+  const response = page.waitForResponse(`${apiOrigin}/api/v1/health`);
   await page.getByRole('button', { name: '检查后端连接' }).click();
   expect((await response).status()).toBe(200);
   await expect(page.getByText('已连接 caau-api，服务状态正常')).toBeVisible();

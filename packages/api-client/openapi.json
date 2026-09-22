@@ -264,6 +264,93 @@
         "required": ["id", "label"],
         "type": "object"
       },
+      "AgentConfirmationSummaryDto": {
+        "properties": {
+          "afterStartAt": {
+            "type": "string"
+          },
+          "afterVenue": {
+            "type": "string"
+          },
+          "awayLabel": {
+            "type": "string"
+          },
+          "beforeStartAt": {
+            "type": "string"
+          },
+          "beforeVenue": {
+            "type": "string"
+          },
+          "homeLabel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "homeLabel",
+          "awayLabel",
+          "beforeStartAt",
+          "beforeVenue",
+          "afterStartAt",
+          "afterVenue"
+        ],
+        "type": "object"
+      },
+      "AgentConfirmationTicketViewDto": {
+        "properties": {
+          "actorDisplayName": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "number"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "matchId": {
+            "type": "string"
+          },
+          "parameterHash": {
+            "type": "string"
+          },
+          "parameterSummary": {
+            "$ref": "#/components/schemas/AgentConfirmationSummaryDto"
+          },
+          "state": {
+            "enum": ["PENDING", "EXECUTED", "CANCELLED"],
+            "type": "string"
+          },
+          "toolVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "actorId",
+          "actorDisplayName",
+          "eventId",
+          "eventName",
+          "matchId",
+          "expectedRevision",
+          "parameterHash",
+          "toolVersion",
+          "expiresAt",
+          "state",
+          "parameterSummary"
+        ],
+        "type": "object"
+      },
       "AgentMessageInputDto": {
         "properties": {
           "eventId": {
@@ -368,6 +455,49 @@
         "required": ["sessionId", "status", "message", "candidates"],
         "type": "object"
       },
+      "AgentScheduleAdjustmentResultDto": {
+        "properties": {
+          "commandId": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleIssueDto"
+            },
+            "type": "array"
+          },
+          "matchId": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "status": {
+            "enum": ["DRAFT"],
+            "type": "string"
+          },
+          "ticketId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticketId",
+          "commandId",
+          "replayed",
+          "eventId",
+          "matchId",
+          "revision",
+          "status",
+          "issues"
+        ],
+        "type": "object"
+      },
       "AgentSessionInputDto": {
         "properties": {
           "currentEventId": {
@@ -452,6 +582,15 @@
             "nullable": true,
             "type": "number"
           },
+          "confirmation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentConfirmationTicketViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
           "eventId": {
             "nullable": true,
             "type": "string"
@@ -495,7 +634,9 @@
               "WAITING_PARAMETERS",
               "PREVIEW_READY",
               "STALE",
-              "FAILED"
+              "FAILED",
+              "EXECUTED",
+              "CANCELLED"
             ],
             "type": "string"
           }
@@ -686,6 +827,21 @@
           }
         },
         "required": ["expectedRevision", "requirements"],
+        "type": "object"
+      },
+      "ConfirmAgentScheduleAdjustmentDto": {
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "matchId": {
+            "type": "string"
+          },
+          "parameterHash": {
+            "type": "string"
+          }
+        },
+        "required": ["eventId", "matchId", "parameterHash"],
         "type": "object"
       },
       "ConfirmHostingPermitDto": {
@@ -4410,6 +4566,90 @@
           }
         ],
         "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/agent/confirmation-tickets/{ticketId}/cancel": {
+      "post": {
+        "operationId": "cancelAgentScheduleAdjustment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticketId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentConfirmationTicketViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/confirmation-tickets/{ticketId}/confirm": {
+      "post": {
+        "operationId": "confirmAgentScheduleAdjustment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticketId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmAgentScheduleAdjustmentDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentScheduleAdjustmentResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
       }
     },
     "/api/v1/agent/model-status": {

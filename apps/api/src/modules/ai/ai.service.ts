@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   Annotation,
   END,
@@ -17,9 +17,10 @@ import {
 } from '../authorization/authorization.service.js';
 import {
   deny,
-  eventOperations,
-  eventOperationsScope,
   isHeadquartersSuperAdmin,
+  scheduleDraftAdjust,
+  scheduleRead,
+  scheduleReadScope,
   type Actor,
 } from '../authorization/policy.js';
 import { SchedulingService } from '../scheduling/scheduling.service.js';
@@ -32,13 +33,18 @@ import type {
 
 type Tx = Prisma.TransactionClient;
 type AgentTaskRow = Prisma.AgentTaskGetPayload<Record<string, never>>;
+type AgentTicketRow = Prisma.AgentConfirmationTicketGetPayload<
+  Record<string, never>
+>;
 type TaskStep =
   | 'LOCATE_EVENT'
   | 'LOCATE_MATCH'
   | 'WAITING_PARAMETERS'
   | 'PREVIEW_READY'
   | 'STALE'
-  | 'FAILED';
+  | 'FAILED'
+  | 'EXECUTED'
+  | 'CANCELLED';
 type ReplyStatus =
   | 'NEED_EVENT'
   | 'NEED_MATCH'
@@ -62,6 +68,45 @@ type RuntimeContext = {
   matchId?: string;
 };
 const json = (value: unknown) => value as Prisma.InputJsonValue;
+const confirmationTool = {
+  name: 'schedule.draft.adjust',
+  version: 'v1',
+} as const;
+type ConfirmationSummary = {
+  homeLabel: string;
+  awayLabel: string;
+  beforeStartAt: string;
+  beforeVenue: string;
+  afterStartAt: string;
+  afterVenue: string;
+};
+const digest = (value: unknown) =>
+  createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const confirmationHash = (input: {
+  ownerId: string;
+  eventId: string;
+  matchId: string;
+  startAt: string;
+  venue: string;
+  expectedRevision: number;
+  summary: ConfirmationSummary;
+}) =>
+  digest([
+    input.ownerId,
+    input.eventId,
+    input.matchId,
+    input.startAt,
+    input.venue,
+    input.expectedRevision,
+    input.summary.homeLabel,
+    input.summary.awayLabel,
+    input.summary.beforeStartAt,
+    input.summary.beforeVenue,
+    input.summary.afterStartAt,
+    input.summary.afterVenue,
+    confirmationTool.name,
+    confirmationTool.version,
+  ]);
 const strings = (value: Prisma.JsonValue): string[] =>
   Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
@@ -227,6 +272,23 @@ export class AiService implements OnModuleDestroy {
     return context;
   }
 
+  private ticketView(ticket: AgentTicketRow) {
+    return {
+      id: ticket.id,
+      actorId: ticket.ownerId,
+      actorDisplayName: ticket.actorDisplayName,
+      eventId: ticket.eventId,
+      eventName: ticket.eventName,
+      matchId: ticket.matchId,
+      expectedRevision: ticket.expectedRevision,
+      parameterHash: ticket.parameterHash,
+      toolVersion: ticket.toolVersion,
+      expiresAt: ticket.expiresAt.toISOString(),
+      state: ticket.state as 'PENDING' | 'EXECUTED' | 'CANCELLED',
+      parameterSummary: ticket.parameterSummary,
+    };
+  }
+
   private taskView(task: {
     id: string;
     goal: string;
@@ -238,6 +300,7 @@ export class AiService implements OnModuleDestroy {
     pendingFields: Prisma.JsonValue;
     preview: Prisma.JsonValue | null;
     previewExpiresAt: Date | null;
+    confirmationTickets?: AgentTicketRow[];
   }) {
     return {
       id: task.id,
@@ -249,6 +312,9 @@ export class AiService implements OnModuleDestroy {
       parameters: parameters(task.parameters),
       pendingFields: strings(task.pendingFields),
       preview: task.step === 'PREVIEW_READY' ? task.preview : null,
+      confirmation: task.confirmationTickets?.[0]
+        ? this.ticketView(task.confirmationTickets[0])
+        : null,
       expiresAt: task.previewExpiresAt?.toISOString() ?? null,
     };
   }
@@ -270,7 +336,7 @@ export class AiService implements OnModuleDestroy {
         ...session.tasks.map((task) => task.eventId),
       ].filter((id): id is string => !!id),
     );
-    for (const eventId of eventIds) await eventOperations(tx, actor, eventId);
+    for (const eventId of eventIds) await scheduleRead(tx, actor, eventId);
     const task = taskId
       ? session.tasks.find((candidate) => candidate.id === taskId)
       : session.tasks[0];
@@ -306,6 +372,164 @@ export class AiService implements OnModuleDestroy {
     return this.model.testConnection();
   }
 
+  confirmScheduleAdjustment(token: string, ticketId: string, input: unknown) {
+    const body = bodyObject(input, ['eventId', 'matchId', 'parameterHash']);
+    const eventId = uuid(body.eventId);
+    const matchId = uuid(body.matchId);
+    const parameterHash = text(body.parameterHash, 64);
+    if (!/^[0-9a-f]{64}$/.test(parameterHash))
+      throw new ConflictException('Confirmation parameters changed');
+    return this.auth.run(
+      token,
+      'schedule.draft.adjust',
+      ticketId,
+      input,
+      async (tx, actor) => {
+        await tx.$queryRaw`SELECT "id" FROM "AgentConfirmationTicket" WHERE "id"=${ticketId}::uuid FOR UPDATE`;
+        const ticket = await tx.agentConfirmationTicket.findUnique({
+          where: { id: ticketId },
+          include: { receipt: true, task: true },
+        });
+        if (
+          !ticket ||
+          ticket.ownerId !== actor.id ||
+          ticket.task.ownerId !== actor.id
+        )
+          deny();
+        if (ticket.eventId !== eventId || ticket.matchId !== matchId)
+          throw new ConflictException('Confirmation resource changed');
+        await scheduleDraftAdjust(tx, actor, ticket.eventId);
+        if (ticket.receipt) {
+          if (ticket.parameterHash !== parameterHash) {
+            throw new ConflictException('Confirmation parameters changed');
+          }
+          return {
+            ...(ticket.receipt.result as object),
+            replayed: true,
+          };
+        }
+        if (ticket.state !== 'PENDING')
+          throw new ConflictException('Confirmation is no longer pending');
+        if (ticket.expiresAt <= new Date())
+          throw new ConflictException('Confirmation expired; preview again');
+        if (
+          ticket.parameterHash !== parameterHash ||
+          ticket.toolName !== confirmationTool.name ||
+          ticket.toolVersion !== confirmationTool.version
+        )
+          throw new ConflictException('Confirmation parameters changed');
+        const summary =
+          ticket.parameterSummary as unknown as ConfirmationSummary;
+        const actualHash = confirmationHash({
+          ownerId: ticket.ownerId,
+          eventId: ticket.eventId,
+          matchId: ticket.matchId,
+          startAt: ticket.startAt.toISOString(),
+          venue: ticket.venue,
+          expectedRevision: ticket.expectedRevision,
+          summary,
+        });
+        if (
+          actualHash !== ticket.parameterHash ||
+          ticket.task.eventId !== ticket.eventId ||
+          ticket.task.matchId !== ticket.matchId ||
+          ticket.task.baselineRevision !== ticket.expectedRevision ||
+          ticket.task.step !== 'PREVIEW_READY'
+        )
+          throw new ConflictException('Confirmation binding changed');
+        const schedule = await this.scheduling.adjustInTransaction(
+          tx,
+          actor,
+          ticket.eventId,
+          ticket.matchId,
+          {
+            commandId: ticket.commandId,
+            expectedRevision: ticket.expectedRevision,
+            startAt: ticket.startAt.toISOString(),
+            venue: ticket.venue,
+          },
+        );
+        const result = {
+          ticketId: ticket.id,
+          commandId: ticket.commandId,
+          replayed: false,
+          eventId: ticket.eventId,
+          matchId: ticket.matchId,
+          revision: schedule.revision,
+          status: 'DRAFT' as const,
+          issues: schedule.issues,
+        };
+        await tx.agentCommandReceipt.create({
+          data: {
+            id: randomUUID(),
+            ticketId: ticket.id,
+            commandId: ticket.commandId,
+            ownerId: actor.id,
+            eventId: ticket.eventId,
+            matchId: ticket.matchId,
+            parameterHash: ticket.parameterHash,
+            result: json(result),
+          },
+        });
+        await tx.agentConfirmationTicket.update({
+          where: { id: ticket.id },
+          data: { state: 'EXECUTED', consumedAt: new Date() },
+        });
+        await tx.agentTask.update({
+          where: { id: ticket.taskId },
+          data: {
+            step: 'EXECUTED',
+            pendingFields: json([]),
+            previewExpiresAt: null,
+            revision: { increment: 1 },
+            updatedAt: new Date(),
+          },
+        });
+        return result;
+      },
+      { retries: 3, retryUnique: true, timeout: 10_000 },
+    );
+  }
+
+  cancelScheduleAdjustment(token: string, ticketId: string) {
+    return this.auth.run(
+      token,
+      'agent.schedule.cancel',
+      ticketId,
+      {},
+      async (tx, actor) => {
+        await tx.$queryRaw`SELECT "id" FROM "AgentConfirmationTicket" WHERE "id"=${ticketId}::uuid FOR UPDATE`;
+        const ticket = await tx.agentConfirmationTicket.findUnique({
+          where: { id: ticketId },
+        });
+        if (!ticket || ticket.ownerId !== actor.id) deny();
+        if (ticket.state === 'EXECUTED')
+          throw new ConflictException('Confirmation was already executed');
+        if (ticket.state === 'CANCELLED') return this.ticketView(ticket);
+        const updated = await tx.agentConfirmationTicket.update({
+          where: { id: ticket.id },
+          data: { state: 'CANCELLED', consumedAt: new Date() },
+        });
+        const newer = await tx.agentConfirmationTicket.count({
+          where: { taskId: ticket.taskId, createdAt: { gt: ticket.createdAt } },
+        });
+        if (!newer)
+          await tx.agentTask.updateMany({
+            where: { id: ticket.taskId, step: 'PREVIEW_READY' },
+            data: {
+              step: 'CANCELLED',
+              pendingFields: json([]),
+              previewExpiresAt: null,
+              revision: { increment: 1 },
+              updatedAt: new Date(),
+            },
+          });
+        return this.ticketView(updated);
+      },
+      { retries: 3 },
+    );
+  }
+
   createSession(token: string, input: unknown) {
     const body = bodyObject(input ?? {}, ['currentEventId']);
     return this.auth.run(
@@ -317,7 +541,7 @@ export class AiService implements OnModuleDestroy {
         const currentEventId = body.currentEventId
           ? uuid(body.currentEventId)
           : null;
-        if (currentEventId) await eventOperations(tx, actor, currentEventId);
+        if (currentEventId) await scheduleRead(tx, actor, currentEventId);
         const session = await tx.agentSession.create({
           data: { id: randomUUID(), ownerId: actor.id, currentEventId },
         });
@@ -338,7 +562,7 @@ export class AiService implements OnModuleDestroy {
             ownerId: actor.id,
             OR: [
               { currentEventId: null },
-              { currentEvent: eventOperationsScope(actor) },
+              { currentEvent: scheduleReadScope(actor) },
             ],
           },
           orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
@@ -368,7 +592,16 @@ export class AiService implements OnModuleDestroy {
       where: { id },
       include: {
         turns: { orderBy: { createdAt: 'desc' }, take: 20 },
-        tasks: { orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 1 },
+        tasks: {
+          orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+          take: 1,
+          include: {
+            confirmationTickets: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
       },
     });
     let task = loaded.tasks[0] ?? null;
@@ -382,6 +615,10 @@ export class AiService implements OnModuleDestroy {
         !task.previewExpiresAt ||
         task.previewExpiresAt <= new Date()
       ) {
+        await tx.agentConfirmationTicket.updateMany({
+          where: { taskId: task.id, state: 'PENDING' },
+          data: { state: 'CANCELLED', consumedAt: new Date() },
+        });
         task = await tx.agentTask.update({
           where: { id: task.id },
           data: {
@@ -391,6 +628,12 @@ export class AiService implements OnModuleDestroy {
             pendingFields: json([]),
             revision: { increment: 1 },
             updatedAt: new Date(),
+          },
+          include: {
+            confirmationTickets: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
           },
         });
       }
@@ -455,7 +698,10 @@ export class AiService implements OnModuleDestroy {
         if (
           body.newTask ||
           switchedEvent ||
-          (!body.taskId && task?.step === 'FAILED')
+          (!body.taskId &&
+            ['FAILED', 'STALE', 'EXECUTED', 'CANCELLED'].includes(
+              task?.step ?? '',
+            ))
         )
           task = undefined;
         if (!task) {
@@ -530,7 +776,14 @@ export class AiService implements OnModuleDestroy {
           sessionId,
           prepared.task.id,
         );
-        return current!;
+        const confirmation = await tx.agentConfirmationTicket.findFirst({
+          where: { taskId: current!.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        return {
+          ...current!,
+          confirmationTickets: confirmation ? [confirmation] : [],
+        };
       },
     );
     return {
@@ -594,7 +847,7 @@ export class AiService implements OnModuleDestroy {
             'Agent task changed; retry with latest state',
           );
         const events = await tx.event.findMany({
-          where: eventOperationsScope(actor),
+          where: scheduleReadScope(actor),
           select: { id: true, name: true },
           orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         });
@@ -627,7 +880,7 @@ export class AiService implements OnModuleDestroy {
             })),
           });
         }
-        await eventOperations(tx, actor, event.id);
+        await scheduleRead(tx, actor, event.id);
         const schedule = await tx.eventSchedule.findUnique({
           where: { eventId: event.id },
         });
@@ -834,6 +1087,54 @@ export class AiService implements OnModuleDestroy {
           throw new ConflictException(
             'Agent task changed; retry with latest state',
           );
+        const event = await tx.event.findUnique({
+          where: { id: preview.eventId },
+          select: { name: true },
+        });
+        if (!event) deny();
+        const consumedAt = new Date();
+        await tx.agentConfirmationTicket.updateMany({
+          where: { taskId: task.id, state: 'PENDING' },
+          data: { state: 'CANCELLED', consumedAt },
+        });
+        const summary: ConfirmationSummary = {
+          homeLabel: preview.before.homeLabel,
+          awayLabel: preview.before.awayLabel,
+          beforeStartAt: preview.before.startAt,
+          beforeVenue: preview.before.venue,
+          afterStartAt: preview.after.startAt,
+          afterVenue: preview.after.venue,
+        };
+        const parameterHash = confirmationHash({
+          ownerId: actor.id,
+          eventId: preview.eventId,
+          matchId: preview.after.id,
+          startAt: preview.after.startAt,
+          venue: preview.after.venue,
+          expectedRevision: preview.baselineRevision,
+          summary,
+        });
+        await tx.agentConfirmationTicket.create({
+          data: {
+            id: randomUUID(),
+            taskId: task.id,
+            ownerId: actor.id,
+            actorDisplayName: actor.displayName,
+            eventId: preview.eventId,
+            eventName: event.name,
+            matchId: preview.after.id,
+            startAt: new Date(preview.after.startAt),
+            venue: preview.after.venue,
+            expectedRevision: preview.baselineRevision,
+            parameterSummary: json(summary),
+            parameterHash,
+            toolName: confirmationTool.name,
+            toolVersion: confirmationTool.version,
+            commandId: randomUUID(),
+            state: 'PENDING',
+            expiresAt: new Date(preview.expiresAt),
+          },
+        });
         const changed = await tx.agentTask.updateMany({
           where: { id: task.id, revision: state.revision },
           data: {
