@@ -16,14 +16,15 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@prisma/client": "7.10.0",
+    "@langchain/langgraph-checkpoint-postgres": "1.0.5",
     "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "pg": "8.23.0"
   },
   "devDependencies": {
-    "prisma": "7.10.0",
-    "@types/pg": "8.23.1",
     "@types/node": "24.10.1",
+    "@types/pg": "8.23.1",
+    "prisma": "7.10.0",
     "typescript": "5.9.3"
   }
 }

@@ -91,6 +91,20 @@ export async function schedulingBrowserTest({ config, tokens, eventId }) {
     await expect(
       page.locator('.schedule-week-table .schedule-match-card'),
     ).toHaveCount(6);
+    await page.getByLabel('调整要求').fill('把周二第二场比赛改到周三十点');
+    await page.getByRole('button', { name: '生成调整预览' }).click();
+    await expect(page.locator('.schedule-agent-preview')).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.locator('.schedule-agent-preview')).toContainText(
+      '修改前',
+    );
+    await expect(page.locator('.schedule-agent-preview')).toContainText(
+      '修改后',
+    );
+    await expect(page.locator('.schedule-agent-preview')).toContainText(
+      '此操作尚未保存',
+    );
     await page
       .locator('.schedule-week-table .schedule-match-card')
       .first()

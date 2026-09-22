@@ -16,6 +16,7 @@ import { ApiError, type components } from '@caau/api-client';
 import { client } from '../materials/client';
 import { useAuth } from '../auth/AuthContext';
 import { ScheduleWeek } from './ScheduleWeek';
+import { ScheduleAgent } from './ScheduleAgent';
 
 type Schedule = components['schemas']['ScheduleViewDto'];
 type EventTeam = components['schemas']['TeamViewDto'];
@@ -241,6 +242,7 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
           }
         />
       )}
+      <ScheduleAgent eventId={eventId} />
       <div className="schedule-layout">
         <details className="schedule-settings" open={!schedule?.exists}>
           <summary>编排条件 · 点击展开或收起</summary>

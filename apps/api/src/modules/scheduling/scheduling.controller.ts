@@ -21,7 +21,9 @@ import { Permission } from '../authorization/authorization.guard.js';
 import {
   AdjustScheduleMatchDto,
   GenerateScheduleDto,
+  PreviewScheduleAdjustmentDto,
   PublishScheduleDto,
+  ScheduleAdjustmentPreviewDto,
   ScheduleViewDto,
 } from './scheduling.dto.js';
 import { SchedulingService } from './scheduling.service.js';
@@ -42,6 +44,23 @@ export class SchedulingController {
   @ApiOkResponse({ type: ScheduleViewDto })
   get(@Param('eventId') eventId: string, @Req() request: AuthRequest) {
     return this.scheduling.get(request.token ?? '', eventId);
+  }
+
+  @Post('preview-adjustment')
+  @HttpCode(200)
+  @Permission('schedules')
+  @ApiOperation({ operationId: 'previewEventScheduleAdjustment' })
+  @ApiOkResponse({ type: ScheduleAdjustmentPreviewDto })
+  preview(
+    @Param('eventId') eventId: string,
+    @Req() request: AuthRequest,
+    @Body() body: PreviewScheduleAdjustmentDto,
+  ) {
+    return this.scheduling.previewAdjustment(
+      request.token ?? '',
+      eventId,
+      body,
+    );
   }
 
   @Post('generate')

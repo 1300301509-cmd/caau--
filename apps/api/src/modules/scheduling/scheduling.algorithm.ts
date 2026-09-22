@@ -296,6 +296,27 @@ export function validateSchedule(
   return issues;
 }
 
+export function calculateAdjustmentPreview(
+  config: ScheduleConfigDto,
+  matches: ScheduleMatchDto[],
+  teams: Team[],
+  matchId: string,
+  startAt: string,
+  venue: string,
+) {
+  const before = matches.find((match) => match.id === matchId);
+  if (!before) throw new BadRequestException('Match not found');
+  const after = { ...before, startAt, venue };
+  const candidate = matches.map((match) =>
+    match.id === matchId ? after : match,
+  );
+  return {
+    before,
+    after,
+    issues: validateSchedule(config, candidate, teams),
+  };
+}
+
 export function generateSchedule(
   format: 'ROUND_ROBIN' | 'SINGLE_ELIMINATION',
   config: ScheduleConfigDto,

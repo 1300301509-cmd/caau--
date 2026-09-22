@@ -61,6 +61,22 @@ export class AdjustScheduleMatchDto {
   @ApiProperty() venue!: string;
 }
 
+export class PreviewScheduleAdjustmentDto {
+  @ApiProperty() expectedRevision!: number;
+  @ApiProperty() matchId!: string;
+  @ApiProperty() startAt!: string;
+  @ApiProperty() venue!: string;
+}
+
+export class ScheduleAdjustmentPreviewDto {
+  @ApiProperty() eventId!: string;
+  @ApiProperty() baselineRevision!: number;
+  @ApiProperty({ type: ScheduleMatchDto }) before!: ScheduleMatchDto;
+  @ApiProperty({ type: ScheduleMatchDto }) after!: ScheduleMatchDto;
+  @ApiProperty({ type: [ScheduleIssueDto] }) issues!: ScheduleIssueDto[];
+  @ApiProperty() expiresAt!: string;
+}
+
 export class PublishScheduleDto {
   @ApiProperty() commandId!: string;
   @ApiProperty() expectedRevision!: number;

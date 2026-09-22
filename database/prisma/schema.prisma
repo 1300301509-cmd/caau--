@@ -67,6 +67,8 @@ enum EventSupplyPhotoState {
 
 model InternalUser {
   teamMemberships TeamMembership[]
+  agentSessions AgentSession[]
+  agentTasks AgentTask[]
 
   id                     String                         @id @default(uuid()) @db.Uuid
   displayName            String                         @db.VarChar(80)
@@ -208,6 +210,8 @@ model AuditRecord {
 }
 
 model Event {
+  agentSessions AgentSession[]
+  agentTasks AgentTask[]
   staff EventStaff[]
   teams EventTeam[]
   schedule EventSchedule?
@@ -248,6 +252,56 @@ model EventSchedule {
   updatedAt DateTime @default(now()) @db.Timestamptz(3)
   publishedAt DateTime? @db.Timestamptz(3)
   versions EventScheduleVersion[]
+}
+
+model AgentSession {
+  id String @id @db.Uuid
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  summary String @default("") @db.VarChar(2000)
+  currentEventId String? @db.Uuid
+  currentEvent Event? @relation(fields: [currentEventId], references: [id], onDelete: Restrict)
+  currentMatchId String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  turns AgentTurn[]
+  tasks AgentTask[]
+
+  @@index([ownerId, updatedAt])
+}
+
+model AgentTurn {
+  id String @id @db.Uuid
+  sessionId String @db.Uuid
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  role String @db.VarChar(16)
+  content String @db.VarChar(2000)
+  structured Json @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([sessionId, createdAt])
+}
+
+model AgentTask {
+  id String @id @db.Uuid
+  sessionId String @db.Uuid
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  goal String @db.VarChar(500)
+  step String @db.VarChar(32)
+  eventId String? @db.Uuid
+  event Event? @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  matchId String? @db.Uuid
+  baselineRevision Int?
+  preview Json?
+  previewExpiresAt DateTime? @db.Timestamptz(3)
+  checkpointThreadId String @unique @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([ownerId, updatedAt])
+  @@index([sessionId, updatedAt])
 }
 
 model EventScheduleVersion {

@@ -75,4 +75,6 @@ CAAU-041 新增 `teams` 模块，负责球队主档案、赛事资料快照及�
 
 CAAU-042 新增 `scheduling` 模块，算法、校验、版本和发布门槛均在 API 侧；Web `SchedulingPanel` 与未来智能体只调用生成契约。赛程引用 `EventTeam` 并冻结对阵显示名称，不从球队主档案动态同步。见 [ADR-0016](../adr/0016-event-scheduling-engine.md)。
 
+CAAU-049 B1 新增 `ai` 模块和 Web `ScheduleAgent`：LangGraph 仅编排会话/任务状态，业务读取与纯预览继续复用 scheduling 权限及确定性校验。`AgentSession/Turn/Task` 与 `caau_agent` checkpoint 的连接/初始化位于 `@caau/database` 边界；模型 SDK 仅在 API，前端只消费生成客户端。checkpoint 不含 token/密钥，长期记忆本批不建表。见 [ADR-0019](../adr/0019-agent-orchestration.md)和[运行手册](../runbooks/agent-platform.md)。
+
 CAAU-046 A阶段规划独立球队端小程序。后续 `apps/team-miniapp` 只消费 `@caau/api-client`，不得引用承办方小程序源码；继续复用 `InternalUser`、`Team` 与 `TeamMembership`，不授予球队用户承办方角色。新 AppID 需要多客户端微信认证，赛事读取需要独立公开发布投影，不能开放内部 Event/Profile。实施时还须把新应用加入边界检查器的受检单元、前端集合以及两小程序构建产物检查。见[ADR-0018](../adr/0018-team-miniapp-boundaries.md)。

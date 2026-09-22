@@ -605,6 +605,98 @@
 .schedule-panel > .ant-alert {
   margin-bottom: 16px;
 }
+.schedule-agent {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid #cfe0d8;
+  border-radius: 16px;
+  background: #f7fbf8;
+}
+.schedule-agent-heading,
+.schedule-agent-preview > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.schedule-agent-heading h3 {
+  margin: 7px 0 5px;
+}
+.schedule-agent-heading p,
+.schedule-agent-preview p {
+  margin: 0;
+  color: var(--hq-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.schedule-agent-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: end;
+}
+.schedule-agent-compose label {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  font-weight: 600;
+}
+.schedule-agent-compose .ant-btn,
+.schedule-agent-candidates .ant-btn {
+  min-height: 44px;
+}
+.schedule-agent-candidates {
+  display: grid;
+  gap: 8px;
+}
+.schedule-agent-candidates .ant-btn {
+  height: auto;
+  padding-block: 9px;
+  white-space: normal;
+  text-align: left;
+}
+.schedule-agent-preview {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #d8e2dc;
+  border-radius: 13px;
+  background: #fff;
+}
+.schedule-agent-preview header strong,
+.schedule-agent-preview header span,
+.schedule-agent-diff span,
+.schedule-agent-diff strong,
+.schedule-agent-diff small {
+  display: block;
+}
+.schedule-agent-preview header span,
+.schedule-agent-diff span,
+.schedule-agent-diff small {
+  margin-top: 4px;
+  color: var(--hq-muted);
+  font-size: 11px;
+}
+.schedule-agent-diff {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.schedule-agent-diff > div {
+  padding: 13px;
+  border-radius: 10px;
+  background: #f4f7f2;
+}
+.schedule-agent-diff > div:last-child {
+  background: #e8f3ed;
+}
+.schedule-agent-preview ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #7b511b;
+  font-size: 12px;
+}
 .schedule-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1233,6 +1325,12 @@
   .schedule-panel {
     padding: 16px;
   }
+  .schedule-agent-heading,
+  .schedule-agent-preview > header {
+    display: grid;
+  }
+  .schedule-agent-compose,
+  .schedule-agent-diff,
   .schedule-form-grid {
     grid-template-columns: minmax(0, 1fr);
   }

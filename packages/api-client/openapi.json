@@ -249,6 +249,179 @@
         "required": ["commandId", "expectedRevision", "startAt", "venue"],
         "type": "object"
       },
+      "AgentCandidateDto": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "label"],
+        "type": "object"
+      },
+      "AgentMessageInputDto": {
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "matchId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["message"],
+        "type": "object"
+      },
+      "AgentReplyDto": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCandidateDto"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": ["NEED_EVENT", "NEED_MATCH", "PREVIEW", "STALE", "ERROR"],
+            "type": "string"
+          },
+          "task": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentTaskViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          }
+        },
+        "required": ["sessionId", "status", "message", "candidates"],
+        "type": "object"
+      },
+      "AgentSessionInputDto": {
+        "properties": {
+          "currentEventId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AgentSessionViewDto": {
+        "properties": {
+          "currentEventId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "currentMatchId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "task": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentTaskViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/AgentTurnViewDto"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "summary", "updatedAt", "turns"],
+        "type": "object"
+      },
+      "AgentTaskViewDto": {
+        "properties": {
+          "baselineRevision": {
+            "nullable": true,
+            "type": "number"
+          },
+          "eventId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "matchId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "preview": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleAdjustmentPreviewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "step": {
+            "enum": [
+              "LOCATE_EVENT",
+              "LOCATE_MATCH",
+              "PREVIEW_READY",
+              "STALE",
+              "FAILED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": ["id", "goal", "step"],
+        "type": "object"
+      },
+      "AgentTurnViewDto": {
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "enum": ["USER", "ASSISTANT"],
+            "type": "string"
+          }
+        },
+        "required": ["id", "role", "content", "createdAt"],
+        "type": "object"
+      },
       "AuditDto": {
         "properties": {
           "action": {
@@ -2865,6 +3038,24 @@
         "required": ["id", "displayName"],
         "type": "object"
       },
+      "PreviewScheduleAdjustmentDto": {
+        "properties": {
+          "expectedRevision": {
+            "type": "number"
+          },
+          "matchId": {
+            "type": "string"
+          },
+          "startAt": {
+            "type": "string"
+          },
+          "venue": {
+            "type": "string"
+          }
+        },
+        "required": ["expectedRevision", "matchId", "startAt", "venue"],
+        "type": "object"
+      },
       "PublishScheduleDto": {
         "properties": {
           "commandId": {
@@ -3084,6 +3275,40 @@
           }
         },
         "required": ["expectedDraftRevision", "generation", "content"],
+        "type": "object"
+      },
+      "ScheduleAdjustmentPreviewDto": {
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/ScheduleMatchDto"
+          },
+          "baselineRevision": {
+            "type": "number"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ScheduleMatchDto"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleIssueDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "eventId",
+          "baselineRevision",
+          "before",
+          "after",
+          "issues",
+          "expiresAt"
+        ],
         "type": "object"
       },
       "ScheduleConfigDto": {
@@ -4085,6 +4310,157 @@
           }
         ],
         "tags": ["event-hosting-applications"]
+      }
+    },
+    "/api/v1/agent/sessions": {
+      "get": {
+        "operationId": "listAgentSessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentSessionViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      },
+      "post": {
+        "operationId": "createAgentSession",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSessionInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/sessions/{sessionId}": {
+      "get": {
+        "operationId": "getAgentSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/sessions/{sessionId}/messages": {
+      "post": {
+        "operationId": "sendAgentMessage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentMessageInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentReplyDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
       }
     },
     "/api/v1/authentication/change-password": {
@@ -6122,6 +6498,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScheduleViewDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "409": {
+            "description": "Revision, command, or validation conflict"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["event-scheduling"]
+      }
+    },
+    "/api/v1/events/{eventId}/schedule/preview-adjustment": {
+      "post": {
+        "operationId": "previewEventScheduleAdjustment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewScheduleAdjustmentDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleAdjustmentPreviewDto"
                 }
               }
             },

@@ -113,6 +113,7 @@ export async function authorizationIntegration(t) {
                   '202609200003_event_supplies',
                   '202609200004_event_situation',
                   '202609210001_event_staff',
+                  '202609220001_agent_platform',
                 ],
               ],
             )
@@ -899,7 +900,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          16,
+          17,
         );
       },
     );
@@ -944,6 +945,13 @@ export async function authorizationIntegration(t) {
       runtime,
       api,
       session,
+      restartApi: async () => {
+        await app.close();
+        app = await createApplication(config);
+        await app.listen(0, '127.0.0.1');
+        base = await app.getUrl();
+        return base;
+      },
     });
     await eventSuppliesIntegration(t, {
       base,

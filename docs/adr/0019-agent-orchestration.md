@@ -1,6 +1,6 @@
 # ADR-0019：业务智能体编排、工具与授权边界
 
-状态：2026-09-22 用户确认采用 NestJS + LangGraph.js 架构，模型接入千问或混元；尚未实施。具体角色能力、入口和数据保存规则仍待确定。
+状态：2026-09-22 架构确认；CAAU-049 B1 已实现 NestJS + LangGraph.js、千问适配层、PostgreSQL checkpoint、会话/任务记忆和不落库的单场调整预览。赛程写入、发布、长期记忆及小程序入口仍未实施。
 
 ## 决策
 
@@ -46,6 +46,12 @@ LangGraph interrupt 恢复会重新执行节点；checkpoint 不提供业务命�
 现有 generate 会直接保存草稿且没有 expectedRevision，不可作为无副作用预览。先复用原算法和冲突校验新增纯预览；生成写工具接入前补齐版本保护。单场调整先接入，整套重排和发布后续分阶段开放。
 
 选型依据：[LangGraph 概览](https://docs.langchain.com/oss/javascript/langgraph/overview)、[中断与恢复](https://docs.langchain.com/oss/javascript/langgraph/interrupts)、[持久化](https://docs.langchain.com/oss/javascript/langgraph/add-memory)。
+
+## 三级记忆落地
+
+B1 已实现 L1 `AgentSession/AgentTurn`，以结构化字段保存当前赛事和场次，同时保留必要近期对话与短摘要；已实现 L2 `AgentTask`，保存 owner、目标、步骤、资源 ID、baseline revision、预览、有效期和 checkpoint thread。每次访问及恢复都重新检查 session actor、资源权限、版本和有效期；撤权后不返回旧上下文，旧预览不携带执行权。
+
+L3 本批仅保留设计边界，不创建空偏好表、知识表或向量库。未来只保存用户明确要求的偏好及带来源、版本、访问范围的知识；聊天总结不能成为正式规则。具体运行方式见[业务智能体赛程预览](../runbooks/agent-platform.md)。
 
 ## 记录与隐私
 

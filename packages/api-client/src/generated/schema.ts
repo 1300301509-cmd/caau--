@@ -65,6 +65,54 @@ export interface paths {
     patch: operations['HostingController_reviewGrantActive'];
     trace?: never;
   };
+  '/api/v1/agent/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listAgentSessions'];
+    put?: never;
+    post: operations['createAgentSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/sessions/{sessionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getAgentSession'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/sessions/{sessionId}/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['sendAgentMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/authentication/change-password': {
     parameters: {
       query?: never;
@@ -672,6 +720,22 @@ export interface paths {
     get?: never;
     put: operations['adjustEventScheduleMatch'];
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/schedule/preview-adjustment': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['previewEventScheduleAdjustment'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1969,6 +2033,59 @@ export interface components {
       startAt: string;
       venue: string;
     };
+    AgentCandidateDto: {
+      detail?: string;
+      id: string;
+      label: string;
+    };
+    AgentMessageInputDto: {
+      eventId?: string;
+      matchId?: string;
+      message: string;
+    };
+    AgentReplyDto: {
+      candidates: components['schemas']['AgentCandidateDto'][];
+      message: string;
+      sessionId: string;
+      /** @enum {string} */
+      status: 'NEED_EVENT' | 'NEED_MATCH' | 'PREVIEW' | 'STALE' | 'ERROR';
+      task?: components['schemas']['AgentTaskViewDto'] | null;
+    };
+    AgentSessionInputDto: {
+      currentEventId?: string;
+    };
+    AgentSessionViewDto: {
+      currentEventId?: string | null;
+      currentMatchId?: string | null;
+      id: string;
+      summary: string;
+      task?: components['schemas']['AgentTaskViewDto'] | null;
+      turns: components['schemas']['AgentTurnViewDto'][];
+      updatedAt: string;
+    };
+    AgentTaskViewDto: {
+      baselineRevision?: number | null;
+      eventId?: string | null;
+      expiresAt?: string | null;
+      goal: string;
+      id: string;
+      matchId?: string | null;
+      preview?: components['schemas']['ScheduleAdjustmentPreviewDto'] | null;
+      /** @enum {string} */
+      step:
+        | 'LOCATE_EVENT'
+        | 'LOCATE_MATCH'
+        | 'PREVIEW_READY'
+        | 'STALE'
+        | 'FAILED';
+    };
+    AgentTurnViewDto: {
+      content: string;
+      createdAt: string;
+      id: string;
+      /** @enum {string} */
+      role: 'USER' | 'ASSISTANT';
+    };
     AuditDto: {
       action: string;
       actorId: string | null;
@@ -2807,6 +2924,12 @@ export interface components {
       /** Format: uuid */
       id: string;
     };
+    PreviewScheduleAdjustmentDto: {
+      expectedRevision: number;
+      matchId: string;
+      startAt: string;
+      venue: string;
+    };
     PublishScheduleDto: {
       commandId: string;
       expectedRevision: number;
@@ -2875,6 +2998,14 @@ export interface components {
       content: components['schemas']['IndividualContentDto'];
       expectedDraftRevision: number;
       generation: number;
+    };
+    ScheduleAdjustmentPreviewDto: {
+      after: components['schemas']['ScheduleMatchDto'];
+      baselineRevision: number;
+      before: components['schemas']['ScheduleMatchDto'];
+      eventId: string;
+      expiresAt: string;
+      issues: components['schemas']['ScheduleIssueDto'][];
     };
     ScheduleConfigDto: {
       bufferMinutes: number;
@@ -3260,6 +3391,94 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  listAgentSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentSessionViewDto'][];
+        };
+      };
+    };
+  };
+  createAgentSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AgentSessionInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentSessionViewDto'];
+        };
+      };
+    };
+  };
+  getAgentSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentSessionViewDto'];
+        };
+      };
+    };
+  };
+  sendAgentMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AgentMessageInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentReplyDto'];
+        };
       };
     };
   };
@@ -5306,6 +5525,38 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ScheduleViewDto'];
+        };
+      };
+      /** @description Revision, command, or validation conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  previewEventScheduleAdjustment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PreviewScheduleAdjustmentDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduleAdjustmentPreviewDto'];
         };
       };
       /** @description Revision, command, or validation conflict */

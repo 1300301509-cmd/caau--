@@ -15,6 +15,7 @@ import { TeamsModule } from './modules/teams/teams.module.js';
 import { SchedulingModule } from './modules/scheduling/scheduling.module.js';
 import { EventSuppliesModule } from './modules/event-supplies/event-supplies.module.js';
 import { EventSituationModule } from './modules/event-situation/event-situation.module.js';
+import { AiModule } from './modules/ai/ai.module.js';
 @Module({
   imports: [
     TeamsModule,
@@ -38,6 +39,7 @@ export class AppModule {
         ReadinessModule.register(probe),
         AuthorizationModule.register(config),
         WorkflowModule.register(config.privateFileRoot),
+        AiModule.register(config.databaseUrl),
       ],
     };
   }

@@ -18,6 +18,7 @@ import type {
   ScheduleViewDto,
 } from './scheduling.dto.js';
 import {
+  calculateAdjustmentPreview,
   generateSchedule,
   validateConfig,
   validateSchedule,
@@ -142,6 +143,54 @@ export class SchedulingService {
           revision: 0,
           publishedAt: '',
           updatedAt: '',
+        };
+      },
+    );
+  }
+
+  previewAdjustment(token: string, eventId: string, input: unknown) {
+    return this.auth.run(
+      token,
+      'schedules.preview',
+      eventId,
+      input,
+      async (tx, actor) => {
+        await this.access(tx, actor, eventId);
+        const body = bodyObject(input, [
+          'expectedRevision',
+          'matchId',
+          'startAt',
+          'venue',
+        ]);
+        const expectedRevision = Number(body.expectedRevision);
+        const matchId = uuid(body.matchId);
+        const startAt = text(body.startAt, 40);
+        const venue = text(body.venue, 80);
+        if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+          throw new BadRequestException('Invalid revision');
+        if (!Number.isFinite(Date.parse(startAt)))
+          throw new BadRequestException('Invalid start time');
+        const current = await tx.eventSchedule.findUnique({
+          where: { eventId },
+        });
+        if (!current || current.revision !== expectedRevision)
+          throw new ConflictException('Schedule revision changed');
+        const config = current.config as unknown as ScheduleConfigDto;
+        if (!config.venues.includes(venue))
+          throw new BadRequestException('Venue is not configured');
+        const preview = calculateAdjustmentPreview(
+          config,
+          current.matches as unknown as ScheduleMatchDto[],
+          await this.teams(tx, eventId),
+          matchId,
+          startAt,
+          venue,
+        );
+        return {
+          eventId,
+          baselineRevision: current.revision,
+          ...preview,
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
         };
       },
     );

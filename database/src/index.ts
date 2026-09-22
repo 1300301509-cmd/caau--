@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client.js';
+import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { Prisma } from './generated/prisma/client.js';
 
 // Prisma is constructed only here; callers never import generated internals.
@@ -131,6 +132,21 @@ export function createAuthorizationDatabase(connectionString: string) {
       await client.$disconnect();
       await pool.end();
     },
+  };
+}
+
+export function createAgentCheckpointer(connectionString: string) {
+  const pool = new Pool({
+    connectionString,
+    max: 4,
+    connectionTimeoutMillis: 1000,
+    statement_timeout: 5000,
+    application_name: 'caau-agent-checkpoint',
+  });
+  pool.on('error', () => {});
+  return {
+    saver: new PostgresSaver(pool, undefined, { schema: 'caau_agent' }),
+    close: () => pool.end(),
   };
 }
 

@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { schedulingBrowserTest } from './scheduling-browser.integration.mjs';
 
 export async function schedulingIntegration(t, context) {
-  const { base, tokens, users, members, orgA, sql, runtime, session } = context;
+  let { base } = context;
+  const { tokens, users, members, orgA, sql, runtime, session, restartApi } =
+    context;
   for (const key of ['super', 'manager', 'reviewer', 'a'])
     await session(key, users[key]);
   async function call(key, method, route, body, status = 200) {
@@ -300,6 +302,153 @@ export async function schedulingIntegration(t, context) {
         active: true,
         profile: team.profile,
       });
+    },
+  );
+
+  await t.test(
+    'agent: ambiguity, multi-turn preview, ownership, revocation and stale recovery',
+    async () => {
+      schedule = await call(
+        'manager',
+        'POST',
+        `events/${event.id}/schedule/generate`,
+        { commandId: randomUUID(), format: 'ROUND_ROBIN', config },
+      );
+      const baseline = {
+        revision: schedule.revision,
+        matches: schedule.matches,
+        versions: (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+      };
+      const agentSession = await call('manager', 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const ambiguous = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        { message: '把比赛改到周三十点', eventId: event.id },
+      );
+      assert.equal(ambiguous.status, 'NEED_MATCH');
+      assert.ok(ambiguous.candidates.length > 1);
+      const preview = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        {
+          message: '就是这场，仍然改到周三十点',
+          eventId: event.id,
+          matchId: ambiguous.candidates[1].id,
+        },
+      );
+      assert.equal(preview.status, 'PREVIEW');
+      assert.equal(preview.task.preview.baselineRevision, baseline.revision);
+      assert.equal(preview.task.preview.before.id, ambiguous.candidates[1].id);
+      const unchanged = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      assert.equal(unchanged.revision, baseline.revision);
+      assert.deepEqual(unchanged.matches, baseline.matches);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        baseline.versions,
+      );
+      const checkpointThreadId = (
+        await sql.query(
+          'SELECT "checkpointThreadId" FROM "AgentTask" WHERE id=$1',
+          [preview.task.id],
+        )
+      ).rows[0].checkpointThreadId;
+      const checkpoints = (
+        await sql.query(
+          'SELECT checkpoint::text, metadata::text FROM caau_agent.checkpoints WHERE thread_id=$1',
+          [checkpointThreadId],
+        )
+      ).rows;
+      assert.ok(checkpoints.length > 0);
+      const persistedCheckpoint = JSON.stringify(checkpoints);
+      assert.ok(!persistedCheckpoint.includes(tokens.manager));
+      assert.ok(!persistedCheckpoint.includes('把比赛改到周三十点'));
+      base = await restartApi();
+      const afterRestart = await call(
+        'manager',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+      );
+      assert.equal(afterRestart.task.step, 'PREVIEW_READY');
+      assert.equal(
+        afterRestart.task.preview.before.id,
+        ambiguous.candidates[1].id,
+      );
+      await call(
+        'reviewer',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+        undefined,
+        403,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      await call(
+        'manager',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+        undefined,
+        403,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      await sql.query(
+        'UPDATE "AgentTask" SET "previewExpiresAt"=clock_timestamp()-interval \'1 minute\' WHERE id=$1',
+        [preview.task.id],
+      );
+      const expired = await call(
+        'manager',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+      );
+      assert.equal(expired.task.step, 'STALE');
+      assert.equal(expired.task.preview, null);
+      const refreshedPreview = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        {
+          message: '继续预览这场改到周三十一点',
+          eventId: event.id,
+          matchId: ambiguous.candidates[1].id,
+        },
+      );
+      assert.equal(refreshedPreview.status, 'PREVIEW');
+      const changed = await call(
+        'manager',
+        'POST',
+        `events/${event.id}/schedule/generate`,
+        { commandId: randomUUID(), format: 'ROUND_ROBIN', config },
+      );
+      assert.ok(changed.revision > baseline.revision);
+      const restored = await call(
+        'manager',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+      );
+      assert.equal(restored.task.step, 'STALE');
+      assert.equal(restored.task.preview, null);
     },
   );
 
