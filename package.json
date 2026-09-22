@@ -19,6 +19,7 @@
     "db:status": "node scripts/database.mjs status",
     "db:api": "node scripts/database.mjs api",
     "auth:local": "corepack pnpm --filter @caau/database build && node scripts/local-identity.mjs",
+    "agent:qwen:test": "corepack pnpm --filter @caau/api build && node --env-file-if-exists=.local/agent/qwen.env scripts/qwen-agent.manual.mjs",
     "admin:init-super": "corepack pnpm --filter @caau/database build && node --env-file-if-exists=.local/db/dev.env scripts/init-local-super-admin.mjs",
     "admin:init-local-super": "corepack pnpm admin:init-super",
     "events:local": "corepack pnpm build:packages && node scripts/local-events.mjs",

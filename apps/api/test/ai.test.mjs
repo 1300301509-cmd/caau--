@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createAgentModel,
+  intentSchema,
+  qwenIntentSystemPrompt,
   RuleAgentModelAdapter,
 } from '../dist/modules/ai/model-adapter.js';
 import { mergeAgentIntent } from '../dist/modules/ai/ai.service.js';
@@ -41,6 +43,22 @@ test('simulated model extracts the supported Chinese schedule adjustment intent'
     sourceWeekday: 6,
     sourceOrdinal: 3,
   });
+});
+
+test('Qwen schema and prompt distinguish source match from target time', () => {
+  assert.match(intentSchema.shape.sourceWeekday.description, /原比赛.*周六.*6/);
+  assert.match(intentSchema.shape.sourceOrdinal.description, /当天.*第二场.*2/);
+  assert.match(intentSchema.shape.targetWeekday.description, /目标星期/);
+  assert.match(intentSchema.shape.targetDate.description, /明确日历日期/);
+  assert.match(intentSchema.shape.targetHour.description, /北京时间.*24小时制/);
+  assert.match(intentSchema.shape.targetMinute.description, /整点.*0/);
+  assert.match(intentSchema.shape.targetOffsetMinutes.description, /分钟偏移/);
+  const prompt = qwenIntentSystemPrompt({ targetWeekday: 7 });
+  assert.match(prompt, /来源比赛/);
+  assert.match(prompt, /目标时间/);
+  assert.match(prompt, /sourceWeekday=6, sourceOrdinal=2/);
+  assert.match(prompt, /只返回本轮/);
+  assert.match(prompt, /不得选择赛事或比赛，不得执行任何修改/);
 });
 
 test('model status exposes host and credential presence but never the key', () => {

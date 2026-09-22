@@ -153,18 +153,72 @@ export class RuleAgentModelAdapter implements AgentModelAdapter {
   }
 }
 
-const intentSchema = z.object({
-  sourceWeekday: z.number().int().min(1).max(7).optional(),
-  sourceOrdinal: z.number().int().min(1).max(100).optional(),
-  targetWeekday: z.number().int().min(1).max(7).optional(),
+export const intentSchema = z.object({
+  sourceWeekday: z
+    .number()
+    .int()
+    .min(1)
+    .max(7)
+    .optional()
+    .describe(
+      '原比赛所在星期，周一=1、周日=7；“周六第二场”中的周六必须返回6。',
+    ),
+  sourceOrdinal: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe('原比赛在当天按开赛时间排序后的序号；“第二场”必须返回2。'),
+  targetWeekday: z
+    .number()
+    .int()
+    .min(1)
+    .max(7)
+    .optional()
+    .describe('调整后的目标星期，周一=1、周日=7。'),
   targetDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  targetHour: z.number().int().min(0).max(23).optional(),
-  targetMinute: z.number().int().min(0).max(59).optional(),
-  targetOffsetMinutes: z.number().int().min(-1440).max(1440).optional(),
+    .optional()
+    .describe('调整后的明确日历日期，格式为YYYY-MM-DD。'),
+  targetHour: z
+    .number()
+    .int()
+    .min(0)
+    .max(23)
+    .optional()
+    .describe('目标北京时间小时，使用24小时制。'),
+  targetMinute: z
+    .number()
+    .int()
+    .min(0)
+    .max(59)
+    .optional()
+    .describe('目标分钟；整点必须返回0。'),
+  targetOffsetMinutes: z
+    .number()
+    .int()
+    .min(-1440)
+    .max(1440)
+    .optional()
+    .describe('相对当前目标时间的分钟偏移；“再晚半小时”返回30。'),
 });
+
+export function qwenIntentSystemPrompt(known: AgentTaskParameters) {
+  return [
+    '你是赛程调整意图提取器，只返回本轮用户明确新增或修改的字段。',
+    '严格区分两类信息：',
+    '1. 来源比赛：用户说的是原比赛在哪一天、是当天按开赛时间排序后的第几场；提取为 sourceWeekday 和 sourceOrdinal。',
+    '2. 目标时间：用户要把比赛改到哪一天、几点；提取为 targetWeekday 或 targetDate，以及 targetHour、targetMinute。',
+    '星期一到星期日使用1到7。整点的 targetMinute 必须为0。“再晚半小时”提取 targetOffsetMinutes=30。',
+    '只返回本轮明确提到的新增或修改字段，不重复未提到的已知字段。不得选择赛事或比赛，不得执行任何修改。',
+    '示例输入：“把周六第二场比赛改到周日十点”',
+    '示例输出：sourceWeekday=6, sourceOrdinal=2, targetWeekday=7, targetHour=10, targetMinute=0',
+    '以下已知结构化条件仅用于理解本轮指代，不要因此重复输出：' +
+      JSON.stringify(known),
+  ].join('\n');
+}
 
 export class QwenAgentModelAdapter implements AgentModelAdapter {
   readonly mode = 'QWEN' as const;
@@ -200,9 +254,7 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
       return await this.model.invoke([
         {
           role: 'system',
-          content:
-            '只提取本轮对赛程调整条件的新增或修改，省略未提及字段。星期一到日用1到7；“再晚半小时”输出targetOffsetMinutes=30。不得选择赛事/比赛或执行操作。已知结构化条件仅用于理解指代：' +
-            JSON.stringify(known),
+          content: qwenIntentSystemPrompt(known),
         },
         { role: 'user', content: message },
       ]);
