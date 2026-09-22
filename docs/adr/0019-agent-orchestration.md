@@ -1,10 +1,10 @@
 # ADR-0019：业务智能体编排、工具与授权边界
 
-状态：建议，待产品原则确认。
+状态：2026-09-22 用户确认采用 NestJS + LangGraph.js 架构，模型接入千问或混元；尚未实施。具体角色能力、入口和数据保存规则仍待确定。
 
 ## 决策
 
-在 `apps/api/src/modules/ai` 建立服务端 Agent Orchestrator。前端只提交当前登录会话、用户输入和可验证的页面上下文；模型通过严格结构化工具调用现有业务能力。模型不直接访问数据库、Prisma、任意 HTTP、文件系统或服务端密钥。
+在 `apps/api/src/modules/ai` 使用 LangGraph.js 建立服务端 Agent Orchestrator，嵌入现有 NestJS 模块化单体。首期为单 Agent 加业务工具组。终端 pi-agent 是开发工具，不是产品运行时。前端只提交当前登录会话、用户输入和可验证的页面上下文；模型通过严格结构化工具调用现有业务能力。模型不直接访问数据库、Prisma、任意 HTTP、文件系统或服务端密钥。
 
 Agent 工具适配器调用业务模块公开 service 或同等受控用例，并把原始用户会话作为 actor 上下文。原业务模块在每次调用时重新执行授权、状态、CAS、幂等、事务和审计；Orchestrator 的工具过滤及模型提示不作为安全边界。
 
@@ -33,7 +33,19 @@ Agent 工具适配器调用业务模块公开 service 或同等受控用例，�
 
 ## 模型与供应商边界
 
-首期可采用 OpenAI Responses API function calling；模型 SDK 只存在于 `ai` 模块。业务模块和生成的 `@caau/api-client` 不依赖模型 SDK。模型配置、提示和工具版本通过服务端配置管理，密钥只保存在服务端环境。未来切换模型或采用 Agents SDK 不改变业务工具和授权语义。
+通过服务端模型适配层接入千问或混元；先选择一个实际可用的模型验证结构化工具调用、中文参数、超时与限流，再验证另一供应商。具体 model ID、端点和依赖版本在实现时核验并固定，不把兼容 API 等同于全部行为兼容。模型 SDK 只存在于 `ai` 模块，业务模块和生成的 `@caau/api-client` 不依赖模型 SDK；密钥只保存在服务端环境。
+
+## 工作流与恢复
+
+图流程为：鉴权与上下文 → 读取业务事实 → 模型解析目标 → 确定性预览 → 等待确认 → 重新鉴权及版本校验 → 执行业务命令 → 返回权威结果。只读步骤可由模型选择白名单工具，确认后的写入由固定程序节点执行。
+
+采用 PostgreSQL checkpointer 保存运行状态，其连接和初始化由 `@caau/database` 封装并按数据库运行手册管理，不由 API 随意建表。thread/session 必须绑定用户并在每次读取、恢复时验证归属；checkpoint 不存会话令牌或模型密钥。测试身份切换后沿用当前有效业务 actor，不能借用签发测试会话的管理员权限。
+
+LangGraph interrupt 恢复会重新执行节点；checkpoint 不提供业务命令恰好执行一次的保证。确认状态、固定 commandId、持久命令回执和业务事务必须协作：业务已提交而图状态未保存时，应返回原结果，不能再次修改。现有赛程仅保存 lastCommandId，接入写工具前需补足跨后续命令的重放保护。
+
+现有 generate 会直接保存草稿且没有 expectedRevision，不可作为无副作用预览。先复用原算法和冲突校验新增纯预览；生成写工具接入前补齐版本保护。单场调整先接入，整套重排和发布后续分阶段开放。
+
+选型依据：[LangGraph 概览](https://docs.langchain.com/oss/javascript/langgraph/overview)、[中断与恢复](https://docs.langchain.com/oss/javascript/langgraph/interrupts)、[持久化](https://docs.langchain.com/oss/javascript/langgraph/add-memory)。
 
 ## 记录与隐私
 
