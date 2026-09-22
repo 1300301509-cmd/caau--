@@ -84,9 +84,9 @@ test('local mode defaults to super admin and switches identity from the sidebar'
   );
 
   await page.goto('/hosting-applications');
-  await expect(
-    page.getByText('总部超级管理员', { exact: true }),
-  ).toBeAttached();
+  await expect(page.locator('.hq-account-copy')).toContainText(
+    '总部超级管理员',
+  );
   expect(issued).toEqual(['super-admin']);
 
   await page.locator('.hq-brand-symbol').hover();
@@ -95,11 +95,27 @@ test('local mode defaults to super admin and switches identity from the sidebar'
   await expect(
     selector.locator('xpath=..').getByText(/总部超级管理员/),
   ).toBeVisible();
+  const switcher = page.locator('.hq-local-switcher');
+  const [switcherBox, selectBox] = await Promise.all([
+    switcher.boundingBox(),
+    selector.locator('xpath=../..').boundingBox(),
+  ]);
+  expect(switcherBox).not.toBeNull();
+  expect(selectBox).not.toBeNull();
+  expect(selectBox!.x).toBeGreaterThanOrEqual(switcherBox!.x);
+  expect(selectBox!.x + selectBox!.width).toBeLessThanOrEqual(
+    switcherBox!.x + switcherBox!.width,
+  );
   await selector.click();
-  await page.getByText('总部审核员甲 · 总部审核员', { exact: true }).click();
+  const reviewerOption = page.getByText('总部审核员甲', { exact: true });
+  await expect(reviewerOption).toBeVisible();
+  const popupBox = await reviewerOption.locator('xpath=../../..').boundingBox();
+  expect(popupBox).not.toBeNull();
+  expect(popupBox!.width).toBeLessThanOrEqual(switcherBox!.width);
+  await reviewerOption.click();
 
   await expect.poll(() => issued).toEqual(['super-admin', 'reviewer-a']);
-  await expect(page.getByText('总部审核员甲', { exact: true })).toBeAttached();
+  await expect(page.locator('.hq-account-copy')).toContainText('总部审核员甲');
   await page.locator('.hq-brand-symbol').hover();
   await expect(
     page

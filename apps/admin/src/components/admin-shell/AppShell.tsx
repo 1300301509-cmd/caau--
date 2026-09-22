@@ -5,13 +5,6 @@ import { useAuth } from '../../features/auth/AuthContext';
 import brandImage from '../../assets/caau-brand.jpg';
 import './review-center.css';
 
-const localRoleLabels: Record<string, string> = {
-  HEADQUARTERS_SUPER_ADMIN: '超级管理员',
-  EVENT_MANAGER: '赛事管理员',
-  REVIEWER: '总部审核员',
-  ORGANIZER: '承办方经办人',
-};
-
 export function AppShell({
   children,
   active = 'materials',
@@ -142,9 +135,10 @@ export function AppShell({
                   onChange={(key) => void auth.switchLocalIdentity(key)}
                   options={auth.localChoices.map((choice) => ({
                     value: choice.key,
-                    label: `${choice.displayName} · ${localRoleLabels[choice.role] ?? choice.role}`,
+                    label: choice.displayName,
+                    title: `${choice.displayName} · ${choice.organizationName}`,
                   }))}
-                  popupMatchSelectWidth={280}
+                  popupMatchSelectWidth
                 />
                 <small>仅本地测试可见；切换后按该账号权限重新加载。</small>
               </div>

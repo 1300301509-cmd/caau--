@@ -615,6 +615,8 @@ body:has(.hq-shell) {
   display: grid;
   grid-column: 1 / -1;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   padding: 10px;
   border: 1px solid #dce6d9;
@@ -629,6 +631,18 @@ body:has(.hq-shell) {
 }
 .hq-local-switcher .ant-select {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.hq-local-switcher .ant-select-selector,
+.hq-local-switcher .ant-select-selection-wrap,
+.hq-local-switcher .ant-select-selection-item {
+  min-width: 0;
+}
+.hq-local-switcher .ant-select-selection-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .hq-local-switcher small {
   color: #788079;
