@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { RuleAgentModelAdapter } from '../dist/modules/ai/model-adapter.js';
+import {
+  createAgentModel,
+  RuleAgentModelAdapter,
+} from '../dist/modules/ai/model-adapter.js';
+import { mergeAgentIntent } from '../dist/modules/ai/ai.service.js';
 import { calculateAdjustmentPreview } from '../dist/modules/scheduling/scheduling.algorithm.js';
 
 test('simulated model extracts the supported Chinese schedule adjustment intent', async () => {
@@ -33,6 +37,60 @@ test('simulated model extracts the supported Chinese schedule adjustment intent'
     (await new RuleAgentModelAdapter().parse('改到周三十点')).targetHour,
     10,
   );
+  assert.deepEqual(await new RuleAgentModelAdapter().parse('换成周六第三场'), {
+    sourceWeekday: 6,
+    sourceOrdinal: 3,
+  });
+});
+
+test('model status exposes host and credential presence but never the key', () => {
+  const key = 'synthetic-secret-never-return';
+  const status = createAgentModel({
+    CAAU_QWEN_API_KEY: key,
+    CAAU_QWEN_MODEL: 'qwen-synthetic',
+    CAAU_QWEN_BASE_URL: 'https://dashscope.example.test/compatible/v1',
+  }).status();
+  assert.equal(status.mode, 'QWEN');
+  assert.equal(status.modelName, 'qwen-synthetic');
+  assert.equal(status.baseUrlHost, 'dashscope.example.test');
+  assert.equal(status.credentialsConfigured, true);
+  assert.ok(!JSON.stringify(status).includes(key));
+});
+
+test('intent merge invalidates mutually exclusive and derived schedule fields', () => {
+  const known = {
+    sourceWeekday: 6,
+    sourceOrdinal: 2,
+    sourceMatchId: '10000000-0000-4000-8000-000000000002',
+    targetWeekday: 7,
+    targetDate: '2027-06-06',
+    targetHour: 23,
+    targetMinute: 30,
+    targetStartAt: '2027-06-06T15:30:00.000Z',
+  };
+  const sourceChanged = mergeAgentIntent(known, {
+    sourceWeekday: 6,
+    sourceOrdinal: 3,
+  });
+  assert.equal(sourceChanged.sourceMatchId, undefined);
+  assert.equal(sourceChanged.targetStartAt, undefined);
+  const explicitDate = mergeAgentIntent(known, {
+    targetDate: '2027-06-08',
+    targetHour: 10,
+    targetMinute: 0,
+  });
+  assert.equal(explicitDate.targetWeekday, undefined);
+  assert.equal(explicitDate.targetDate, '2027-06-08');
+  const explicitWeekday = mergeAgentIntent(explicitDate, {
+    targetWeekday: 7,
+  });
+  assert.equal(explicitWeekday.targetDate, undefined);
+  const crossWeek = mergeAgentIntent(known, { targetOffsetMinutes: 60 });
+  assert.equal(crossWeek.targetWeekday, undefined);
+  assert.equal(crossWeek.targetDate, '2027-06-07');
+  assert.equal(crossWeek.targetHour, 0);
+  assert.equal(crossWeek.targetMinute, 30);
+  assert.equal(crossWeek.targetStartAt, '2027-06-06T16:30:00.000Z');
 });
 
 test('adjustment preview uses deterministic validation without mutating input', () => {

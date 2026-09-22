@@ -114,6 +114,82 @@ export const operations = {
     },
     authenticated: true,
   },
+  getAgentModelStatus: {
+    path: '/api/v1/agent/model-status',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: {
+          baseUrlHost: { nullable: true, type: 'string' },
+          credentialsConfigured: { type: 'boolean' },
+          lastConnectionTest: {
+            properties: {
+              message: { type: 'string' },
+              status: {
+                enum: ['NOT_TESTED', 'SUCCEEDED', 'FAILED', 'NOT_APPLICABLE'],
+                type: 'string',
+              },
+              testedAt: { nullable: true, type: 'string' },
+            },
+            required: ['status', 'message'],
+            type: 'object',
+          },
+          mode: { enum: ['SIMULATED', 'QWEN'], type: 'string' },
+          modelName: { type: 'string' },
+        },
+        required: [
+          'mode',
+          'modelName',
+          'credentialsConfigured',
+          'lastConnectionTest',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  testAgentModelConnection: {
+    path: '/api/v1/agent/model-status/test',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          baseUrlHost: { nullable: true, type: 'string' },
+          credentialsConfigured: { type: 'boolean' },
+          lastConnectionTest: {
+            properties: {
+              message: { type: 'string' },
+              status: {
+                enum: ['NOT_TESTED', 'SUCCEEDED', 'FAILED', 'NOT_APPLICABLE'],
+                type: 'string',
+              },
+              testedAt: { nullable: true, type: 'string' },
+            },
+            required: ['status', 'message'],
+            type: 'object',
+          },
+          mode: { enum: ['SIMULATED', 'QWEN'], type: 'string' },
+          modelName: { type: 'string' },
+        },
+        required: [
+          'mode',
+          'modelName',
+          'credentialsConfigured',
+          'lastConnectionTest',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
   listAgentSessions: {
     path: '/api/v1/agent/sessions',
     method: 'GET',

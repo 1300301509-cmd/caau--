@@ -19,11 +19,13 @@ import {
   deny,
   eventOperations,
   eventOperationsScope,
+  isHeadquartersSuperAdmin,
   type Actor,
 } from '../authorization/policy.js';
 import { SchedulingService } from '../scheduling/scheduling.service.js';
 import type { ScheduleMatchDto } from '../scheduling/scheduling.dto.js';
 import type {
+  AgentIntentPatch,
   AgentModelAdapter,
   AgentTaskParameters,
 } from './model-adapter.js';
@@ -104,6 +106,78 @@ function instant(date: string, hour: number, minute: number) {
   return new Date(
     `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+08:00`,
   ).toISOString();
+}
+function shiftDate(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+export function mergeAgentIntent(
+  known: AgentTaskParameters,
+  patch: AgentIntentPatch,
+) {
+  const next = { ...known };
+  const sourceChanged =
+    patch.sourceWeekday !== undefined || patch.sourceOrdinal !== undefined;
+  if (sourceChanged) {
+    delete next.sourceMatchId;
+    delete next.targetStartAt;
+  }
+  for (const key of [
+    'sourceWeekday',
+    'sourceOrdinal',
+    'targetHour',
+    'targetMinute',
+    'venue',
+  ] as const)
+    if (patch[key] !== undefined) next[key] = patch[key] as never;
+
+  if (patch.targetWeekday !== undefined) {
+    next.targetWeekday = patch.targetWeekday;
+    delete next.targetDate;
+  }
+  // A calendar date is more specific than a weekday if both occur in one turn.
+  if (patch.targetDate !== undefined) {
+    next.targetDate = patch.targetDate;
+    delete next.targetWeekday;
+  }
+  const absoluteTargetChanged =
+    patch.targetWeekday !== undefined ||
+    patch.targetDate !== undefined ||
+    patch.targetHour !== undefined ||
+    patch.targetMinute !== undefined;
+  if (absoluteTargetChanged) delete next.targetStartAt;
+
+  if (patch.targetOffsetMinutes !== undefined) {
+    if (!sourceChanged && !absoluteTargetChanged && known.targetStartAt) {
+      const shifted = new Date(
+        Date.parse(known.targetStartAt) + patch.targetOffsetMinutes * 60 * 1000,
+      );
+      next.targetStartAt = shifted.toISOString();
+      const local = localParts(next.targetStartAt);
+      next.targetDate = local.date;
+      next.targetHour = Number(local.time.slice(0, 2));
+      next.targetMinute = Number(local.time.slice(3, 5));
+      delete next.targetWeekday;
+    } else if (next.targetHour !== undefined) {
+      const total =
+        next.targetHour * 60 +
+        (next.targetMinute ?? 0) +
+        patch.targetOffsetMinutes;
+      const dayDelta = Math.floor(total / 1440);
+      const normalized = ((total % 1440) + 1440) % 1440;
+      next.targetHour = Math.floor(normalized / 60);
+      next.targetMinute = normalized % 60;
+      if (dayDelta && next.targetWeekday !== undefined) {
+        next.targetWeekday =
+          ((next.targetWeekday - 1 + dayDelta + 700) % 7) + 1;
+        delete next.targetDate;
+      } else if (dayDelta && next.targetDate)
+        next.targetDate = shiftDate(next.targetDate, dayDelta);
+      delete next.targetStartAt;
+    }
+  }
+  return next;
 }
 function matchLabel(match: ScheduleMatchDto) {
   return `第${match.order}场 · ${match.homeLabel} vs ${match.awayLabel}`;
@@ -202,6 +276,34 @@ export class AiService implements OnModuleDestroy {
       : session.tasks[0];
     if (taskId && !task) deny();
     return { session, task };
+  }
+
+  async getModelStatus(token: string) {
+    await this.auth.run(
+      token,
+      'agent.model.status',
+      undefined,
+      {},
+      async (_tx, actor) => {
+        if (!isHeadquartersSuperAdmin(actor)) deny();
+        return true;
+      },
+    );
+    return this.model.status();
+  }
+
+  async testModelConnection(token: string) {
+    await this.auth.run(
+      token,
+      'agent.model.test',
+      undefined,
+      {},
+      async (_tx, actor) => {
+        if (!isHeadquartersSuperAdmin(actor)) deny();
+        return true;
+      },
+    );
+    return this.model.testConnection();
   }
 
   createSession(token: string, input: unknown) {
@@ -465,38 +567,7 @@ export class AiService implements OnModuleDestroy {
       context.message,
       state.parameters ?? {},
     );
-    const next = { ...(state.parameters ?? {}) };
-    for (const [key, value] of Object.entries(patch))
-      if (key !== 'targetOffsetMinutes' && value !== undefined)
-        (next as Record<string, unknown>)[key] = value;
-    if (
-      patch.targetWeekday !== undefined ||
-      patch.targetDate !== undefined ||
-      patch.targetHour !== undefined ||
-      patch.targetMinute !== undefined
-    )
-      delete next.targetStartAt;
-    if (patch.targetOffsetMinutes !== undefined) {
-      if (next.targetStartAt) {
-        const shifted = new Date(
-          Date.parse(next.targetStartAt) +
-            patch.targetOffsetMinutes * 60 * 1000,
-        );
-        next.targetStartAt = shifted.toISOString();
-        const local = localParts(next.targetStartAt);
-        next.targetDate = local.date;
-        next.targetHour = Number(local.time.slice(0, 2));
-        next.targetMinute = Number(local.time.slice(3, 5));
-        next.targetWeekday = weekday(local.date);
-      } else if (next.targetHour !== undefined) {
-        const total =
-          next.targetHour * 60 +
-          (next.targetMinute ?? 0) +
-          patch.targetOffsetMinutes;
-        next.targetHour = Math.floor((((total % 1440) + 1440) % 1440) / 60);
-        next.targetMinute = ((total % 60) + 60) % 60;
-      }
-    }
+    const next = mergeAgentIntent(state.parameters ?? {}, patch);
     if (context.matchId) {
       next.sourceMatchId = context.matchId;
       delete next.targetStartAt;

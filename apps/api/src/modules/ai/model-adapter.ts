@@ -18,6 +18,19 @@ export type AgentIntentPatch = Partial<AgentTaskParameters> & {
   targetOffsetMinutes?: number;
 };
 
+export type AgentModelConnectionResult = {
+  status: 'NOT_TESTED' | 'SUCCEEDED' | 'FAILED' | 'NOT_APPLICABLE';
+  testedAt: string | null;
+  message: string;
+};
+export type AgentModelStatus = {
+  mode: 'SIMULATED' | 'QWEN';
+  modelName: string;
+  baseUrlHost: string | null;
+  credentialsConfigured: boolean;
+  lastConnectionTest: AgentModelConnectionResult;
+};
+
 const weekday = new Map([
   ['一', 1],
   ['二', 2],
@@ -49,19 +62,37 @@ function number(value?: string) {
     return (chineseNumber.get(value[0] ?? '') ?? 0) * 10;
   return chineseNumber.get(value);
 }
+function host(baseURL?: string) {
+  if (!baseURL) return null;
+  try {
+    return new URL(baseURL).hostname;
+  } catch {
+    return null;
+  }
+}
 
 export interface AgentModelAdapter {
   readonly mode: 'SIMULATED' | 'QWEN';
   parse(message: string, known: AgentTaskParameters): Promise<AgentIntentPatch>;
+  status(): AgentModelStatus;
+  testConnection(): Promise<AgentModelStatus>;
 }
 
 export class RuleAgentModelAdapter implements AgentModelAdapter {
   readonly mode = 'SIMULATED' as const;
+  private lastConnectionTest: AgentModelConnectionResult = {
+    status: 'NOT_TESTED',
+    testedAt: null,
+    message: '尚未执行连接测试',
+  };
   async parse(message: string): Promise<AgentIntentPatch> {
     const source =
       /周([一二三四五六日天])(?:[^，。]*?)([一二三四五六七八九十\d]+)场/.exec(
         message,
       );
+    const sourceOrdinal =
+      source?.[2] ??
+      /(?:换成|改成|选择)?第?([一二三四五六七八九十\d]+)场/.exec(message)?.[1];
     const targetWeekday =
       /(?:改|移|调)[^，。]*?(?:到|至)周([一二三四五六日天])/.exec(message);
     const targetDate = /(?:改|移|调)[^，。]*?(?:到|至)(\d{4}-\d{2}-\d{2})/.exec(
@@ -92,12 +123,8 @@ export class RuleAgentModelAdapter implements AgentModelAdapter {
         ? 60
         : undefined;
     return {
-      ...(source
-        ? {
-            sourceWeekday: weekday.get(source[1]!),
-            sourceOrdinal: number(source[2]),
-          }
-        : {}),
+      ...(source ? { sourceWeekday: weekday.get(source[1]!) } : {}),
+      ...(sourceOrdinal ? { sourceOrdinal: number(sourceOrdinal) } : {}),
       ...(targetWeekday
         ? { targetWeekday: weekday.get(targetWeekday[1]!) }
         : {}),
@@ -106,6 +133,23 @@ export class RuleAgentModelAdapter implements AgentModelAdapter {
       ...(minute === undefined ? {} : { targetMinute: minute }),
       ...(offset === undefined ? {} : { targetOffsetMinutes: offset }),
     };
+  }
+  status(): AgentModelStatus {
+    return {
+      mode: this.mode,
+      modelName: 'deterministic-rule-parser',
+      baseUrlHost: null,
+      credentialsConfigured: false,
+      lastConnectionTest: this.lastConnectionTest,
+    };
+  }
+  async testConnection() {
+    this.lastConnectionTest = {
+      status: 'NOT_APPLICABLE',
+      testedAt: new Date().toISOString(),
+      message: '模拟模式不连接外部模型',
+    };
+    return this.status();
   }
 }
 
@@ -124,16 +168,27 @@ const intentSchema = z.object({
 
 export class QwenAgentModelAdapter implements AgentModelAdapter {
   readonly mode = 'QWEN' as const;
+  private readonly rawModel;
   private readonly model;
-  constructor(apiKey: string, model: string, baseURL: string) {
-    this.model = new ChatOpenAI({
+  private lastConnectionTest: AgentModelConnectionResult = {
+    status: 'NOT_TESTED',
+    testedAt: null,
+    message: '尚未执行连接测试',
+  };
+  constructor(
+    private readonly apiKey: string,
+    private readonly modelName: string,
+    private readonly baseURL: string,
+  ) {
+    this.rawModel = new ChatOpenAI({
       apiKey,
-      model,
+      model: modelName,
       temperature: 0,
       configuration: { baseURL },
       timeout: 8000,
       maxRetries: 0,
-    }).withStructuredOutput(intentSchema, {
+    });
+    this.model = this.rawModel.withStructuredOutput(intentSchema, {
       name: 'schedule_adjustment_intent_patch',
     });
   }
@@ -154,6 +209,35 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
     } catch {
       throw new ServiceUnavailableException('Agent model unavailable');
     }
+  }
+  status(): AgentModelStatus {
+    return {
+      mode: this.mode,
+      modelName: this.modelName,
+      baseUrlHost: host(this.baseURL),
+      credentialsConfigured: !!this.apiKey,
+      lastConnectionTest: this.lastConnectionTest,
+    };
+  }
+  async testConnection() {
+    try {
+      await this.rawModel.invoke([
+        { role: 'system', content: '这是连接测试，只回复 OK。' },
+        { role: 'user', content: 'ping' },
+      ]);
+      this.lastConnectionTest = {
+        status: 'SUCCEEDED',
+        testedAt: new Date().toISOString(),
+        message: '连接测试成功',
+      };
+    } catch {
+      this.lastConnectionTest = {
+        status: 'FAILED',
+        testedAt: new Date().toISOString(),
+        message: '连接测试失败',
+      };
+    }
+    return this.status();
   }
 }
 

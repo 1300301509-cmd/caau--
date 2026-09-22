@@ -342,6 +342,29 @@ export async function schedulingIntegration(t, context) {
           )
         ).rows[0].n,
       };
+      const modelStatus = await call('super', 'GET', 'agent/model-status');
+      assert.deepEqual(modelStatus, {
+        mode: 'SIMULATED',
+        modelName: 'deterministic-rule-parser',
+        baseUrlHost: null,
+        credentialsConfigured: false,
+        lastConnectionTest: {
+          status: 'NOT_TESTED',
+          testedAt: null,
+          message: '尚未执行连接测试',
+        },
+      });
+      await call('manager', 'GET', 'agent/model-status', undefined, 403);
+      const testedModel = await call(
+        'super',
+        'POST',
+        'agent/model-status/test',
+        {},
+      );
+      assert.equal(testedModel.lastConnectionTest.status, 'NOT_APPLICABLE');
+      assert.ok(testedModel.lastConnectionTest.testedAt);
+      assert.ok(!JSON.stringify(testedModel).includes(tokens.super));
+
       const agentSession = await call('manager', 'POST', 'agent/sessions', {
         currentEventId: event.id,
       });
@@ -399,11 +422,92 @@ export async function schedulingIntegration(t, context) {
       assert.equal(later.task.parameters.targetHour, 10);
       assert.equal(later.task.parameters.targetMinute, 30);
       assert.match(later.task.parameters.targetStartAt, /T02:30:00\.000Z$/);
+
+      const saturday = baseline.matches
+        .filter(
+          (match) =>
+            new Date(Date.parse(match.startAt) + 8 * 60 * 60 * 1000)
+              .toISOString()
+              .slice(0, 10) === '2027-06-05',
+        )
+        .sort(
+          (left, right) =>
+            Date.parse(left.startAt) - Date.parse(right.startAt) ||
+            left.order - right.order,
+        );
+      assert.ok(saturday.length >= 3);
+      const thirdMatch = saturday[2];
+      const changedSource = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        { message: '换成周六第三场', taskId: waiting.task.id },
+      );
+      assert.equal(changedSource.status, 'PREVIEW');
+      assert.equal(changedSource.task.matchId, thirdMatch.id);
+      assert.equal(changedSource.task.parameters.sourceMatchId, thirdMatch.id);
+      assert.equal(changedSource.task.parameters.sourceOrdinal, 3);
+      assert.equal(changedSource.task.preview.before.id, thirdMatch.id);
+      assert.notEqual(changedSource.task.matchId, waiting.task.matchId);
+
+      const explicitDate = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        {
+          message: '改到2027-06-08上午十点',
+          taskId: waiting.task.id,
+        },
+      );
+      assert.equal(explicitDate.status, 'PREVIEW');
+      assert.equal(explicitDate.task.parameters.targetWeekday, undefined);
+      assert.equal(explicitDate.task.parameters.targetDate, '2027-06-08');
+      assert.equal(
+        explicitDate.task.parameters.targetStartAt,
+        '2027-06-08T02:00:00.000Z',
+      );
+      assert.equal(explicitDate.task.preview.before.id, thirdMatch.id);
+      assert.equal(
+        explicitDate.task.preview.after.startAt,
+        '2027-06-08T02:00:00.000Z',
+      );
+
+      const weekdayAgain = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        { message: '改到周日晚上十一点半', taskId: waiting.task.id },
+      );
+      assert.equal(weekdayAgain.task.parameters.targetWeekday, 7);
+      assert.equal(weekdayAgain.task.parameters.targetDate, '2027-06-06');
+      assert.equal(
+        weekdayAgain.task.parameters.targetStartAt,
+        '2027-06-06T15:30:00.000Z',
+      );
+      const crossWeek = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        { message: '再晚一小时', taskId: waiting.task.id },
+      );
+      assert.equal(crossWeek.status, 'PREVIEW');
+      assert.equal(crossWeek.task.parameters.targetWeekday, undefined);
+      assert.equal(crossWeek.task.parameters.targetDate, '2027-06-07');
+      assert.equal(crossWeek.task.parameters.targetHour, 0);
+      assert.equal(crossWeek.task.parameters.targetMinute, 30);
+      assert.equal(
+        crossWeek.task.parameters.targetStartAt,
+        '2027-06-06T16:30:00.000Z',
+      );
+      assert.equal(
+        crossWeek.task.preview.after.startAt,
+        '2027-06-06T16:30:00.000Z',
+      );
       assert.equal(
         (
           await sql.query(
             'SELECT "checkpointThreadId" FROM "AgentTask" WHERE id=$1',
-            [later.task.id],
+            [crossWeek.task.id],
           )
         ).rows[0].checkpointThreadId,
         durable.checkpointThreadId,
@@ -441,6 +545,22 @@ export async function schedulingIntegration(t, context) {
       await sql.query(
         'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
         [event.id, members.manager],
+      );
+      const afterAgentPreviews = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      assert.equal(afterAgentPreviews.revision, baseline.revision);
+      assert.deepEqual(afterAgentPreviews.matches, baseline.matches);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        baseline.versions,
       );
 
       const changed = await call(

@@ -631,6 +631,33 @@
   font-size: 12px;
   line-height: 1.6;
 }
+.schedule-agent-model-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid #d8e2dc;
+  border-radius: 12px;
+  background: #fff;
+}
+.schedule-agent-model-status strong,
+.schedule-agent-model-status span,
+.schedule-agent-model-status small {
+  display: block;
+}
+.schedule-agent-model-status span,
+.schedule-agent-model-status small {
+  margin-top: 3px;
+  color: var(--hq-muted);
+  overflow-wrap: anywhere;
+}
+.schedule-agent-model-status span {
+  font-size: 12px;
+}
+.schedule-agent-model-status small {
+  font-size: 11px;
+}
 .schedule-agent-compose {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1326,6 +1353,7 @@
     padding: 16px;
   }
   .schedule-agent-heading,
+  .schedule-agent-model-status,
   .schedule-agent-preview > header {
     display: grid;
   }

@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 type Session = components['schemas']['AgentSessionViewDto'];
 type Reply = components['schemas']['AgentReplyDto'];
 type Candidate = components['schemas']['AgentCandidateDto'];
+type ModelStatus = components['schemas']['AgentModelStatusDto'];
 
 function localTime(value: string) {
   return new Date(Date.parse(value) + 8 * 60 * 60 * 1000)
@@ -26,7 +27,12 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
   const [input, setInput] = useState('');
   const [lastMessage, setLastMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [modelStatus, setModelStatus] = useState<ModelStatus>();
+  const [modelStatusLoading, setModelStatusLoading] = useState(false);
   const [error, setError] = useState('');
+  const isSuperAdmin = auth.identity?.roles.includes(
+    'HEADQUARTERS_SUPER_ADMIN',
+  );
 
   useEffect(() => {
     let alive = true;
@@ -67,6 +73,36 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
       alive = false;
     };
   }, [eventId, token, auth.identity?.id]);
+
+  useEffect(() => {
+    let alive = true;
+    setModelStatus(undefined);
+    if (!isSuperAdmin) return;
+    void client
+      .request('getAgentModelStatus', { token })
+      .then((value) => {
+        if (alive) setModelStatus(value);
+      })
+      .catch(() => {
+        if (alive) setModelStatus(undefined);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isSuperAdmin, token, auth.identity?.id]);
+
+  async function testModelConnection() {
+    setModelStatusLoading(true);
+    try {
+      setModelStatus(
+        await client.request('testAgentModelConnection', { token }),
+      );
+    } catch {
+      setError('模型连接测试未完成；未返回任何凭据信息。');
+    } finally {
+      setModelStatusLoading(false);
+    }
+  }
 
   async function send(candidate?: Candidate) {
     if (!session || (!input.trim() && !lastMessage)) return;
@@ -128,6 +164,31 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
         <Tag color="blue">智能体生成 · 仅预览</Tag>
       </div>
       {error && <Alert type="warning" showIcon title={error} />}
+      {isSuperAdmin && modelStatus && (
+        <div className="schedule-agent-model-status">
+          <div>
+            <strong>模型状态</strong>
+            <span>
+              {modelStatus.mode} · {modelStatus.modelName} ·{' '}
+              {modelStatus.baseUrlHost ?? '无外部主机'}
+            </span>
+            <small>
+              凭据：{modelStatus.credentialsConfigured ? '已配置' : '未配置'}；
+              最近测试：{modelStatus.lastConnectionTest.message}
+              {modelStatus.lastConnectionTest.testedAt
+                ? `（${localTime(modelStatus.lastConnectionTest.testedAt)}）`
+                : ''}
+            </small>
+          </div>
+          <Button
+            size="small"
+            loading={modelStatusLoading}
+            onClick={() => void testModelConnection()}
+          >
+            测试模型连接
+          </Button>
+        </div>
+      )}
       <div className="schedule-agent-compose">
         <label htmlFor="schedule-agent-input">调整要求</label>
         <Input.TextArea

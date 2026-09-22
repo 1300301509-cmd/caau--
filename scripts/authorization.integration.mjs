@@ -247,6 +247,12 @@ export async function authorizationIntegration(t) {
           agentModelCalls += 1;
           return simulatedAgentModel.parse(message, known);
         },
+        status() {
+          return simulatedAgentModel.status();
+        },
+        testConnection() {
+          return simulatedAgentModel.testConnection();
+        },
       },
     };
     app = await createApplication(config);

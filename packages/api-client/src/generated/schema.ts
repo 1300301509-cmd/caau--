@@ -65,6 +65,38 @@ export interface paths {
     patch: operations['HostingController_reviewGrantActive'];
     trace?: never;
   };
+  '/api/v1/agent/model-status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getAgentModelStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/model-status/test': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['testAgentModelConnection'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/agent/sessions': {
     parameters: {
       query?: never;
@@ -2045,6 +2077,20 @@ export interface components {
       newTask?: boolean;
       taskId?: string;
     };
+    AgentModelConnectionResultDto: {
+      message: string;
+      /** @enum {string} */
+      status: 'NOT_TESTED' | 'SUCCEEDED' | 'FAILED' | 'NOT_APPLICABLE';
+      testedAt?: string | null;
+    };
+    AgentModelStatusDto: {
+      baseUrlHost?: string | null;
+      credentialsConfigured: boolean;
+      lastConnectionTest: components['schemas']['AgentModelConnectionResultDto'];
+      /** @enum {string} */
+      mode: 'SIMULATED' | 'QWEN';
+      modelName: string;
+    };
     AgentReplyDto: {
       candidates: components['schemas']['AgentCandidateDto'][];
       message: string;
@@ -3413,6 +3459,44 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  getAgentModelStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentModelStatusDto'];
+        };
+      };
+    };
+  };
+  testAgentModelConnection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentModelStatusDto'];
+        };
       };
     };
   };

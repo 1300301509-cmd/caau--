@@ -1,6 +1,28 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ScheduleAdjustmentPreviewDto } from '../scheduling/scheduling.dto.js';
 
+export class AgentModelConnectionResultDto {
+  @ApiProperty({
+    enum: ['NOT_TESTED', 'SUCCEEDED', 'FAILED', 'NOT_APPLICABLE'],
+  })
+  status!: 'NOT_TESTED' | 'SUCCEEDED' | 'FAILED' | 'NOT_APPLICABLE';
+  @ApiPropertyOptional({ type: String, nullable: true }) testedAt!:
+    | string
+    | null;
+  @ApiProperty() message!: string;
+}
+
+export class AgentModelStatusDto {
+  @ApiProperty({ enum: ['SIMULATED', 'QWEN'] }) mode!: 'SIMULATED' | 'QWEN';
+  @ApiProperty() modelName!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) baseUrlHost!:
+    | string
+    | null;
+  @ApiProperty() credentialsConfigured!: boolean;
+  @ApiProperty({ type: AgentModelConnectionResultDto })
+  lastConnectionTest!: AgentModelConnectionResultDto;
+}
+
 export class AgentSessionInputDto {
   @ApiPropertyOptional() currentEventId?: string;
 }

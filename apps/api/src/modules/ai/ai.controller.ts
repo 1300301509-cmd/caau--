@@ -19,6 +19,7 @@ import { Permission } from '../authorization/authorization.guard.js';
 import { AiService } from './ai.service.js';
 import {
   AgentMessageInputDto,
+  AgentModelStatusDto,
   AgentReplyDto,
   AgentSessionInputDto,
   AgentSessionViewDto,
@@ -27,11 +28,28 @@ import {
 @ApiTags('agent')
 @ApiBearerAuth()
 @ApiCookieAuth('webSession')
-@Controller('agent/sessions')
+@Controller('agent')
 export class AiController {
   constructor(private readonly service: AiService) {}
 
-  @Post()
+  @Get('model-status')
+  @Permission('agent.model.status')
+  @ApiOperation({ operationId: 'getAgentModelStatus' })
+  @ApiOkResponse({ type: AgentModelStatusDto })
+  modelStatus(@Req() request: AuthRequest) {
+    return this.service.getModelStatus(request.token ?? '');
+  }
+
+  @Post('model-status/test')
+  @HttpCode(200)
+  @Permission('agent.model.test')
+  @ApiOperation({ operationId: 'testAgentModelConnection' })
+  @ApiOkResponse({ type: AgentModelStatusDto })
+  testModel(@Req() request: AuthRequest) {
+    return this.service.testModelConnection(request.token ?? '');
+  }
+
+  @Post('sessions')
   @HttpCode(200)
   @Permission('agent.session')
   @ApiOperation({ operationId: 'createAgentSession' })
@@ -40,7 +58,7 @@ export class AiController {
     return this.service.createSession(request.token ?? '', body);
   }
 
-  @Get()
+  @Get('sessions')
   @Permission('agent.session')
   @ApiOperation({ operationId: 'listAgentSessions' })
   @ApiOkResponse({ type: [AgentSessionViewDto] })
@@ -48,7 +66,7 @@ export class AiController {
     return this.service.listSessions(request.token ?? '');
   }
 
-  @Get(':sessionId')
+  @Get('sessions/:sessionId')
   @Permission('agent.session')
   @ApiOperation({ operationId: 'getAgentSession' })
   @ApiOkResponse({ type: AgentSessionViewDto })
@@ -56,7 +74,7 @@ export class AiController {
     return this.service.getSession(request.token ?? '', sessionId);
   }
 
-  @Post(':sessionId/messages')
+  @Post('sessions/:sessionId/messages')
   @HttpCode(200)
   @Permission('agent.message')
   @ApiOperation({ operationId: 'sendAgentMessage' })

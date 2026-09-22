@@ -22,7 +22,7 @@ Nest `ai` 模块使用 LangGraph.js 编排并在 PostgreSQL `caau_agent` schema 
 
 ### L2 任务记忆（已实现）
 
-`AgentTask` 保存 owner、目标、步骤、event/match ID、逐字段合并的 `parameters`、`pendingFields`、候选 ID、baseline revision、任务 revision、预览 JSON、有效期和 `checkpointThreadId`。同一任务的后续补参和调整复用同一个 task/thread；请求带 `taskId` 时明确继续，`newTask=true` 时明确新建，切换到另一赛事也自动新建并清空旧条件。省略的字段不会覆盖已有有效条件，例如“移到周日”→“上午十点”→“再晚半小时”形成 10:30 的同一任务预览。
+`AgentTask` 保存 owner、目标、步骤、event/match ID、逐字段合并的 `parameters`、`pendingFields`、候选 ID、baseline revision、任务 revision、预览 JSON、有效期和 `checkpointThreadId`。同一任务的后续补参和调整复用同一个 task/thread；请求带 `taskId` 时明确继续，`newTask=true` 时明确新建，切换到另一赛事也自动新建并清空旧条件。省略的字段不会覆盖已有有效条件，例如“移到周日”→“上午十点”→“再晚半小时”形成 10:30 的同一任务预览。来源星期或序号变化会清除旧 `sourceMatchId` 并重新定位；明确日期与目标星期互斥，后说的字段覆盖前者；绝对日期/星期/时间变化清除派生的 `targetStartAt`。相对时间跨日或跨周时按北京时间推进完整日期，并清除已不再适用的星期锚点。
 
 LangGraph checkpoint 只保存结构化流程/资源/版本状态，不保存 Cookie、Bearer token、供应商密钥或用户消息原文。checkpoint 不是业务事实来源；每次消息在模型收到结构化历史前先校验会话 owner、当前身份及会话历史任务涉及的赛事权限，赛事读取和纯预览前再次鉴权。同一任务并发请求使用任务 revision 比较，冲突请求返回 409，不静默覆盖条件。
 
@@ -32,6 +32,8 @@ LangGraph checkpoint 只保存结构化流程/资源/版本状态，不保存 Co
 
 ## API
 
+- `GET /api/v1/agent/model-status`：仅总部超级管理员读取安全模型状态；
+- `POST /api/v1/agent/model-status/test`：仅总部超级管理员显式执行连接测试；
 - `POST /api/v1/agent/sessions`：创建绑定当前用户的会话，可带当前 `eventId`；
 - `GET /api/v1/agent/sessions`：列出当前仍有权恢复的会话；
 - `GET /api/v1/agent/sessions/:sessionId`：恢复并重新校验会话/任务；
@@ -50,7 +52,7 @@ CAAU_QWEN_MODEL=qwen-plus             # 可选，默认 qwen-plus
 CAAU_QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1 # 可选
 ```
 
-不要把密钥放在前端、数据库、checkpoint、日志、提交或聊天中。设置 `CAAU_QWEN_API_KEY` 后模型异常返回 503，不降级为可能改变理解结果的静默模拟；无论模型是否可用都不会写赛程，原赛程页面仍可使用。
+不要把密钥放在前端、数据库、checkpoint、日志、提交或聊天中。模型状态接口和总部 Web 只返回 `SIMULATED/QWEN`、模型名称、Base URL 主机、是否配置凭据，以及当前 API 进程内最近一次脱敏连接测试结果；永不返回 API Key、完整供应商响应或请求头。连接测试只在总部超级管理员明确点击时执行，进程重启后结果恢复为“尚未测试”。设置 `CAAU_QWEN_API_KEY` 后模型异常返回 503，不降级为可能改变理解结果的静默模拟；无论模型是否可用都不会写赛程，原赛程页面仍可使用。
 
 ## 启动与验证
 

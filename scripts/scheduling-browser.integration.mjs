@@ -102,6 +102,13 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await expect(
       page.locator('.schedule-week-table .schedule-match-card'),
     ).toHaveCount(6);
+    await expect(page.locator('.schedule-agent-model-status')).toContainText(
+      'SIMULATED',
+    );
+    await page.getByRole('button', { name: '测试模型连接' }).click();
+    await expect(page.locator('.schedule-agent-model-status')).toContainText(
+      '模拟模式不连接外部模型',
+    );
     await page.getByLabel('调整要求').fill('把周二第二场比赛改到周三十点');
     await page.getByRole('button', { name: '生成调整预览' }).click();
     try {
