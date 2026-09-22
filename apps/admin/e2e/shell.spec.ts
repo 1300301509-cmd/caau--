@@ -15,6 +15,7 @@ test.beforeEach(async ({ page }) => {
       contentType: 'application/json',
       body: JSON.stringify({
         localIdentityEnabled: false,
+        serverTestIdentityEnabled: false,
         wechatMiniappEnabled: false,
       }),
     }),
@@ -89,7 +90,7 @@ test('material review remains accessible within the review center', async ({
   await page.locator('.hq-brand-symbol').hover();
   await expect(page.getByText('正式账号', { exact: true })).toBeVisible();
   await expect(page.getByLabel('选择测试身份')).toHaveCount(0);
-  await expect(page.getByLabel('全局切换本地账号权限')).toHaveCount(0);
+  await expect(page.getByLabel('全局切换测试账号权限')).toHaveCount(0);
 });
 
 test('event result deep links retain their detail page without another primary module', async ({

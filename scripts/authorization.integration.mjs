@@ -374,11 +374,86 @@ export async function authorizationIntegration(t) {
       },
     );
     assert.equal(bootstrapChange.status, 200);
+    const bootstrapChangedSession = await bootstrapChange.json();
     tokens.super = bootstrapChange.headers
       .get('set-cookie')
       ?.split(';')[0]
       .split('=')[1];
     assert.match(tokens.super ?? '', /^[A-Za-z0-9_-]{43}$/);
+    await t.test(
+      'server test identity signer requires formal super administrator cookie',
+      async () => {
+        const testApp = await createApplication({
+          ...config,
+          localIdentity: false,
+          serverTestIdentity: true,
+          production: true,
+          cookieSecure: true,
+        });
+        try {
+          await testApp.listen(0, '127.0.0.1');
+          const testBase = await testApp.getUrl();
+          assert.equal(
+            (await fetch(`${testBase}/api/v1/server-test-identities`)).status,
+            401,
+          );
+          assert.equal(
+            (
+              await fetch(`${testBase}/api/v1/server-test-identities`, {
+                headers: { Authorization: `Bearer ${tokens.super}` },
+              })
+            ).status,
+            403,
+          );
+          assert.equal(
+            (
+              await fetch(`${testBase}/api/v1/server-test-identities`, {
+                headers: { Cookie: `__Host-caau_session=${tokens.reviewer}` },
+              })
+            ).status,
+            403,
+          );
+          const choices = await fetch(
+            `${testBase}/api/v1/server-test-identities`,
+            { headers: { Cookie: `__Host-caau_session=${tokens.super}` } },
+          );
+          assert.equal(choices.status, 200);
+          assert.equal((await choices.json()).length, 6);
+          const issued = await fetch(
+            `${testBase}/api/v1/server-test-identities/sessions`,
+            {
+              method: 'POST',
+              headers: {
+                Origin: 'http://127.0.0.1:5175',
+                Cookie: `__Host-caau_session=${tokens.super}`,
+                'X-CSRF-Token': bootstrapChangedSession.csrfToken,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ identity: 'organizer-a' }),
+            },
+          );
+          assert.equal(issued.status, 200);
+          const testSession = await issued.json();
+          assert.equal(testSession.identity, 'organizer-a');
+          assert.match(testSession.token, /^[A-Za-z0-9_-]{43}$/);
+          const target = await fetch(`${testBase}/api/v1/workspace/identity`, {
+            headers: { Authorization: `Bearer ${testSession.token}` },
+          });
+          assert.equal(target.status, 200);
+          assert.deepEqual((await target.json()).roles, ['ORGANIZER']);
+          const audit = await sql.query(
+            `SELECT "actorId","resourceId" FROM "AuditRecord" WHERE action='session.server-test.issue' ORDER BY "occurredAt" DESC LIMIT 1`,
+          );
+          assert.equal(audit.rows[0].actorId, users.super);
+          assert.equal(
+            audit.rows[0].resourceId,
+            '00000000-0000-4000-8000-000000000204',
+          );
+        } finally {
+          await testApp.close();
+        }
+      },
+    );
     await authenticationIntegration(t, {
       base,
       config,

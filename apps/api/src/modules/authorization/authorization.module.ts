@@ -4,6 +4,7 @@ import {
   AuthenticationController,
   AuthorizationController,
   LocalTestIdentityController,
+  ServerTestIdentityController,
 } from './authorization.controller.js';
 import {
   AuthorizationService,
@@ -20,6 +21,7 @@ export class AuthorizationModule {
         AuthenticationController,
         AuthorizationController,
         LocalTestIdentityController,
+        ServerTestIdentityController,
       ],
       exports: [AuthorizationService],
       providers: [

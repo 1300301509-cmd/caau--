@@ -203,7 +203,7 @@ export async function hostingBrowserTest({
     const deniedPage = await denied.newPage();
     await deniedPage.goto('http://127.0.0.1:4173/hosting-applications');
     await deniedPage.locator('.hq-brand-symbol').hover();
-    await deniedPage.getByLabel('全局切换本地账号权限').click();
+    await deniedPage.getByLabel('全局切换测试账号权限').click();
     await deniedPage.getByText('承办方 B 经办人', { exact: true }).click();
     await expect(
       deniedPage.getByText(/当前身份没有承办申请审核权限/),

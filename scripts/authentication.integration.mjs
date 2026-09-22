@@ -439,6 +439,7 @@ export async function authenticationIntegration(t, context) {
         assert.equal(modeResponse.status, 200);
         assert.deepEqual(await modeResponse.json(), {
           localIdentityEnabled: false,
+          serverTestIdentityEnabled: false,
           wechatMiniappEnabled: false,
         });
         assert.equal(

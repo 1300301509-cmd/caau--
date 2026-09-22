@@ -299,11 +299,18 @@
           "localIdentityEnabled": {
             "type": "boolean"
           },
+          "serverTestIdentityEnabled": {
+            "type": "boolean"
+          },
           "wechatMiniappEnabled": {
             "type": "boolean"
           }
         },
-        "required": ["localIdentityEnabled", "wechatMiniappEnabled"],
+        "required": [
+          "localIdentityEnabled",
+          "serverTestIdentityEnabled",
+          "wechatMiniappEnabled"
+        ],
         "type": "object"
       },
       "AuthenticationSessionDto": {
@@ -9872,6 +9879,87 @@
         },
         "summary": "Database connectivity; 1500ms application deadline, not schema readiness",
         "tags": ["system"]
+      }
+    },
+    "/api/v1/server-test-identities": {
+      "get": {
+        "operationId": "listServerTestIdentities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LocalIdentityChoiceDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Formal sign-in required"
+          },
+          "403": {
+            "description": "Super administrator required"
+          },
+          "503": {
+            "description": "Server test mode unavailable"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "",
+        "tags": ["ServerTestIdentity"]
+      }
+    },
+    "/api/v1/server-test-identities/sessions": {
+      "post": {
+        "operationId": "createServerTestSession",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalSessionRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalSessionDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Formal sign-in required"
+          },
+          "403": {
+            "description": "Super administrator required"
+          },
+          "503": {
+            "description": "Server test mode unavailable"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "",
+        "tags": ["ServerTestIdentity"]
       }
     },
     "/api/v1/teams": {

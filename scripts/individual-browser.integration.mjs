@@ -253,7 +253,7 @@ export async function individualBrowserTest({
     pageErrors.length = 0;
     await eventPage.goto('http://127.0.0.1:4173/events');
     await eventPage.locator('.hq-brand-symbol').hover();
-    const globalIdentity = eventPage.getByLabel('全局切换本地账号权限');
+    const globalIdentity = eventPage.getByLabel('全局切换测试账号权限');
     await globalIdentity.click();
     await globalIdentity.press('ArrowDown');
     await globalIdentity.press('Enter');

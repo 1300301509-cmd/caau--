@@ -23,6 +23,23 @@ Web 在 **http://127.0.0.1:5175/hosting-applications** 首次进入时默认签�
 
 该下拉框不是正式账号的权限编辑器，也不会修改数据库中的角色。正常模式下 Web 只显示正式登录，左下角切换器不渲染，`GET/POST /api/v1/local-test-identities` 返回 503。不得为了演示在公网、production 或非回环地址开启 `CAAU_IDENTITY_MODE=local`。
 
+## 测试服务器身份切换
+
+联网测试环境不得使用 local 模式。测试服务器使用正式密码登录作为第一道身份验证，且只有总部超级管理员能打开左下角“TEST · 测试身份”并签发固定测试会话：
+
+```sh
+NODE_ENV=production
+CAAU_DEPLOYMENT_STAGE=test
+CAAU_IDENTITY_MODE=server-test
+HOST=0.0.0.0
+CORS_ORIGINS=https://test.example.com
+# CAAU_CSRF_SECRET、CAAU_LOGIN_THROTTLE_SECRET、DATABASE_URL 和私有文件目录由服务器密钥管理注入
+```
+
+测试 Web 和 API 必须位于 HTTPS 精确来源中。登录正式超级管理员后，首次默认进入固定测试超级管理员，可在当前标签页切换赛事管理员、审核员与承办方。`GET/POST /api/v1/server-test-identities` 拒绝未登录、Bearer 调用和非超级管理员；POST 同时校验 Origin 与 CSRF。每次签发审计记录实际正式管理员和目标身份。
+
+生产环境必须使用 `CAAU_DEPLOYMENT_STAGE=production`、`CAAU_IDENTITY_MODE=disabled`；配置加载会拒绝在生产阶段打开 local 或 server-test。当前仓库尚无云部署脚本，不能把本地验证记为测试服务器已经上线。技术决策见 [ADR-0021](../adr/0021-server-test-identity-switching.md)。
+
 离线兼容仍可运行 `corepack pnpm auth:local <内部用户UUID>` 为已存在、未停用的合成用户生成会话文件；它不再是当前 Web 的操作入口。不要把令牌写进 shell 历史、浏览器 URL、日志或聊天。`POST /api/v1/authorization/logout` 撤销当前会话。
 
 默认身份模式关闭；开启 local 必须非 production 且 HOST 为回环地址。本地身份选择/签发 HTTP 端点也受此开关限制，不能接受任意 UUID 或角色，禁用时返回 503。生产微信/内部身份提供方、TLS、正式会话发放与回收、限流、防暴力攻击及独立安全评审均未完成；不可直接对外开放本地模式。微信 AppID 缺失，不提供微信 code 换身份接口。
@@ -34,6 +51,7 @@ Web 在 **http://127.0.0.1:5175/hosting-applications** 首次进入时默认签�
 | 接口 | 权限与约束 |
 | --- | --- |
 | `GET /api/v1/local-test-identities` / `POST /api/v1/local-test-identities/sessions` | 仅显式本地测试模式；列固定身份并签发后端 opaque 会话，禁用时 503 |
+| `GET /api/v1/server-test-identities` / `POST /api/v1/server-test-identities/sessions` | 仅测试服务器模式；要求正式总部超级管理员 Cookie，POST 另验 Origin/CSRF，签发动作留痕 |
 | GET me / POST logout | 有效内部会话；用户停用/过期/注销后拒绝 |
 | POST users / organizations / members | 系统管理员；成员只能使用四种角色，用户/组织/角色组合唯一 |
 | PATCH users/:id / members/:id | 系统管理员，仅接受 active 布尔值；每次请求重读当前状态 |

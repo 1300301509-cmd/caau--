@@ -43,6 +43,7 @@ export class LocalSessionDto {
 }
 export class AuthenticationModeDto {
   @ApiProperty() localIdentityEnabled!: boolean;
+  @ApiProperty() serverTestIdentityEnabled!: boolean;
   @ApiProperty() wechatMiniappEnabled!: boolean;
 }
 export class LoginRequestDto {

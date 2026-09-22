@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Header,
   HttpCode,
@@ -73,6 +74,7 @@ export class AuthenticationController {
   mode() {
     return {
       localIdentityEnabled: this.service.localIdentityEnabled,
+      serverTestIdentityEnabled: this.service.serverTestIdentityEnabled,
       wechatMiniappEnabled: this.service.wechatMiniappEnabled,
     };
   }
@@ -214,6 +216,39 @@ export class LocalTestIdentityController {
   @Header('Cache-Control', 'no-store')
   session(@Body() body: LocalSessionRequestDto) {
     return this.service.issueLocalTestSession(body);
+  }
+}
+
+@Controller('server-test-identities')
+@ApiCookieAuth('webSession')
+@ApiResponse({ status: 401, description: 'Formal sign-in required' })
+@ApiResponse({ status: 403, description: 'Super administrator required' })
+@ApiResponse({ status: 503, description: 'Server test mode unavailable' })
+export class ServerTestIdentityController {
+  constructor(private readonly service: AuthorizationService) {}
+
+  @Get()
+  @Permission('session.server-test.list')
+  @ApiOperation({ operationId: 'listServerTestIdentities' })
+  @ApiOkResponse({ type: LocalIdentityChoiceDto, isArray: true })
+  @Header('Cache-Control', 'no-store')
+  choices(@Req() request: AuthRequest) {
+    if (request.credential !== 'cookie')
+      throw new ForbiddenException('Formal web session required');
+    return this.service.serverTestIdentityOptions(request.token!);
+  }
+
+  @Post('sessions')
+  @Permission('session.server-test.issue')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'createServerTestSession' })
+  @ApiBody({ type: LocalSessionRequestDto })
+  @ApiOkResponse({ type: LocalSessionDto })
+  @Header('Cache-Control', 'no-store')
+  session(@Req() request: AuthRequest, @Body() body: LocalSessionRequestDto) {
+    if (request.credential !== 'cookie')
+      throw new ForbiddenException('Formal web session required');
+    return this.service.issueServerTestSession(request.token!, body);
   }
 }
 

@@ -90,7 +90,7 @@ export function AppShell({
               <NavIcon name="calendar" />
               <span>比赛管理中心</span>
             </a>
-            {auth.mode === 'formal' && auth.identity?.canManageAccounts && (
+            {auth.identity?.canManageAccounts && (
               <a
                 className={`hq-nav-item ${active === 'accounts' ? 'active' : ''}`}
                 href="/accounts"
@@ -120,15 +120,23 @@ export function AppShell({
               {auth.identity?.displayName ??
                 auth.session?.displayName ??
                 '总部工作空间'}
-              <small>{auth.mode === 'formal' ? '正式账号' : '本地测试'}</small>
+              <small>
+                {auth.mode === 'formal'
+                  ? '正式账号'
+                  : auth.testIdentityEnvironment === 'server'
+                    ? '测试服务器'
+                    : '本地测试'}
+              </small>
             </span>
             {auth.mode === 'local' && (
               <div className="hq-local-switcher">
                 <span className="hq-local-switcher-label">
-                  LOCAL · 测试身份
+                  {auth.testIdentityEnvironment === 'server'
+                    ? 'TEST · 测试身份'
+                    : 'LOCAL · 测试身份'}
                 </span>
                 <Select
-                  aria-label="全局切换本地账号权限"
+                  aria-label="全局切换测试账号权限"
                   value={auth.localIdentityKey || undefined}
                   loading={auth.localBusy}
                   disabled={auth.localBusy}
@@ -140,12 +148,19 @@ export function AppShell({
                   }))}
                   popupMatchSelectWidth
                 />
-                <small>仅本地测试可见；切换后按该账号权限重新加载。</small>
+                <small>
+                  {auth.testIdentityEnvironment === 'server'
+                    ? '仅测试服务器可见；每次切换均由正式超级管理员授权并留痕。'
+                    : '仅本地测试可见；切换后按该账号权限重新加载。'}
+                </small>
               </div>
             )}
-            {auth.mode === 'formal' && (
+            {(auth.mode === 'formal' ||
+              auth.testIdentityEnvironment === 'server') && (
               <div className="hq-account-actions">
-                <a href="/account/password">账号安全</a>
+                {auth.mode === 'formal' && (
+                  <a href="/account/password">账号安全</a>
+                )}
                 <Button
                   type="text"
                   size="small"

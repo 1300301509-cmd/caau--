@@ -25,6 +25,7 @@ type AuthValue = {
   localChoices: LocalIdentity[];
   localIdentityKey: string;
   localBusy: boolean;
+  testIdentityEnvironment?: 'local' | 'server';
   switchLocalIdentity: (key: string) => Promise<void>;
   expire: () => void;
   refresh: () => Promise<void>;
@@ -212,6 +213,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [localChoices, setLocalChoices] = useState<LocalIdentity[]>([]);
   const [selectedLocalIdentity, setSelectedLocalIdentity] = useState('');
   const [localBusy, setLocalBusy] = useState(false);
+  const [testIdentityEnvironment, setTestIdentityEnvironment] = useState<
+    'local' | 'server'
+  >();
   const modeRef = useRef<Mode>('checking');
   modeRef.current = mode;
   const expire = useCallback(() => {
@@ -240,28 +244,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const next = await client.request('getAuthenticationSession');
     await accept(next);
   }, [accept]);
-  const switchLocalIdentity = useCallback(async (key: string) => {
-    setLocalBusy(true);
-    const previous = sessionStorage.getItem(localSessionKey) ?? '';
-    try {
-      const issued = await client.request('createLocalTestSession', {
-        body: { identity: key as LocalIdentity['key'] },
-      });
-      const nextIdentity = await client.request('getWorkspaceIdentity', {
-        token: issued.token,
-      });
-      sessionStorage.setItem(localSessionKey, issued.token);
-      sessionStorage.setItem(localIdentityKey, key);
-      setIdentity(nextIdentity);
-      setSelectedLocalIdentity(key);
-      setMode('local');
-      if (previous && previous !== issued.token)
-        void client.request('logout', { token: previous }).catch(() => {});
-      location.reload();
-    } finally {
-      setLocalBusy(false);
-    }
-  }, []);
+  const switchLocalIdentity = useCallback(
+    async (key: string) => {
+      setLocalBusy(true);
+      const previous = sessionStorage.getItem(localSessionKey) ?? '';
+      try {
+        const issued = await client.request(
+          testIdentityEnvironment === 'server'
+            ? 'createServerTestSession'
+            : 'createLocalTestSession',
+          { body: { identity: key as LocalIdentity['key'] } },
+        );
+        const nextIdentity = await client.request('getWorkspaceIdentity', {
+          token: issued.token,
+        });
+        sessionStorage.setItem(localSessionKey, issued.token);
+        sessionStorage.setItem(localIdentityKey, key);
+        setIdentity(nextIdentity);
+        setSelectedLocalIdentity(key);
+        setMode('local');
+        if (previous && previous !== issued.token)
+          void client.request('logout', { token: previous }).catch(() => {});
+        location.reload();
+      } finally {
+        setLocalBusy(false);
+      }
+    },
+    [testIdentityEnvironment],
+  );
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -271,6 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
         if (!active) return;
         if (authenticationMode.localIdentityEnabled) {
+          setTestIdentityEnvironment('local');
           const choices = await client.request('listLocalTestIdentities');
           if (!active) return;
           setLocalChoices(choices);
@@ -318,11 +329,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setMode('local');
           return;
         }
-        sessionStorage.removeItem(localSessionKey);
-        sessionStorage.removeItem(localIdentityKey);
         try {
           const next = await client.request('getAuthenticationSession');
-          if (active) await accept(next);
+          if (!active) return;
+          await accept(next);
+          if (
+            authenticationMode.serverTestIdentityEnabled &&
+            next.roles.includes('HEADQUARTERS_SUPER_ADMIN') &&
+            !next.mustChangePassword
+          ) {
+            const choices = await client.request('listServerTestIdentities');
+            if (!active) return;
+            setTestIdentityEnvironment('server');
+            setLocalChoices(choices);
+            const savedToken = sessionStorage.getItem(localSessionKey) ?? '';
+            if (savedToken) {
+              try {
+                const nextIdentity = await client.request(
+                  'getWorkspaceIdentity',
+                  { token: savedToken },
+                );
+                if (!active) return;
+                const detected = choices.find(
+                  (choice) =>
+                    choice.displayName === nextIdentity.displayName &&
+                    nextIdentity.roles.includes(choice.role),
+                );
+                if (detected) {
+                  setIdentity(nextIdentity);
+                  setSelectedLocalIdentity(detected.key);
+                  setMode('local');
+                  return;
+                }
+              } catch {
+                // A stale synthetic session is replaced below.
+              }
+              sessionStorage.removeItem(localSessionKey);
+              sessionStorage.removeItem(localIdentityKey);
+            }
+            const fallback =
+              choices.find(
+                (choice) => choice.role === 'HEADQUARTERS_SUPER_ADMIN',
+              ) ?? choices[0];
+            if (!fallback) throw new Error('No server test identities');
+            const issued = await client.request('createServerTestSession', {
+              body: { identity: fallback.key },
+            });
+            const nextIdentity = await client.request('getWorkspaceIdentity', {
+              token: issued.token,
+            });
+            if (!active) return;
+            sessionStorage.setItem(localSessionKey, issued.token);
+            sessionStorage.setItem(localIdentityKey, fallback.key);
+            setIdentity(nextIdentity);
+            setSelectedLocalIdentity(fallback.key);
+            setMode('local');
+            return;
+          }
+          sessionStorage.removeItem(localSessionKey);
+          sessionStorage.removeItem(localIdentityKey);
         } catch (error) {
           if (!active) return;
           setMode(
@@ -361,6 +426,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localChoices,
       localIdentityKey: selectedLocalIdentity,
       localBusy,
+      testIdentityEnvironment,
       switchLocalIdentity,
       expire,
       refresh,
@@ -373,6 +439,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localChoices,
       selectedLocalIdentity,
       localBusy,
+      testIdentityEnvironment,
       switchLocalIdentity,
       expire,
       refresh,

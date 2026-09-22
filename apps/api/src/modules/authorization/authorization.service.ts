@@ -38,6 +38,7 @@ import {
 export interface AuthorizationConfig {
   databaseUrl?: string;
   localIdentity: boolean;
+  serverTestIdentity: boolean;
   production: boolean;
   cookieSecure: boolean;
   csrfSecret: string;
@@ -167,6 +168,9 @@ export class AuthorizationService {
   get localIdentityEnabled() {
     return this.config.localIdentity;
   }
+  get serverTestIdentityEnabled() {
+    return this.config.serverTestIdentity;
+  }
   get wechatMiniappEnabled() {
     return !!this.config.wechatMiniapp;
   }
@@ -215,6 +219,28 @@ export class AuthorizationService {
         )?.name ?? '',
       role: identity.role,
     }));
+  }
+  async serverTestIdentityOptions(token: string) {
+    if (!this.config.serverTestIdentity)
+      throw new ServiceUnavailableException('Server test identity unavailable');
+    return this.run(
+      token,
+      'session.server-test.list',
+      undefined,
+      undefined,
+      async (_tx, actor) => {
+        if (!isHeadquartersSuperAdmin(actor)) deny();
+        return localTestIdentities.map((identity) => ({
+          key: identity.key,
+          displayName: identity.displayName,
+          organizationName:
+            localTestOrganizations.find(
+              (organization) => organization.id === identity.organizationId,
+            )?.name ?? '',
+          role: identity.role,
+        }));
+      },
+    );
   }
   async issueLocalTestSession(input: unknown) {
     const db = this.localDb();
@@ -278,6 +304,61 @@ export class AuthorizationService {
       if (error instanceof HttpException) throw error;
       throw new ServiceUnavailableException('Local identity unavailable');
     }
+  }
+  async issueServerTestSession(token: string, input: unknown) {
+    if (!this.config.serverTestIdentity)
+      throw new ServiceUnavailableException('Server test identity unavailable');
+    const body = bodyObject(input, ['identity']);
+    if (
+      typeof body.identity !== 'string' ||
+      !localIdentityKeys.includes(
+        body.identity as (typeof localIdentityKeys)[number],
+      )
+    )
+      throw new BadRequestException('Invalid fixed identity');
+    const identity = localTestIdentities.find(
+      (candidate) => candidate.key === body.identity,
+    )!;
+    const issuedToken = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + this.config.sessionTtlMs);
+    return this.run(
+      token,
+      'session.server-test.issue',
+      identity.userId,
+      { identity: identity.key },
+      async (tx, actor) => {
+        if (!isHeadquartersSuperAdmin(actor)) deny();
+        await prepareLocalTestIdentities(tx);
+        const user = await tx.internalUser.findUnique({
+          where: { id: identity.userId },
+          include: { memberships: true },
+        });
+        if (
+          !user?.active ||
+          !user.memberships.some(
+            (member) =>
+              member.active &&
+              member.organizationId === identity.organizationId &&
+              member.role === identity.role,
+          )
+        )
+          throw new ForbiddenException('Fixed test identity is inactive');
+        await tx.session.create({
+          data: {
+            userId: identity.userId,
+            tokenHash: hashToken(issuedToken),
+            clientType: 'LOCAL_TEST',
+            expiresAt,
+          },
+        });
+        return {
+          identity: identity.key,
+          token: issuedToken,
+          expiresAt: expiresAt.toISOString(),
+        };
+      },
+      { retries: 2, retryUnique: true },
+    );
   }
   private async session(tx: Prisma.TransactionClient, token: string) {
     const session = await tx.session.findUnique({

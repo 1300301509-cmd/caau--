@@ -250,9 +250,14 @@ export const operations = {
       '200': {
         properties: {
           localIdentityEnabled: { type: 'boolean' },
+          serverTestIdentityEnabled: { type: 'boolean' },
           wechatMiniappEnabled: { type: 'boolean' },
         },
-        required: ['localIdentityEnabled', 'wechatMiniappEnabled'],
+        required: [
+          'localIdentityEnabled',
+          'serverTestIdentityEnabled',
+          'wechatMiniappEnabled',
+        ],
         type: 'object',
       },
     },
@@ -7681,6 +7686,95 @@ export const operations = {
     responseMediaType: 'application/json',
     body: null,
     authenticated: false,
+  },
+  listServerTestIdentities: {
+    path: '/api/v1/server-test-identities',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            displayName: { type: 'string' },
+            key: {
+              enum: [
+                'super-admin',
+                'event-manager',
+                'reviewer-a',
+                'reviewer-b',
+                'organizer-a',
+                'organizer-b',
+              ],
+              type: 'string',
+            },
+            organizationName: { type: 'string' },
+            role: {
+              enum: [
+                'EVENT_MANAGER',
+                'ORGANIZER',
+                'REVIEWER',
+                'SYSTEM_ADMIN',
+                'HEADQUARTERS_SUPER_ADMIN',
+              ],
+              type: 'string',
+            },
+          },
+          required: ['key', 'displayName', 'organizationName', 'role'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  createServerTestSession: {
+    path: '/api/v1/server-test-identities/sessions',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          expiresAt: { format: 'date-time', type: 'string' },
+          identity: {
+            enum: [
+              'super-admin',
+              'event-manager',
+              'reviewer-a',
+              'reviewer-b',
+              'organizer-a',
+              'organizer-b',
+            ],
+            type: 'string',
+          },
+          token: { type: 'string' },
+        },
+        required: ['identity', 'token', 'expiresAt'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        identity: {
+          enum: [
+            'super-admin',
+            'event-manager',
+            'reviewer-a',
+            'reviewer-b',
+            'organizer-a',
+            'organizer-b',
+          ],
+          type: 'string',
+        },
+      },
+      required: ['identity'],
+      type: 'object',
+    },
+    authenticated: true,
   },
   listTeams: {
     path: '/api/v1/teams',

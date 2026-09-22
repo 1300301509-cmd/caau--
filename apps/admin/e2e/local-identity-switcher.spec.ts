@@ -30,6 +30,7 @@ test('local mode defaults to super admin and switches identity from the sidebar'
       contentType: 'application/json',
       body: JSON.stringify({
         localIdentityEnabled: true,
+        serverTestIdentityEnabled: false,
         wechatMiniappEnabled: false,
       }),
     }),
@@ -90,7 +91,7 @@ test('local mode defaults to super admin and switches identity from the sidebar'
   expect(issued).toEqual(['super-admin']);
 
   await page.locator('.hq-brand-symbol').hover();
-  const selector = page.getByLabel('全局切换本地账号权限');
+  const selector = page.getByLabel('全局切换测试账号权限');
   await expect(selector).toBeVisible();
   await expect(
     selector.locator('xpath=..').getByText(/总部超级管理员/),
@@ -119,7 +120,7 @@ test('local mode defaults to super admin and switches identity from the sidebar'
   await page.locator('.hq-brand-symbol').hover();
   await expect(
     page
-      .getByLabel('全局切换本地账号权限')
+      .getByLabel('全局切换测试账号权限')
       .locator('xpath=..')
       .getByText(/总部审核员甲/),
   ).toBeVisible();

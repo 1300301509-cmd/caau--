@@ -1,6 +1,6 @@
 # CAAU 正式工程
 
-CAAU-057 为 Web 本地测试模式增加固定“总部超级管理员”身份和左下角全局账号权限切换。`CAAU_IDENTITY_MODE=local` 时首次进入自动使用超级管理员，可切换赛事管理员、审核员和承办方经办人；正常模式继续使用正式账号登录，绝不显示或开放测试签发入口。操作与安全边界见[本地身份手册](docs/runbooks/authorization.md)。
+CAAU-058 增加受控测试服务器身份切换：先用正式总部超级管理员登录，再在左下角切换固定测试身份；测试阶段与生产阶段由配置硬隔离，每次签发记录真实操作管理员。CAAU-057 的 `local` 回环模式继续用于本机开发。操作与安全边界见[身份与权限手册](docs/runbooks/authorization.md)。
 
 CAAU-053 已重设计承办方小程序“我的比赛”工作台与五个业务子模块的移动界面，包含赛事切换、真实概览、每日赛程筛选及统一交互。见[设计与技能选型](docs/product/miniapp-competition-design.md)；正式微信及完整平台写入验收仍以 roadmap 为准。
 
@@ -80,7 +80,7 @@ corepack pnpm dev:admin     # http://127.0.0.1:5175
 corepack pnpm dev:miniapp   # watch 编译，产物 apps/miniapp/dist
 ```
 
-Web 当前提供 `/materials` 资料审核、`/events` 赛事管理、`/hosting-applications` 承办申请审核和受权可见的`/accounts`账号权限管理，使用同一套紧凑后台壳层；正常模式统一进入正式账号登录，不显示测试身份。原 `/workspace` 不进入导航，仅暂留自动化回归兼容。只有自动化/本地业务回归才以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 显式开启五个固定测试身份；后端签发真实Bearer测试会话，当前标签页刷新恢复且标签页间互不覆盖。`corepack pnpm events:local` 幂等准备两个本地测试赛事及范围授权；`corepack pnpm tasks:local` 进一步准备两个空材料清单、可自由新增的体验任务，不代替用户新增、提交或审核。`corepack pnpm materials:demo` 才会追加带预置业务过程的合成演示任务。工程连接辅助页位于 `/system/health`。小程序需在微信开发者工具中导入`apps/miniapp`；材料流程见[材料Taro手册](docs/runbooks/individual-material-miniapp.md)，承办申请见[申请小程序手册](docs/runbooks/event-hosting-application-miniapp.md)。当前仍是`touristappid`和回环HTTP，承办申请页面已在官方模拟器运行，文件选择闭环、正式平台与真机仍未完成。API 开发命令先编译再启动，不自动热重载。
+Web 当前提供 `/materials` 资料审核、`/events` 赛事管理、`/hosting-applications` 承办申请审核和受权可见的`/accounts`账号权限管理，使用同一套紧凑后台壳层；正常模式统一进入正式账号登录，不显示测试身份。原 `/workspace` 不进入导航，仅暂留自动化回归兼容。只有自动化/本地业务回归才以 `CAAU_IDENTITY_MODE=local corepack pnpm db:api` 显式开启六个固定测试身份；后端签发真实Bearer测试会话，当前标签页刷新恢复且标签页间互不覆盖。联网测试服务器另用受正式超级管理员保护的 `server-test` 模式，禁止复用本地公开入口。`corepack pnpm events:local` 幂等准备两个本地测试赛事及范围授权；`corepack pnpm tasks:local` 进一步准备两个空材料清单、可自由新增的体验任务，不代替用户新增、提交或审核。`corepack pnpm materials:demo` 才会追加带预置业务过程的合成演示任务。工程连接辅助页位于 `/system/health`。小程序需在微信开发者工具中导入`apps/miniapp`；材料流程见[材料Taro手册](docs/runbooks/individual-material-miniapp.md)，承办申请见[申请小程序手册](docs/runbooks/event-hosting-application-miniapp.md)。当前仍是`touristappid`和回环HTTP，承办申请页面已在官方模拟器运行，文件选择闭环、正式平台与真机仍未完成。API 开发命令先编译再启动，不自动热重载。
 
 ## 检查与构建
 
