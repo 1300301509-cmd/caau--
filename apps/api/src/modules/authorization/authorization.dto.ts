@@ -17,6 +17,7 @@ export class IdDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
 }
 export const localIdentityKeys = [
+  'super-admin',
   'event-manager',
   'reviewer-a',
   'reviewer-b',

@@ -237,6 +237,11 @@ export async function individualBrowserTest({
     }
     taskId = await createTask(eventId, 'a', 'CAAU012 单份材料浏览器任务');
     await createTask(otherEvent, 'b', 'CAAU012 其他机构任务');
+    const fixedEventCountBefore = (
+      await sql.query(
+        `SELECT count(*)::int n FROM "Event" WHERE "createdBy"::text LIKE '00000000-0000-4000-8000-00000000020_'`,
+      )
+    ).rows[0].n;
     browser = await chromium.launch();
 
     // The new event page uses the current API and keeps backend role enforcement.
@@ -247,14 +252,18 @@ export async function individualBrowserTest({
     const eventPage = await eventContext.newPage();
     pageErrors.length = 0;
     await eventPage.goto('http://127.0.0.1:4173/events');
-    await expect(eventPage.getByLabel('测试身份')).toBeVisible({
-      timeout: 15000,
-    });
-    await eventPage.evaluate(
-      ([storageKey, session]) => sessionStorage.setItem(storageKey, session),
-      ['caau.local-test-session', tokens.manager],
-    );
-    await eventPage.reload();
+    await eventPage.locator('.hq-brand-symbol').hover();
+    const globalIdentity = eventPage.getByLabel('全局切换本地账号权限');
+    await globalIdentity.click();
+    await globalIdentity.press('ArrowDown');
+    await globalIdentity.press('Enter');
+    await expect
+      .poll(() =>
+        eventPage.evaluate(() =>
+          sessionStorage.getItem('caau.local-test-identity'),
+        ),
+      )
+      .toBe('event-manager');
     await expect(
       eventPage.getByRole('heading', { level: 1, name: '赛事详情' }),
     ).toBeVisible();
@@ -306,22 +315,32 @@ export async function individualBrowserTest({
     await organizerTab.getByLabel('选择测试身份').selectOption('organizer-b');
     await organizerTab.getByTestId('local-identity-enter').click();
     await expect(
-      managerTab.getByText('总部审核员甲 · 总部审核员', { exact: true }),
+      managerTab
+        .locator('#review-content')
+        .getByText('总部审核员甲 · 总部审核员', { exact: true }),
     ).toBeVisible({ timeout: 15000 });
     await expect(
-      organizerTab.getByText('承办方 B 经办人 · 承办方', { exact: true }),
+      organizerTab
+        .locator('#review-content')
+        .getByText('承办方 B 经办人 · 承办方', { exact: true }),
     ).toBeVisible({ timeout: 15000 });
     await managerTab.reload();
     await expect(
-      managerTab.getByText('总部审核员甲 · 总部审核员', { exact: true }),
+      managerTab
+        .locator('#review-content')
+        .getByText('总部审核员甲 · 总部审核员', { exact: true }),
     ).toBeVisible({ timeout: 15000 });
     await managerTab.getByLabel('选择测试身份').selectOption('event-manager');
     await managerTab.getByTestId('local-identity-enter').click();
     await expect(
-      managerTab.getByText('总部赛事管理员 · 总部管理', { exact: true }),
+      managerTab
+        .locator('#review-content')
+        .getByText('总部赛事管理员 · 总部管理', { exact: true }),
     ).toBeVisible({ timeout: 15000 });
     await expect(
-      organizerTab.getByText('承办方 B 经办人 · 承办方', { exact: true }),
+      organizerTab
+        .locator('#review-content')
+        .getByText('承办方 B 经办人 · 承办方', { exact: true }),
     ).toBeVisible();
     const expiringToken = await organizerTab.evaluate(() =>
       sessionStorage.getItem('caau.local-test-session'),
@@ -343,7 +362,9 @@ export async function individualBrowserTest({
     );
     await organizerTab.getByTestId('local-identity-enter').click();
     await expect(
-      organizerTab.getByText('承办方 B 经办人 · 承办方', { exact: true }),
+      organizerTab
+        .locator('#review-content')
+        .getByText('承办方 B 经办人 · 承办方', { exact: true }),
     ).toBeVisible({ timeout: 15000 });
     await identityContext.close();
     assert.equal(
@@ -352,7 +373,7 @@ export async function individualBrowserTest({
           `SELECT count(*)::int n FROM "InternalUser" WHERE id::text LIKE '00000000-0000-4000-8000-00000000020_'`,
         )
       ).rows[0].n,
-      5,
+      6,
     );
     assert.equal(
       (
@@ -368,7 +389,7 @@ export async function individualBrowserTest({
           `SELECT count(*)::int n FROM "OrganizationMember" WHERE "userId"::text LIKE '00000000-0000-4000-8000-00000000020_'`,
         )
       ).rows[0].n,
-      5,
+      6,
     );
     assert.equal(
       (
@@ -376,7 +397,7 @@ export async function individualBrowserTest({
           `SELECT count(*)::int n FROM "Event" WHERE "createdBy"::text LIKE '00000000-0000-4000-8000-00000000020_'`,
         )
       ).rows[0].n,
-      0,
+      fixedEventCountBefore + 1,
     );
 
     org = await newPage('a');

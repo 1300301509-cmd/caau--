@@ -6190,6 +6190,7 @@ export const operations = {
             displayName: { type: 'string' },
             key: {
               enum: [
+                'super-admin',
                 'event-manager',
                 'reviewer-a',
                 'reviewer-b',
@@ -6231,6 +6232,7 @@ export const operations = {
           expiresAt: { format: 'date-time', type: 'string' },
           identity: {
             enum: [
+              'super-admin',
               'event-manager',
               'reviewer-a',
               'reviewer-b',
@@ -6252,6 +6254,7 @@ export const operations = {
       properties: {
         identity: {
           enum: [
+            'super-admin',
             'event-manager',
             'reviewer-a',
             'reviewer-b',

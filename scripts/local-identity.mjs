@@ -23,7 +23,7 @@ async function main() {
     if (target === 'prepare') {
       await db.client.$transaction((tx) => prepareLocalTestIdentities(tx));
       console.log(
-        'Five fixed local test identities are ready; existing records and business data were not updated.',
+        'Six fixed local test identities are ready; existing records and business data were not updated.',
       );
       return;
     }

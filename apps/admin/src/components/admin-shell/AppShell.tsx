@@ -1,9 +1,16 @@
 import { useState, type ReactNode } from 'react';
-import { Button } from 'antd';
+import { Button, Select } from 'antd';
 import { NavIcon } from './NavIcon';
 import { useAuth } from '../../features/auth/AuthContext';
 import brandImage from '../../assets/caau-brand.jpg';
 import './review-center.css';
+
+const localRoleLabels: Record<string, string> = {
+  HEADQUARTERS_SUPER_ADMIN: '超级管理员',
+  EVENT_MANAGER: '赛事管理员',
+  REVIEWER: '总部审核员',
+  ORGANIZER: '承办方经办人',
+};
 
 export function AppShell({
   children,
@@ -111,12 +118,37 @@ export function AppShell({
           </div>
           <div className="hq-sidebar-footer">
             <span className="hq-account-avatar" aria-hidden="true">
-              {auth.session?.displayName.slice(0, 1) ?? '总'}
+              {(auth.identity?.displayName ?? auth.session?.displayName)?.slice(
+                0,
+                1,
+              ) ?? '总'}
             </span>
             <span className="hq-account-copy">
-              {auth.session?.displayName ?? '总部工作空间'}
+              {auth.identity?.displayName ??
+                auth.session?.displayName ??
+                '总部工作空间'}
               <small>{auth.mode === 'formal' ? '正式账号' : '本地测试'}</small>
             </span>
+            {auth.mode === 'local' && (
+              <div className="hq-local-switcher">
+                <span className="hq-local-switcher-label">
+                  LOCAL · 测试身份
+                </span>
+                <Select
+                  aria-label="全局切换本地账号权限"
+                  value={auth.localIdentityKey || undefined}
+                  loading={auth.localBusy}
+                  disabled={auth.localBusy}
+                  onChange={(key) => void auth.switchLocalIdentity(key)}
+                  options={auth.localChoices.map((choice) => ({
+                    value: choice.key,
+                    label: `${choice.displayName} · ${localRoleLabels[choice.role] ?? choice.role}`,
+                  }))}
+                  popupMatchSelectWidth={280}
+                />
+                <small>仅本地测试可见；切换后按该账号权限重新加载。</small>
+              </div>
+            )}
             {auth.mode === 'formal' && (
               <div className="hq-account-actions">
                 <a href="/account/password">账号安全</a>

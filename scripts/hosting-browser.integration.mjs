@@ -202,13 +202,13 @@ export async function hostingBrowserTest({
     });
     const deniedPage = await denied.newPage();
     await deniedPage.goto('http://127.0.0.1:4173/hosting-applications');
-    await deniedPage.evaluate(
-      ([key, value]) => sessionStorage.setItem(key, value),
-      [sessionKey, tokens.b],
-    );
-    await deniedPage.reload();
+    await deniedPage.locator('.hq-brand-symbol').hover();
+    await deniedPage.getByLabel('全局切换本地账号权限').click();
+    await deniedPage
+      .getByText('承办方 B 经办人 · 承办方经办人', { exact: true })
+      .click();
     await expect(
-      deniedPage.getByText('当前身份没有承办申请审核权限，或权限已被撤销。'),
+      deniedPage.getByText(/当前身份没有承办申请审核权限/),
     ).toBeVisible({ timeout: 15000 });
     await expect(deniedPage.locator('.review-table-row')).toHaveCount(0);
     await denied.close();

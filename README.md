@@ -1,5 +1,7 @@
 # CAAU 正式工程
 
+CAAU-057 为 Web 本地测试模式增加固定“总部超级管理员”身份和左下角全局账号权限切换。`CAAU_IDENTITY_MODE=local` 时首次进入自动使用超级管理员，可切换赛事管理员、审核员和承办方经办人；正常模式继续使用正式账号登录，绝不显示或开放测试签发入口。操作与安全边界见[本地身份手册](docs/runbooks/authorization.md)。
+
 CAAU-053 已重设计承办方小程序“我的比赛”工作台与五个业务子模块的移动界面，包含赛事切换、真实概览、每日赛程筛选及统一交互。见[设计与技能选型](docs/product/miniapp-competition-design.md)；正式微信及完整平台写入验收仍以 roadmap 为准。
 
 CAAU-052 已接入承办方小程序【我的比赛】下的球队管理、赛程编排、物料管理、赛事情况，并保留人员管理。源码/本地检查与微信平台验收分别记录，操作见[小程序比赛模块](docs/runbooks/miniapp-competition.md)，当前验证状态见 roadmap。

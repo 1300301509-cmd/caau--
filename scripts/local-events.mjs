@@ -35,7 +35,7 @@ async function main() {
     return client.request(name, input);
   };
   const choices = await call('listLocalTestIdentities');
-  if (choices.length !== 5) throw new Error('Fixed identities unavailable');
+  if (choices.length !== 6) throw new Error('Fixed identities unavailable');
   const sessions = {};
   for (const identity of choices) {
     const session = await call('createLocalTestSession', {

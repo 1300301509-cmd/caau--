@@ -2657,6 +2657,7 @@ export interface components {
       displayName: string;
       /** @enum {string} */
       key:
+        | 'super-admin'
         | 'event-manager'
         | 'reviewer-a'
         | 'reviewer-b'
@@ -2676,6 +2677,7 @@ export interface components {
       expiresAt: string;
       /** @enum {string} */
       identity:
+        | 'super-admin'
         | 'event-manager'
         | 'reviewer-a'
         | 'reviewer-b'
@@ -2686,6 +2688,7 @@ export interface components {
     LocalSessionRequestDto: {
       /** @enum {string} */
       identity:
+        | 'super-admin'
         | 'event-manager'
         | 'reviewer-a'
         | 'reviewer-b'

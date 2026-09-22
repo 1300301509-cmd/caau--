@@ -31,6 +31,14 @@ export const localTestOrganizations = [
 
 export const localTestIdentities = [
   {
+    key: 'super-admin',
+    userId: '00000000-0000-4000-8000-000000000206',
+    memberId: '00000000-0000-4000-8000-000000000306',
+    displayName: '总部超级管理员',
+    organizationId: localTestOrganizations[0].id,
+    role: 'HEADQUARTERS_SUPER_ADMIN',
+  },
+  {
     key: 'event-manager',
     userId: '00000000-0000-4000-8000-000000000201',
     memberId: '00000000-0000-4000-8000-000000000301',

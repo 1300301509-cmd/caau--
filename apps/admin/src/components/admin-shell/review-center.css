@@ -611,6 +611,30 @@ body:has(.hq-shell) {
   border: 0;
   gap: 12px;
 }
+.hq-local-switcher {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dce6d9;
+  border-radius: 10px;
+  background: #f6f9f3;
+}
+.hq-local-switcher-label {
+  color: #23695b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+.hq-local-switcher .ant-select {
+  width: 100%;
+}
+.hq-local-switcher small {
+  color: #788079;
+  font-size: 10px;
+  line-height: 1.5;
+}
 @media (min-width: 761px) {
   .hq-sidebar .hq-sidebar-footer {
     opacity: 1;
@@ -618,13 +642,15 @@ body:has(.hq-shell) {
     padding-left: 8px;
   }
   .hq-sidebar-footer .hq-account-copy,
-  .hq-sidebar-footer .hq-account-actions {
+  .hq-sidebar-footer .hq-account-actions,
+  .hq-sidebar-footer .hq-local-switcher {
     visibility: hidden;
     opacity: 0;
     transition: opacity 180ms ease;
   }
   .hq-sidebar.is-expanded .hq-sidebar-footer .hq-account-copy,
-  .hq-sidebar.is-expanded .hq-sidebar-footer .hq-account-actions {
+  .hq-sidebar.is-expanded .hq-sidebar-footer .hq-account-actions,
+  .hq-sidebar.is-expanded .hq-sidebar-footer .hq-local-switcher {
     visibility: visible;
     opacity: 1;
   }

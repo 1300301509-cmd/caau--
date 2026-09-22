@@ -16,17 +16,24 @@ import './auth.css';
 type S = components['schemas'];
 type Session = S['AuthenticationSessionDto'];
 type Identity = S['WorkspaceIdentityDto'];
+type LocalIdentity = S['LocalIdentityChoiceDto'];
 type Mode = 'checking' | 'formal' | 'local' | 'signed-out' | 'unavailable';
 type AuthValue = {
   mode: Mode;
   session?: Session;
   identity?: Identity;
+  localChoices: LocalIdentity[];
+  localIdentityKey: string;
+  localBusy: boolean;
+  switchLocalIdentity: (key: string) => Promise<void>;
   expire: () => void;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | undefined>(undefined);
+const localSessionKey = 'caau.local-test-session';
+const localIdentityKey = 'caau.local-test-identity';
 
 export function useAuth() {
   const value = useContext(AuthContext);
@@ -202,6 +209,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<Mode>('checking');
   const [session, setSession] = useState<Session>();
   const [identity, setIdentity] = useState<Identity>();
+  const [localChoices, setLocalChoices] = useState<LocalIdentity[]>([]);
+  const [selectedLocalIdentity, setSelectedLocalIdentity] = useState('');
+  const [localBusy, setLocalBusy] = useState(false);
   const modeRef = useRef<Mode>('checking');
   modeRef.current = mode;
   const expire = useCallback(() => {
@@ -230,34 +240,101 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const next = await client.request('getAuthenticationSession');
     await accept(next);
   }, [accept]);
+  const switchLocalIdentity = useCallback(async (key: string) => {
+    setLocalBusy(true);
+    const previous = sessionStorage.getItem(localSessionKey) ?? '';
+    try {
+      const issued = await client.request('createLocalTestSession', {
+        body: { identity: key as LocalIdentity['key'] },
+      });
+      const nextIdentity = await client.request('getWorkspaceIdentity', {
+        token: issued.token,
+      });
+      sessionStorage.setItem(localSessionKey, issued.token);
+      sessionStorage.setItem(localIdentityKey, key);
+      setIdentity(nextIdentity);
+      setSelectedLocalIdentity(key);
+      setMode('local');
+      if (previous && previous !== issued.token)
+        void client.request('logout', { token: previous }).catch(() => {});
+      location.reload();
+    } finally {
+      setLocalBusy(false);
+    }
+  }, []);
   useEffect(() => {
     let active = true;
-    void client
-      .request('getAuthenticationSession')
-      .then(async (next) => {
-        if (active) await accept(next);
-      })
-      .catch(async (error: unknown) => {
+    void (async () => {
+      try {
+        const authenticationMode = await client.request(
+          'getAuthenticationMode',
+        );
         if (!active) return;
-        if (!(error instanceof ApiError) || error.status !== 401) {
-          setMode('unavailable');
+        if (authenticationMode.localIdentityEnabled) {
+          const choices = await client.request('listLocalTestIdentities');
+          if (!active) return;
+          setLocalChoices(choices);
+          const savedToken = sessionStorage.getItem(localSessionKey) ?? '';
+          if (savedToken) {
+            try {
+              const nextIdentity = await client.request(
+                'getWorkspaceIdentity',
+                { token: savedToken },
+              );
+              if (!active) return;
+              const detected = choices.find(
+                (choice) =>
+                  choice.displayName === nextIdentity.displayName &&
+                  nextIdentity.roles.includes(choice.role),
+              );
+              if (detected)
+                sessionStorage.setItem(localIdentityKey, detected.key);
+              else sessionStorage.removeItem(localIdentityKey);
+              setIdentity(nextIdentity);
+              setSelectedLocalIdentity(detected?.key ?? '');
+              setMode('local');
+              return;
+            } catch {
+              sessionStorage.removeItem(localSessionKey);
+              sessionStorage.removeItem(localIdentityKey);
+            }
+          }
+          const fallback =
+            choices.find(
+              (choice) => choice.role === 'HEADQUARTERS_SUPER_ADMIN',
+            ) ?? choices[0];
+          if (!fallback) throw new Error('No local identities');
+          const issued = await client.request('createLocalTestSession', {
+            body: { identity: fallback.key },
+          });
+          const nextIdentity = await client.request('getWorkspaceIdentity', {
+            token: issued.token,
+          });
+          if (!active) return;
+          sessionStorage.setItem(localSessionKey, issued.token);
+          sessionStorage.setItem(localIdentityKey, fallback.key);
+          setIdentity(nextIdentity);
+          setSelectedLocalIdentity(fallback.key);
+          setMode('local');
           return;
         }
+        sessionStorage.removeItem(localSessionKey);
+        sessionStorage.removeItem(localIdentityKey);
         try {
-          const authenticationMode = await client.request(
-            'getAuthenticationMode',
-          );
+          const next = await client.request('getAuthenticationSession');
+          if (active) await accept(next);
+        } catch (error) {
           if (!active) return;
-          if (!authenticationMode.localIdentityEnabled) {
-            setMode('signed-out');
-            return;
-          }
-          await client.request('listLocalTestIdentities');
-          if (active) setMode('local');
-        } catch {
-          if (active) setMode('unavailable');
+          setMode(
+            error instanceof ApiError && error.status === 401
+              ? 'signed-out'
+              : 'unavailable',
+          );
         }
-      });
+      } catch {
+        if (active) setMode('unavailable');
+      }
+    })();
     return () => {
       active = false;
     };
@@ -277,8 +354,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [expire]);
   const value = useMemo(
-    () => ({ mode, session, identity, expire, refresh, logout }),
-    [mode, session, identity, expire, refresh, logout],
+    () => ({
+      mode,
+      session,
+      identity,
+      localChoices,
+      localIdentityKey: selectedLocalIdentity,
+      localBusy,
+      switchLocalIdentity,
+      expire,
+      refresh,
+      logout,
+    }),
+    [
+      mode,
+      session,
+      identity,
+      localChoices,
+      selectedLocalIdentity,
+      localBusy,
+      switchLocalIdentity,
+      expire,
+      refresh,
+      logout,
+    ],
   );
 
   if (location.pathname === '/system/health') return <>{children}</>;

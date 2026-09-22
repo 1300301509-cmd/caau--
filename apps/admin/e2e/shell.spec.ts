@@ -10,6 +10,15 @@ test.beforeEach(async ({ page }) => {
     canManageAccounts: false,
     hostingApplicantOrganizations: [],
   };
+  await page.route('**/api/v1/authentication/mode', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        localIdentityEnabled: false,
+        wechatMiniappEnabled: false,
+      }),
+    }),
+  );
   await page.route('**/api/v1/authentication/session', (route) =>
     route.fulfill({
       contentType: 'application/json',
@@ -46,10 +55,13 @@ test('review center is the default route with one primary module and two review 
     page.getByRole('heading', { level: 1, name: '赛事审核中心' }),
   ).toBeVisible();
   const navigation = page.getByRole('navigation', { name: '主要导航' });
-  await expect(navigation.getByRole('link')).toHaveCount(1);
+  await expect(navigation.getByRole('link')).toHaveCount(2);
   await expect(
     navigation.getByRole('link', { name: '赛事审核中心' }),
   ).toHaveAttribute('aria-current', 'page');
+  await expect(
+    navigation.getByRole('link', { name: '比赛管理中心' }),
+  ).toBeVisible();
   const types = page.getByRole('navigation', { name: '审核类型' });
   await expect(
     types.getByRole('link', { name: '承办申请审核' }),
@@ -77,6 +89,7 @@ test('material review remains accessible within the review center', async ({
   await page.locator('.hq-brand-symbol').hover();
   await expect(page.getByText('正式账号', { exact: true })).toBeVisible();
   await expect(page.getByLabel('选择测试身份')).toHaveCount(0);
+  await expect(page.getByLabel('全局切换本地账号权限')).toHaveCount(0);
 });
 
 test('event result deep links retain their detail page without another primary module', async ({

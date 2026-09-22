@@ -2566,6 +2566,7 @@
           },
           "key": {
             "enum": [
+              "super-admin",
               "event-manager",
               "reviewer-a",
               "reviewer-b",
@@ -2599,6 +2600,7 @@
           },
           "identity": {
             "enum": [
+              "super-admin",
               "event-manager",
               "reviewer-a",
               "reviewer-b",
@@ -2618,6 +2620,7 @@
         "properties": {
           "identity": {
             "enum": [
+              "super-admin",
               "event-manager",
               "reviewer-a",
               "reviewer-b",
