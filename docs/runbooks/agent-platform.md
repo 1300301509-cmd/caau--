@@ -8,8 +8,9 @@ Nest `ai` 模块使用 LangGraph.js 编排并在 PostgreSQL `caau_agent` schema 
 - 读取最新赛程，以星期、当天序号或用户明确选择的 match ID 定位场次；
 - 多个候选时返回选择项，不自动选中；
 - 用 scheduling 模块的确定性校验生成修改前后、冲突、基线 revision 和 30 分钟有效期；
-- 保存会话、近期 turn、摘要、当前赛事/场次、任务步骤、资源 ID、基线版本、预览和 checkpoint thread；
-- 服务重启后恢复；恢复时重新检查当前用户、有效授权、赛程 revision 和预览有效期。
+- 保存会话、近期 turn、摘要、当前赛事/场次、任务步骤、结构化已知条件/待补字段、候选 ID、资源 ID、基线版本、预览和 checkpoint thread；
+- 使用实际业务图节点完成“鉴权与上下文 → 意图增量解析 → 赛事/场次定位 → 缺参等待 → 确定性预览 → 返回结果”，而不是用单一节点包装 service；
+- 服务重启后从同一 LangGraph thread 恢复缺参状态；恢复时重新检查当前用户、历史任务涉及的赛事权限、赛程 revision 和预览有效期。
 
 本批没有赛程写工具，不调用会保存草稿的 `generate`，也不发布赛程。预览过期或 revision 变化后标记为 `STALE` 并清除响应中的旧预览；它不会自动取得未来写入授权。
 
@@ -21,7 +22,9 @@ Nest `ai` 模块使用 LangGraph.js 编排并在 PostgreSQL `caau_agent` schema 
 
 ### L2 任务记忆（已实现）
 
-`AgentTask` 保存 owner、目标、步骤、event/match ID、baseline revision、预览 JSON、有效期和 `checkpointThreadId`。LangGraph checkpoint 只保存任务/资源/版本状态，不保存 Cookie、Bearer token、供应商密钥或模型原始凭据。checkpoint 不是业务事实来源；恢复时实时读取权限和赛程。
+`AgentTask` 保存 owner、目标、步骤、event/match ID、逐字段合并的 `parameters`、`pendingFields`、候选 ID、baseline revision、任务 revision、预览 JSON、有效期和 `checkpointThreadId`。同一任务的后续补参和调整复用同一个 task/thread；请求带 `taskId` 时明确继续，`newTask=true` 时明确新建，切换到另一赛事也自动新建并清空旧条件。省略的字段不会覆盖已有有效条件，例如“移到周日”→“上午十点”→“再晚半小时”形成 10:30 的同一任务预览。
+
+LangGraph checkpoint 只保存结构化流程/资源/版本状态，不保存 Cookie、Bearer token、供应商密钥或用户消息原文。checkpoint 不是业务事实来源；每次消息在模型收到结构化历史前先校验会话 owner、当前身份及会话历史任务涉及的赛事权限，赛事读取和纯预览前再次鉴权。同一任务并发请求使用任务 revision 比较，冲突请求返回 409，不静默覆盖条件。
 
 ### L3 长期记忆（仅规划）
 
@@ -32,7 +35,7 @@ Nest `ai` 模块使用 LangGraph.js 编排并在 PostgreSQL `caau_agent` schema 
 - `POST /api/v1/agent/sessions`：创建绑定当前用户的会话，可带当前 `eventId`；
 - `GET /api/v1/agent/sessions`：列出当前仍有权恢复的会话；
 - `GET /api/v1/agent/sessions/:sessionId`：恢复并重新校验会话/任务；
-- `POST /api/v1/agent/sessions/:sessionId/messages`：提交消息或结构化的 event/match 选择；
+- `POST /api/v1/agent/sessions/:sessionId/messages`：提交消息或结构化的 event/match 选择；可带 `taskId` 继续任务，或带 `newTask=true` 显式新建任务，两者不可同时提供；
 - `POST /api/v1/events/:eventId/schedule/preview-adjustment`：纯调整预览，无业务写入。
 
 前端只通过生成的 `@caau/api-client` 调用这些接口。小程序继续复用同一 API 的方案不变，但本批未增加小程序入口。

@@ -1,8 +1,5 @@
-import {
-  BadRequestException,
-  Injectable,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { ConflictException, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import {
   Annotation,
@@ -24,28 +21,71 @@ import {
   eventOperationsScope,
   type Actor,
 } from '../authorization/policy.js';
-import { calculateAdjustmentPreview } from '../scheduling/scheduling.algorithm.js';
+import { SchedulingService } from '../scheduling/scheduling.service.js';
+import type { ScheduleMatchDto } from '../scheduling/scheduling.dto.js';
 import type {
-  ScheduleConfigDto,
-  ScheduleMatchDto,
-} from '../scheduling/scheduling.dto.js';
-import type { AgentIntent, AgentModelAdapter } from './model-adapter.js';
+  AgentModelAdapter,
+  AgentTaskParameters,
+} from './model-adapter.js';
 
 type Tx = Prisma.TransactionClient;
+type AgentTaskRow = Prisma.AgentTaskGetPayload<Record<string, never>>;
 type TaskStep =
   | 'LOCATE_EVENT'
   | 'LOCATE_MATCH'
+  | 'WAITING_PARAMETERS'
   | 'PREVIEW_READY'
   | 'STALE'
   | 'FAILED';
+type ReplyStatus =
+  | 'NEED_EVENT'
+  | 'NEED_MATCH'
+  | 'NEED_PARAMETERS'
+  | 'PREVIEW'
+  | 'STALE'
+  | 'ERROR';
+type Candidate = { id: string; label: string; detail?: string };
+type MessageBody = {
+  message: string;
+  eventId?: string;
+  matchId?: string;
+  taskId?: string;
+  newTask: boolean;
+};
+type RuntimeContext = {
+  token: string;
+  sessionId: string;
+  message: string;
+  eventId?: string;
+  matchId?: string;
+};
 const json = (value: unknown) => value as Prisma.InputJsonValue;
+const strings = (value: Prisma.JsonValue): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+const parameters = (value: Prisma.JsonValue): AgentTaskParameters =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as AgentTaskParameters)
+    : {};
+
 const GraphState = Annotation.Root({
+  workflowVersion: Annotation<number>(),
   taskId: Annotation<string>(),
+  sessionId: Annotation<string>(),
+  revision: Annotation<number>(),
   step: Annotation<string>(),
   eventId: Annotation<string>(),
   matchId: Annotation<string>(),
   baselineRevision: Annotation<number>(),
+  parameters: Annotation<AgentTaskParameters>(),
+  pendingFields: Annotation<string[]>(),
+  candidates: Annotation<Candidate[]>(),
+  route: Annotation<'preview' | 'respond'>(),
+  status: Annotation<ReplyStatus>(),
+  responseMessage: Annotation<string>(),
 });
+type WorkflowState = typeof GraphState.State;
 
 function localParts(iso: string) {
   const value = new Date(Date.parse(iso) + 8 * 60 * 60 * 1000).toISOString();
@@ -54,16 +94,15 @@ function localParts(iso: string) {
 function weekday(date: string) {
   return new Date(`${date}T00:00:00Z`).getUTCDay() || 7;
 }
-function targetInstant(source: string, intent: AgentIntent) {
-  if (intent.targetWeekday === undefined || intent.targetHour === undefined)
-    return undefined;
+function dateForWeekday(source: string, targetWeekday: number) {
   const sourceDate = localParts(source).date;
-  const delta = intent.targetWeekday - weekday(sourceDate);
   const day = new Date(`${sourceDate}T00:00:00Z`);
-  day.setUTCDate(day.getUTCDate() + delta);
-  const date = day.toISOString().slice(0, 10);
+  day.setUTCDate(day.getUTCDate() + targetWeekday - weekday(sourceDate));
+  return day.toISOString().slice(0, 10);
+}
+function instant(date: string, hour: number, minute: number) {
   return new Date(
-    `${date}T${String(intent.targetHour).padStart(2, '0')}:${String(intent.targetMinute ?? 0).padStart(2, '0')}:00+08:00`,
+    `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+08:00`,
   ).toISOString();
 }
 function matchLabel(match: ScheduleMatchDto) {
@@ -74,9 +113,12 @@ function matchLabel(match: ScheduleMatchDto) {
 export class AiService implements OnModuleDestroy {
   private readonly checkpoint;
   private readonly graph;
+  private readonly runtime = new AsyncLocalStorage<RuntimeContext>();
+
   constructor(
     private readonly auth: AuthorizationService,
     private readonly model: AgentModelAdapter,
+    private readonly scheduling: SchedulingService,
     databaseUrl?: string,
   ) {
     this.checkpoint = databaseUrl
@@ -84,14 +126,31 @@ export class AiService implements OnModuleDestroy {
       : undefined;
     const saver = this.checkpoint?.saver ?? new MemorySaver();
     this.graph = new StateGraph(GraphState)
-      .addNode('persist', (state) => state)
-      .addEdge(START, 'persist')
-      .addEdge('persist', END)
+      .addNode('authorize_context', (state) => this.authorizeNode(state))
+      .addNode('parse_intent', (state) => this.parseIntentNode(state))
+      .addNode('locate_resources', (state) => this.locateResourcesNode(state))
+      .addNode('deterministic_preview', (state) => this.previewNode(state))
+      .addNode('return_result', (state) => this.resultNode(state))
+      .addEdge(START, 'authorize_context')
+      .addEdge('authorize_context', 'parse_intent')
+      .addEdge('parse_intent', 'locate_resources')
+      .addConditionalEdges('locate_resources', (state) => state.route, {
+        preview: 'deterministic_preview',
+        respond: 'return_result',
+      })
+      .addEdge('deterministic_preview', 'return_result')
+      .addEdge('return_result', END)
       .compile({ checkpointer: saver });
   }
 
   async onModuleDestroy() {
     await this.checkpoint?.close();
+  }
+
+  private context() {
+    const context = this.runtime.getStore();
+    if (!context) throw new Error('Agent runtime context unavailable');
+    return context;
   }
 
   private taskView(task: {
@@ -101,6 +160,8 @@ export class AiService implements OnModuleDestroy {
     eventId: string | null;
     matchId: string | null;
     baselineRevision: number | null;
+    parameters: Prisma.JsonValue;
+    pendingFields: Prisma.JsonValue;
     preview: Prisma.JsonValue | null;
     previewExpiresAt: Date | null;
   }) {
@@ -111,29 +172,36 @@ export class AiService implements OnModuleDestroy {
       eventId: task.eventId,
       matchId: task.matchId,
       baselineRevision: task.baselineRevision,
+      parameters: parameters(task.parameters),
+      pendingFields: strings(task.pendingFields),
       preview: task.step === 'PREVIEW_READY' ? task.preview : null,
       expiresAt: task.previewExpiresAt?.toISOString() ?? null,
     };
   }
 
-  private async persistCheckpoint(task: {
-    id: string;
-    checkpointThreadId: string;
-    step: string;
-    eventId: string | null;
-    matchId: string | null;
-    baselineRevision: number | null;
-  }) {
-    await this.graph.invoke(
-      {
-        taskId: task.id,
-        step: task.step,
-        eventId: task.eventId ?? '',
-        matchId: task.matchId ?? '',
-        baselineRevision: task.baselineRevision ?? 0,
-      },
-      { configurable: { thread_id: task.checkpointThreadId } },
+  private async validateSessionAccess(
+    tx: Tx,
+    actor: Actor,
+    sessionId: string,
+    taskId?: string,
+  ) {
+    const session = await tx.agentSession.findFirst({
+      where: { id: sessionId, ownerId: actor.id },
+      include: { tasks: { orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] } },
+    });
+    if (!session) deny();
+    const eventIds = new Set(
+      [
+        session.currentEventId,
+        ...session.tasks.map((task) => task.eventId),
+      ].filter((id): id is string => !!id),
     );
+    for (const eventId of eventIds) await eventOperations(tx, actor, eventId);
+    const task = taskId
+      ? session.tasks.find((candidate) => candidate.id === taskId)
+      : session.tasks[0];
+    if (taskId && !task) deny();
+    return { session, task };
   }
 
   createSession(token: string, input: unknown) {
@@ -174,9 +242,10 @@ export class AiService implements OnModuleDestroy {
           orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
           take: 30,
         });
-        return Promise.all(
-          rows.map((row) => this.sessionView(tx, actor, row.id)),
-        );
+        const result = [];
+        for (const row of rows)
+          result.push(await this.sessionView(tx, actor, row.id));
+        return result;
       },
     );
   }
@@ -192,28 +261,24 @@ export class AiService implements OnModuleDestroy {
   }
 
   private async sessionView(tx: Tx, actor: Actor, id: string) {
-    const session = await tx.agentSession.findFirst({
-      where: { id, ownerId: actor.id },
+    const { session } = await this.validateSessionAccess(tx, actor, id);
+    const loaded = await tx.agentSession.findUniqueOrThrow({
+      where: { id },
       include: {
         turns: { orderBy: { createdAt: 'desc' }, take: 20 },
-        tasks: { orderBy: { updatedAt: 'desc' }, take: 1 },
+        tasks: { orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 1 },
       },
     });
-    if (!session) deny();
-    let task = session.tasks[0] ?? null;
-    if (session.currentEventId)
-      await eventOperations(tx, actor, session.currentEventId);
-    if (task?.eventId) await eventOperations(tx, actor, task.eventId);
-    if (task?.eventId) {
+    let task = loaded.tasks[0] ?? null;
+    if (task?.eventId && task.step === 'PREVIEW_READY') {
       const schedule = await tx.eventSchedule.findUnique({
         where: { eventId: task.eventId },
       });
       if (
-        task.step === 'PREVIEW_READY' &&
-        (!schedule ||
-          schedule.revision !== task.baselineRevision ||
-          !task.previewExpiresAt ||
-          task.previewExpiresAt <= new Date())
+        !schedule ||
+        schedule.revision !== task.baselineRevision ||
+        !task.previewExpiresAt ||
+        task.previewExpiresAt <= new Date()
       ) {
         task = await tx.agentTask.update({
           where: { id: task.id },
@@ -221,6 +286,8 @@ export class AiService implements OnModuleDestroy {
             step: 'STALE',
             preview: json({}),
             previewExpiresAt: null,
+            pendingFields: json([]),
+            revision: { increment: 1 },
             updatedAt: new Date(),
           },
         });
@@ -228,11 +295,11 @@ export class AiService implements OnModuleDestroy {
     }
     return {
       id: session.id,
-      summary: session.summary,
-      currentEventId: session.currentEventId,
-      currentMatchId: session.currentMatchId,
-      updatedAt: session.updatedAt.toISOString(),
-      turns: session.turns.reverse().map((turn) => ({
+      summary: loaded.summary,
+      currentEventId: loaded.currentEventId,
+      currentMatchId: loaded.currentMatchId,
+      updatedAt: loaded.updatedAt.toISOString(),
+      turns: loaded.turns.reverse().map((turn) => ({
         id: turn.id,
         role: turn.role as 'USER' | 'ASSISTANT',
         content: turn.content,
@@ -242,269 +309,538 @@ export class AiService implements OnModuleDestroy {
     };
   }
 
-  async message(token: string, sessionId: string, input: unknown) {
-    const body = bodyObject(input, ['message', 'eventId', 'matchId']);
-    const message = text(body.message, 2000);
-    const existingGoal = await this.auth.run(
+  private parseMessage(input: unknown): MessageBody {
+    const body = bodyObject(input, [
+      'message',
+      'eventId',
+      'matchId',
+      'taskId',
+      'newTask',
+    ]);
+    if (body.newTask !== undefined && typeof body.newTask !== 'boolean')
+      throw new ConflictException('Invalid new task flag');
+    if (body.newTask && body.taskId)
+      throw new ConflictException('New task cannot continue an existing task');
+    return {
+      message: text(body.message, 2000),
+      ...(body.eventId ? { eventId: uuid(body.eventId) } : {}),
+      ...(body.matchId ? { matchId: uuid(body.matchId) } : {}),
+      ...(body.taskId ? { taskId: uuid(body.taskId) } : {}),
+      newTask: body.newTask === true,
+    };
+  }
+
+  private async prepareInvocation(
+    token: string,
+    sessionId: string,
+    body: MessageBody,
+  ) {
+    return this.auth.run(
       token,
-      'agent.session.prepare',
+      'agent.workflow.prepare',
       sessionId,
       {},
       async (tx, actor) => {
-        const session = await tx.agentSession.findFirst({
-          where: { id: sessionId, ownerId: actor.id },
-          include: { tasks: { orderBy: { updatedAt: 'desc' }, take: 1 } },
-        });
-        if (!session) deny();
-        return session.tasks[0]?.goal ?? '';
+        const { session, task: requested } = await this.validateSessionAccess(
+          tx,
+          actor,
+          sessionId,
+          body.taskId,
+        );
+        let task = requested;
+        const switchedEvent =
+          body.eventId && task?.eventId && body.eventId !== task.eventId;
+        if (
+          body.newTask ||
+          switchedEvent ||
+          (!body.taskId && task?.step === 'FAILED')
+        )
+          task = undefined;
+        if (!task) {
+          task = await tx.agentTask.create({
+            data: {
+              id: randomUUID(),
+              sessionId,
+              ownerId: actor.id,
+              goal: body.message.slice(0, 500),
+              step: 'LOCATE_EVENT',
+              eventId: body.eventId ?? null,
+              checkpointThreadId: randomUUID(),
+            },
+          });
+        }
+        return { task, sessionCurrentEventId: session.currentEventId };
       },
     );
-    const intent = await this.model.parse(`${message} ${existingGoal}`.trim());
-    const result = await this.auth.run(
+  }
+
+  async message(token: string, sessionId: string, input: unknown) {
+    const body = this.parseMessage(input);
+    const prepared = await this.prepareInvocation(token, sessionId, body);
+    const config = {
+      configurable: { thread_id: prepared.task.checkpointThreadId },
+    };
+    const snapshot = await this.graph.getState(config);
+    const saved = snapshot.values as Partial<WorkflowState>;
+    const recoverable =
+      saved.workflowVersion === 2 && saved.taskId === prepared.task.id;
+    const initial: Partial<WorkflowState> = recoverable
+      ? {
+          taskId: prepared.task.id,
+          sessionId,
+          revision: prepared.task.revision,
+        }
+      : {
+          workflowVersion: 2,
+          taskId: prepared.task.id,
+          sessionId,
+          revision: prepared.task.revision,
+          step: prepared.task.step,
+          eventId: prepared.task.eventId ?? '',
+          matchId: prepared.task.matchId ?? '',
+          baselineRevision: prepared.task.baselineRevision ?? 0,
+          parameters: parameters(prepared.task.parameters),
+          pendingFields: strings(prepared.task.pendingFields),
+          candidates: [],
+          route: 'respond',
+          status: 'ERROR',
+          responseMessage: '',
+        };
+    const state = await this.runtime.run(
+      {
+        token,
+        sessionId,
+        message: body.message,
+        eventId: body.eventId ?? prepared.sessionCurrentEventId ?? undefined,
+        matchId: body.matchId,
+      },
+      () => this.graph.invoke(initial, config),
+    );
+    const task = await this.auth.run(
       token,
-      'agent.message.create',
-      sessionId,
+      'agent.task.read',
+      prepared.task.id,
       {},
       async (tx, actor) => {
-        const session = await tx.agentSession.findFirst({
-          where: { id: sessionId, ownerId: actor.id },
-        });
-        if (!session) deny();
-        await tx.agentTurn.create({
-          data: { id: randomUUID(), sessionId, role: 'USER', content: message },
-        });
+        const { task: current } = await this.validateSessionAccess(
+          tx,
+          actor,
+          sessionId,
+          prepared.task.id,
+        );
+        return current!;
+      },
+    );
+    return {
+      sessionId,
+      status: state.status,
+      message: state.responseMessage,
+      candidates: state.candidates,
+      task: this.taskView(task),
+    };
+  }
+
+  private authorizeNode(state: WorkflowState) {
+    const context = this.context();
+    return this.auth.run(
+      context.token,
+      'agent.workflow.authorize',
+      state.taskId,
+      {},
+      async (tx, actor) => {
+        await this.validateSessionAccess(
+          tx,
+          actor,
+          context.sessionId,
+          state.taskId,
+        );
+        return {};
+      },
+    );
+  }
+
+  private async parseIntentNode(state: WorkflowState) {
+    const context = this.context();
+    const patch = await this.model.parse(
+      context.message,
+      state.parameters ?? {},
+    );
+    const next = { ...(state.parameters ?? {}) };
+    for (const [key, value] of Object.entries(patch))
+      if (key !== 'targetOffsetMinutes' && value !== undefined)
+        (next as Record<string, unknown>)[key] = value;
+    if (
+      patch.targetWeekday !== undefined ||
+      patch.targetDate !== undefined ||
+      patch.targetHour !== undefined ||
+      patch.targetMinute !== undefined
+    )
+      delete next.targetStartAt;
+    if (patch.targetOffsetMinutes !== undefined) {
+      if (next.targetStartAt) {
+        const shifted = new Date(
+          Date.parse(next.targetStartAt) +
+            patch.targetOffsetMinutes * 60 * 1000,
+        );
+        next.targetStartAt = shifted.toISOString();
+        const local = localParts(next.targetStartAt);
+        next.targetDate = local.date;
+        next.targetHour = Number(local.time.slice(0, 2));
+        next.targetMinute = Number(local.time.slice(3, 5));
+        next.targetWeekday = weekday(local.date);
+      } else if (next.targetHour !== undefined) {
+        const total =
+          next.targetHour * 60 +
+          (next.targetMinute ?? 0) +
+          patch.targetOffsetMinutes;
+        next.targetHour = Math.floor((((total % 1440) + 1440) % 1440) / 60);
+        next.targetMinute = ((total % 60) + 60) % 60;
+      }
+    }
+    if (context.matchId) {
+      next.sourceMatchId = context.matchId;
+      delete next.targetStartAt;
+    }
+    return { parameters: next };
+  }
+
+  private async locateResourcesNode(state: WorkflowState) {
+    const context = this.context();
+    return this.auth.run(
+      context.token,
+      'agent.workflow.locate',
+      state.taskId,
+      {},
+      async (tx, actor) => {
+        const { task } = await this.validateSessionAccess(
+          tx,
+          actor,
+          context.sessionId,
+          state.taskId,
+        );
+        if (!task || task.revision !== state.revision)
+          throw new ConflictException(
+            'Agent task changed; retry with latest state',
+          );
         const events = await tx.event.findMany({
           where: eventOperationsScope(actor),
           select: { id: true, name: true },
           orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         });
-        const requestedEvent = body.eventId
-          ? uuid(body.eventId)
-          : session.currentEventId;
-        const event = requestedEvent
-          ? events.find((candidate) => candidate.id === requestedEvent)
+        const requestedEventId =
+          context.eventId || state.eventId || task.eventId;
+        const event = requestedEventId
+          ? events.find((candidate) => candidate.id === requestedEventId)
           : events.length === 1
             ? events[0]
             : undefined;
-        if (requestedEvent && !event) deny();
-        const taskId = randomUUID();
-        const checkpointThreadId = randomUUID();
+        if (requestedEventId && !event) deny();
         if (!event) {
-          const task = await tx.agentTask.create({
-            data: {
-              id: taskId,
-              sessionId,
-              ownerId: actor.id,
-              goal: message,
-              step: 'LOCATE_EVENT',
-              checkpointThreadId,
-            },
-          });
-          const reply = events.length
-            ? '请先选择要调整的赛事，我不会替你猜测。'
-            : '当前账号没有可操作的赛事。';
-          await this.saveReply(tx, sessionId, reply, null, null);
-          return {
-            status: 'NEED_EVENT' as const,
-            message: reply,
+          return this.saveLocatedState(tx, task, {
+            state,
+            step: 'LOCATE_EVENT',
+            eventId: null,
+            matchId: null,
+            baselineRevision: null,
+            pendingFields: ['eventId'],
+            candidateEventIds: events.map((item) => item.id),
+            candidateMatchIds: [],
+            parameters: state.parameters,
+            status: 'NEED_EVENT',
+            message: events.length
+              ? '请先选择要调整的赛事，我不会替你猜测。'
+              : '当前账号没有可操作的赛事。',
             candidates: events.map((item) => ({
               id: item.id,
               label: item.name,
             })),
-            task,
-          };
+          });
         }
         await eventOperations(tx, actor, event.id);
         const schedule = await tx.eventSchedule.findUnique({
           where: { eventId: event.id },
         });
         if (!schedule) {
-          const task = await tx.agentTask.create({
-            data: {
-              id: taskId,
-              sessionId,
-              ownerId: actor.id,
-              goal: message,
-              step: 'FAILED',
-              eventId: event.id,
-              checkpointThreadId,
-            },
-          });
-          const reply = '当前赛事还没有可读取的赛程，未生成任何预览。';
-          await this.saveReply(tx, sessionId, reply, event.id, null);
-          return {
-            status: 'ERROR' as const,
-            message: reply,
+          return this.saveLocatedState(tx, task, {
+            state,
+            step: 'FAILED',
+            eventId: event.id,
+            matchId: null,
+            baselineRevision: null,
+            pendingFields: [],
+            candidateEventIds: [],
+            candidateMatchIds: [],
+            parameters: {},
+            status: 'ERROR',
+            message: '当前赛事还没有可读取的赛程，未生成任何预览。',
             candidates: [],
-            task,
-          };
+          });
         }
         const matches = schedule.matches as unknown as ScheduleMatchDto[];
-        let selected = body.matchId
-          ? matches.find((match) => match.id === uuid(body.matchId))
+        const next = { ...state.parameters };
+        let selected = next.sourceMatchId
+          ? matches.find((match) => match.id === next.sourceMatchId)
           : undefined;
-        if (body.matchId && !selected) deny();
-        if (
-          !selected &&
-          session.currentMatchId &&
-          intent.sourceWeekday === undefined
-        )
-          selected = matches.find(
-            (match) => match.id === session.currentMatchId,
-          );
-        let candidates: ScheduleMatchDto[] = [];
-        if (!selected && intent.sourceWeekday && intent.sourceOrdinal) {
+        if (next.sourceMatchId && !selected) deny();
+        let matchCandidates: ScheduleMatchDto[] = [];
+        if (!selected && next.sourceWeekday && next.sourceOrdinal) {
           const byDate = new Map<string, ScheduleMatchDto[]>();
           for (const match of matches.filter((item) => item.startAt)) {
             const date = localParts(match.startAt).date;
-            if (weekday(date) !== intent.sourceWeekday) continue;
+            if (weekday(date) !== next.sourceWeekday) continue;
             byDate.set(date, [...(byDate.get(date) ?? []), match]);
           }
-          candidates = [...byDate.values()]
+          matchCandidates = [...byDate.values()]
             .map(
               (items) =>
                 items.sort(
                   (a, b) =>
                     Date.parse(a.startAt) - Date.parse(b.startAt) ||
                     a.order - b.order,
-                )[intent.sourceOrdinal! - 1],
+                )[next.sourceOrdinal! - 1],
             )
             .filter((item): item is ScheduleMatchDto => !!item);
-          if (candidates.length === 1) selected = candidates[0];
+          if (matchCandidates.length === 1) selected = matchCandidates[0];
         }
         if (!selected) {
-          const task = await tx.agentTask.create({
-            data: {
-              id: taskId,
-              sessionId,
-              ownerId: actor.id,
-              goal: message,
-              step: 'LOCATE_MATCH',
-              eventId: event.id,
-              baselineRevision: schedule.revision,
-              checkpointThreadId,
-            },
+          const choices = matchCandidates.length ? matchCandidates : matches;
+          return this.saveLocatedState(tx, task, {
+            state,
+            step: 'LOCATE_MATCH',
+            eventId: event.id,
+            matchId: null,
+            baselineRevision: schedule.revision,
+            pendingFields: ['sourceMatchId'],
+            candidateEventIds: [],
+            candidateMatchIds: choices.map((match) => match.id),
+            parameters: next,
+            status: 'NEED_MATCH',
+            message:
+              matchCandidates.length > 1
+                ? '找到多场符合描述的比赛，请明确选择；我不会擅自决定。'
+                : '没有唯一定位到比赛，请选择具体场次。',
+            candidates: choices.slice(0, 20).map((match) => ({
+              id: match.id,
+              label: matchLabel(match),
+              detail: `${localParts(match.startAt).date} ${localParts(match.startAt).time} · ${match.venue}`,
+            })),
           });
-          const reply =
-            candidates.length > 1
-              ? '找到多场符合描述的比赛，请明确选择；我不会擅自决定。'
-              : '没有唯一定位到比赛，请选择具体场次。';
-          await this.saveReply(tx, sessionId, reply, event.id, null);
-          return {
-            status: 'NEED_MATCH' as const,
-            message: reply,
-            candidates: (candidates.length ? candidates : matches)
-              .slice(0, 20)
-              .map((match) => ({
-                id: match.id,
-                label: matchLabel(match),
-                detail: `${localParts(match.startAt).date} ${localParts(match.startAt).time} · ${match.venue}`,
-              })),
-            task,
-          };
         }
-        const startAt = targetInstant(selected.startAt, intent);
-        if (!startAt)
-          throw new BadRequestException('Target weekday and time required');
-        const config = schedule.config as unknown as ScheduleConfigDto;
-        const teams = await tx.eventTeam.findMany({
-          where: { eventId: event.id },
-          orderBy: { createdAt: 'asc' },
-        });
-        const preview = calculateAdjustmentPreview(
-          config,
-          matches,
-          teams.map((team) => ({
-            id: team.id,
-            active: team.active,
-            name:
-              typeof team.profile === 'object' &&
-              team.profile &&
-              !Array.isArray(team.profile) &&
-              typeof team.profile.name === 'string'
-                ? team.profile.name
-                : '未命名球队',
-          })),
-          selected.id,
-          startAt,
-          selected.venue,
-        );
-        const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-        const storedPreview = {
-          eventId: event.id,
-          baselineRevision: schedule.revision,
-          ...preview,
-          expiresAt: expiresAt.toISOString(),
-        };
-        const task = await tx.agentTask.create({
-          data: {
-            id: taskId,
-            sessionId,
-            ownerId: actor.id,
-            goal: message,
-            step: 'PREVIEW_READY',
+        next.sourceMatchId = selected.id;
+        if (next.targetWeekday !== undefined)
+          next.targetDate = dateForWeekday(
+            selected.startAt,
+            next.targetWeekday,
+          );
+        const pendingFields: string[] = [];
+        if (!next.targetDate) pendingFields.push('targetDate');
+        if (next.targetHour === undefined) pendingFields.push('targetTime');
+        if (pendingFields.length) {
+          return this.saveLocatedState(tx, task, {
+            state,
+            step: 'WAITING_PARAMETERS',
             eventId: event.id,
             matchId: selected.id,
             baselineRevision: schedule.revision,
-            preview: json(storedPreview),
-            previewExpiresAt: expiresAt,
-            checkpointThreadId,
-          },
-        });
-        const reply = preview.issues.length
-          ? `预览已生成，确定性校验发现 ${preview.issues.length} 项冲突。此操作尚未保存。`
-          : '预览已生成，确定性校验未发现冲突。此操作尚未保存。';
-        await this.saveReply(
-          tx,
-          sessionId,
-          reply,
-          event.id,
-          selected.id,
-          message,
+            pendingFields,
+            candidateEventIds: [],
+            candidateMatchIds: [],
+            parameters: next,
+            status: 'NEED_PARAMETERS',
+            message: pendingFields.includes('targetTime')
+              ? '已定位比赛，请补充目标开赛时间。'
+              : '已定位比赛，请补充目标日期或星期。',
+            candidates: [],
+          });
+        }
+        next.targetMinute ??= 0;
+        next.targetStartAt = instant(
+          next.targetDate!,
+          next.targetHour!,
+          next.targetMinute,
         );
-        return {
-          status: 'PREVIEW' as const,
-          message: reply,
+        next.venue ??= selected.venue;
+        return this.saveLocatedState(tx, task, {
+          state,
+          step: 'WAITING_PARAMETERS',
+          eventId: event.id,
+          matchId: selected.id,
+          baselineRevision: schedule.revision,
+          pendingFields: [],
+          candidateEventIds: [],
+          candidateMatchIds: [],
+          parameters: next,
+          status: 'NEED_PARAMETERS',
+          message: '',
           candidates: [],
-          task,
-        };
+          route: 'preview',
+        });
       },
     );
-    await this.persistCheckpoint(result.task);
-    return {
-      sessionId,
-      status: result.status,
-      message: result.message,
-      candidates: result.candidates,
-      task: this.taskView(result.task),
-    };
   }
 
-  private async saveReply(
+  private async saveLocatedState(
     tx: Tx,
-    sessionId: string,
-    content: string,
-    eventId: string | null,
-    matchId: string | null,
-    summary?: string,
+    task: AgentTaskRow,
+    input: {
+      state: WorkflowState;
+      step: TaskStep;
+      eventId: string | null;
+      matchId: string | null;
+      baselineRevision: number | null;
+      pendingFields: string[];
+      candidateEventIds: string[];
+      candidateMatchIds: string[];
+      parameters: AgentTaskParameters;
+      status: ReplyStatus;
+      message: string;
+      candidates: Candidate[];
+      route?: 'preview' | 'respond';
+    },
   ) {
-    await tx.agentTurn.create({
+    const changed = await tx.agentTask.updateMany({
+      where: { id: task.id, revision: input.state.revision },
       data: {
-        id: randomUUID(),
-        sessionId,
-        role: 'ASSISTANT',
-        content,
-        structured: { eventId, matchId },
-      },
-    });
-    await tx.agentSession.update({
-      where: { id: sessionId },
-      data: {
-        currentEventId: eventId,
-        currentMatchId: matchId,
-        summary: summary?.slice(0, 2000) ?? undefined,
+        step: input.step,
+        eventId: input.eventId,
+        matchId: input.matchId,
+        baselineRevision: input.baselineRevision,
+        parameters: json(input.parameters),
+        pendingFields: json(input.pendingFields),
+        candidateEventIds: json(input.candidateEventIds),
+        candidateMatchIds: json(input.candidateMatchIds),
+        preview: input.step === 'PREVIEW_READY' ? undefined : json({}),
+        previewExpiresAt: null,
+        revision: { increment: 1 },
         updatedAt: new Date(),
       },
     });
+    if (changed.count !== 1)
+      throw new ConflictException(
+        'Agent task changed; retry with latest state',
+      );
+    return {
+      workflowVersion: 2,
+      revision: input.state.revision + 1,
+      step: input.step,
+      eventId: input.eventId ?? '',
+      matchId: input.matchId ?? '',
+      baselineRevision: input.baselineRevision ?? 0,
+      parameters: input.parameters,
+      pendingFields: input.pendingFields,
+      candidates: input.candidates,
+      route: input.route ?? 'respond',
+      status: input.status,
+      responseMessage: input.message,
+    };
+  }
+
+  private async previewNode(state: WorkflowState) {
+    const context = this.context();
+    const preview = await this.scheduling.previewAdjustment(
+      context.token,
+      state.eventId,
+      {
+        expectedRevision: state.baselineRevision,
+        matchId: state.matchId,
+        startAt: state.parameters.targetStartAt,
+        venue: state.parameters.venue,
+      },
+    );
+    const result = await this.auth.run(
+      context.token,
+      'agent.workflow.preview',
+      state.taskId,
+      {},
+      async (tx, actor) => {
+        const { task } = await this.validateSessionAccess(
+          tx,
+          actor,
+          context.sessionId,
+          state.taskId,
+        );
+        if (!task || task.revision !== state.revision)
+          throw new ConflictException(
+            'Agent task changed; retry with latest state',
+          );
+        const changed = await tx.agentTask.updateMany({
+          where: { id: task.id, revision: state.revision },
+          data: {
+            step: 'PREVIEW_READY',
+            preview: json(preview),
+            previewExpiresAt: new Date(preview.expiresAt),
+            pendingFields: json([]),
+            revision: { increment: 1 },
+            updatedAt: new Date(),
+          },
+        });
+        if (changed.count !== 1)
+          throw new ConflictException(
+            'Agent task changed; retry with latest state',
+          );
+        return state.revision + 1;
+      },
+    );
+    return {
+      revision: result,
+      step: 'PREVIEW_READY',
+      pendingFields: [],
+      status: 'PREVIEW' as const,
+      responseMessage: preview.issues.length
+        ? `预览已生成，确定性校验发现 ${preview.issues.length} 项冲突。此操作尚未保存。`
+        : '预览已生成，确定性校验未发现冲突。此操作尚未保存。',
+      candidates: [],
+    };
+  }
+
+  private resultNode(state: WorkflowState) {
+    const context = this.context();
+    return this.auth.run(
+      context.token,
+      'agent.workflow.result',
+      state.taskId,
+      {},
+      async (tx, actor) => {
+        await this.validateSessionAccess(
+          tx,
+          actor,
+          context.sessionId,
+          state.taskId,
+        );
+        await tx.agentTurn.createMany({
+          data: [
+            {
+              id: randomUUID(),
+              sessionId: context.sessionId,
+              role: 'USER',
+              content: context.message,
+              structured: json({ taskId: state.taskId }),
+            },
+            {
+              id: randomUUID(),
+              sessionId: context.sessionId,
+              role: 'ASSISTANT',
+              content: state.responseMessage,
+              structured: json({
+                taskId: state.taskId,
+                eventId: state.eventId || null,
+                matchId: state.matchId || null,
+                pendingFields: state.pendingFields,
+              }),
+            },
+          ],
+        });
+        await tx.agentSession.update({
+          where: { id: context.sessionId },
+          data: {
+            currentEventId: state.eventId || null,
+            currentMatchId: state.matchId || null,
+            summary: context.message.slice(0, 2000),
+            updatedAt: new Date(),
+          },
+        });
+        return {};
+      },
+    );
   }
 }

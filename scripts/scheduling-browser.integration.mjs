@@ -3,7 +3,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { chromium, expect } from '@playwright/test';
 import { createApplication } from '../apps/api/dist/application.js';
 
-export async function schedulingBrowserTest({ config, tokens, eventId }) {
+export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
   const web = createServer(async (request, response) => {
     const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
     const asset = /^\/assets\/[a-zA-Z0-9_.-]+\.(js|css|jpg|png|svg)$/.test(
@@ -44,6 +44,17 @@ export async function schedulingBrowserTest({ config, tokens, eventId }) {
     });
     browser = await chromium.launch();
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const agentResponses = [];
+    page.on('response', async (response) => {
+      if (
+        response.url().includes('/agent/sessions/') &&
+        response.url().endsWith('/messages')
+      )
+        agentResponses.push({
+          status: response.status(),
+          body: await response.text(),
+        });
+    });
     await page.goto(
       `http://127.0.0.1:4173/competition?module=schedule&event=${eventId}`,
     );
@@ -93,9 +104,21 @@ export async function schedulingBrowserTest({ config, tokens, eventId }) {
     ).toHaveCount(6);
     await page.getByLabel('调整要求').fill('把周二第二场比赛改到周三十点');
     await page.getByRole('button', { name: '生成调整预览' }).click();
-    await expect(page.locator('.schedule-agent-preview')).toBeVisible({
-      timeout: 15000,
-    });
+    try {
+      await expect(page.locator('.schedule-agent-preview')).toBeVisible({
+        timeout: 15000,
+      });
+    } catch (error) {
+      const audits = (
+        await sql.query(
+          'SELECT action, outcome FROM "AuditRecord" WHERE action LIKE \'agent.%\' ORDER BY "occurredAt" DESC LIMIT 8',
+        )
+      ).rows;
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\nAgent responses: ${JSON.stringify(agentResponses)}\nAgent audits: ${JSON.stringify(audits)}`,
+        { cause: error },
+      );
+    }
     await expect(page.locator('.schedule-agent-preview')).toContainText(
       '修改前',
     );

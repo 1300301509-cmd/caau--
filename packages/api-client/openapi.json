@@ -274,6 +274,12 @@
           },
           "message": {
             "type": "string"
+          },
+          "newTask": {
+            "type": "boolean"
+          },
+          "taskId": {
+            "type": "string"
           }
         },
         "required": ["message"],
@@ -294,7 +300,14 @@
             "type": "string"
           },
           "status": {
-            "enum": ["NEED_EVENT", "NEED_MATCH", "PREVIEW", "STALE", "ERROR"],
+            "enum": [
+              "NEED_EVENT",
+              "NEED_MATCH",
+              "NEED_PARAMETERS",
+              "PREVIEW",
+              "STALE",
+              "ERROR"
+            ],
             "type": "string"
           },
           "task": {
@@ -356,6 +369,38 @@
         "required": ["id", "summary", "updatedAt", "turns"],
         "type": "object"
       },
+      "AgentTaskParametersDto": {
+        "properties": {
+          "sourceMatchId": {
+            "type": "string"
+          },
+          "sourceOrdinal": {
+            "type": "number"
+          },
+          "sourceWeekday": {
+            "type": "number"
+          },
+          "targetDate": {
+            "type": "string"
+          },
+          "targetHour": {
+            "type": "number"
+          },
+          "targetMinute": {
+            "type": "number"
+          },
+          "targetStartAt": {
+            "type": "string"
+          },
+          "targetWeekday": {
+            "type": "number"
+          },
+          "venue": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AgentTaskViewDto": {
         "properties": {
           "baselineRevision": {
@@ -380,6 +425,15 @@
             "nullable": true,
             "type": "string"
           },
+          "parameters": {
+            "$ref": "#/components/schemas/AgentTaskParametersDto"
+          },
+          "pendingFields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "preview": {
             "allOf": [
               {
@@ -393,6 +447,7 @@
             "enum": [
               "LOCATE_EVENT",
               "LOCATE_MATCH",
+              "WAITING_PARAMETERS",
               "PREVIEW_READY",
               "STALE",
               "FAILED"
@@ -400,7 +455,7 @@
             "type": "string"
           }
         },
-        "required": ["id", "goal", "step"],
+        "required": ["id", "goal", "step", "parameters", "pendingFields"],
         "type": "object"
       },
       "AgentTurnViewDto": {

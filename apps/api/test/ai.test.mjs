@@ -22,6 +22,17 @@ test('simulated model extracts the supported Chinese schedule adjustment intent'
     ).targetHour,
     11,
   );
+  assert.deepEqual(await new RuleAgentModelAdapter().parse('上午十点'), {
+    targetHour: 10,
+    targetMinute: 0,
+  });
+  assert.deepEqual(await new RuleAgentModelAdapter().parse('再晚半小时'), {
+    targetOffsetMinutes: 30,
+  });
+  assert.equal(
+    (await new RuleAgentModelAdapter().parse('改到周三十点')).targetHour,
+    10,
+  );
 });
 
 test('adjustment preview uses deterministic validation without mutating input', () => {

@@ -271,7 +271,14 @@ export const operations = {
           message: { type: 'string' },
           sessionId: { type: 'string' },
           status: {
-            enum: ['NEED_EVENT', 'NEED_MATCH', 'PREVIEW', 'STALE', 'ERROR'],
+            enum: [
+              'NEED_EVENT',
+              'NEED_MATCH',
+              'NEED_PARAMETERS',
+              'PREVIEW',
+              'STALE',
+              'ERROR',
+            ],
             type: 'string',
           },
           task: {
@@ -300,6 +307,8 @@ export const operations = {
         eventId: { type: 'string' },
         matchId: { type: 'string' },
         message: { type: 'string' },
+        newTask: { type: 'boolean' },
+        taskId: { type: 'string' },
       },
       required: ['message'],
       type: 'object',

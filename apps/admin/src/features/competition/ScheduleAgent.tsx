@@ -74,6 +74,12 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
     setLoading(true);
     setError('');
     try {
+      const activeTask = reply?.task ?? session.task;
+      const shouldContinue =
+        !!reply ||
+        activeTask?.step === 'LOCATE_EVENT' ||
+        activeTask?.step === 'LOCATE_MATCH' ||
+        activeTask?.step === 'WAITING_PARAMETERS';
       const next = await client.request('sendAgentMessage', {
         token,
         path: { sessionId: session.id },
@@ -81,6 +87,11 @@ export function ScheduleAgent({ eventId }: { eventId: string }) {
           message,
           eventId,
           ...(candidate ? { matchId: candidate.id } : {}),
+          ...(activeTask && shouldContinue
+            ? { taskId: activeTask.id }
+            : activeTask
+              ? { newTask: true }
+              : {}),
         },
       });
       setReply(next);

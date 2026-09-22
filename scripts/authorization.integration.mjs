@@ -9,6 +9,7 @@ import path from 'node:path';
 import pg from 'pg';
 import { createApplication } from '../apps/api/dist/application.js';
 import { readConfig } from '../apps/api/dist/config.js';
+import { RuleAgentModelAdapter } from '../apps/api/dist/modules/ai/model-adapter.js';
 import { createApiClient } from '../packages/api-client/dist/index.js';
 import { createFetchTransport } from '../packages/api-client/dist/fetch.js';
 import {
@@ -114,6 +115,7 @@ export async function authorizationIntegration(t) {
                   '202609200004_event_situation',
                   '202609210001_event_staff',
                   '202609220001_agent_platform',
+                  '202609220002_agent_workflow_state',
                 ],
               ],
             )
@@ -233,10 +235,19 @@ export async function authorizationIntegration(t) {
       [randomUUID(), sys, hq, 'SYSTEM_ADMIN'],
     );
     await session('sys', sys);
+    const simulatedAgentModel = new RuleAgentModelAdapter();
+    let agentModelCalls = 0;
     const config = {
       ...readConfig({ CAAU_IDENTITY_MODE: 'local' }),
       databaseUrl: appUrl.href,
       privateFileRoot: path.join(root, '.local/files', name),
+      agentModel: {
+        mode: 'SIMULATED',
+        parse(message, known) {
+          agentModelCalls += 1;
+          return simulatedAgentModel.parse(message, known);
+        },
+      },
     };
     app = await createApplication(config);
     await app.listen(0, '127.0.0.1');
@@ -900,7 +911,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          17,
+          18,
         );
       },
     );
@@ -945,6 +956,7 @@ export async function authorizationIntegration(t) {
       runtime,
       api,
       session,
+      getAgentModelCalls: () => agentModelCalls,
       restartApi: async () => {
         await app.close();
         app = await createApplication(config);

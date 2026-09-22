@@ -96,11 +96,11 @@
 
 目标：让智能体通过自然语言参与真实工作，首个闭环为赛程查询、候选生成和草稿调整；所有动作继续使用现有业务接口、当前登录身份、赛事数据范围、状态机、CAS/幂等和审计，模型不直接写数据库或获得独立超级权限。
 
-交付：[业务智能体方案](../product/agent-platform-plan.md)、[ADR-0019](../adr/0019-agent-orchestration.md)、[分阶段计划](caau-049-agent-platform.md)及[运行手册](../runbooks/agent-platform.md)。B1 已新增 Nest `ai` 模块、LangGraph.js 图、千问适配层、PostgreSQL checkpoint、Agent 会话/turn/任务模型和生成客户端；Web 赛程页提供最小对话、歧义选择及结构化前后预览。预览复用 scheduling 确定性校验，不调用会落库的 generate，不保存或发布赛程。
+交付：[业务智能体方案](../product/agent-platform-plan.md)、[ADR-0019](../adr/0019-agent-orchestration.md)、[分阶段计划](caau-049-agent-platform.md)及[运行手册](../runbooks/agent-platform.md)。B1 已新增 Nest `ai` 模块、千问适配层、PostgreSQL checkpoint、Agent 会话/turn/任务模型和生成客户端；LangGraph 现由鉴权与上下文、意图增量解析、赛事/场次定位、缺参等待、确定性预览和结果返回等实际业务节点组成。Web 赛程页提供最小对话、歧义选择及结构化前后预览。预览复用 scheduling 确定性校验，不调用会落库的 generate，不保存或发布赛程。
 
-三级记忆：L1 已保存必要近期对话、摘要和结构化当前 event/match；L2 已保存 owner、目标、步骤、资源 ID、baseline revision、预览/有效期及 checkpoint thread。每次访问/恢复重新检查当前 actor、资源权限、版本与期限；撤权后不返回旧上下文，旧预览不获得执行授权。L3 只记录未来“用户明确偏好”和“有来源/版本/范围知识”的边界，没有创建空表或向量库，聊天摘要不成为业务规则。
+三级记忆：L1 已保存必要近期对话、摘要和结构化当前 event/match；L2 已保存 owner、目标、步骤、逐字段参数、待补字段、候选 ID、资源 ID、baseline/task revision、预览/有效期及 checkpoint thread。同一任务稳定复用 task/thread；显式新任务或赛事切换清空条件。每次访问/恢复在模型前检查当前 actor 及历史任务资源权限，业务读取和预览再鉴权；撤权后不返回旧上下文且不调用模型，并发请求用任务 revision 防止静默覆盖。L3 只记录未来“用户明确偏好”和“有来源/版本/范围知识”的边界，没有创建空表或向量库，聊天摘要不成为业务规则。
 
-验证：Context7/包元数据核验并固定 LangGraph 1.4.17、PostgreSQL checkpointer 1.0.5、OpenAI 适配 1.5.13，均兼容 Node 24.20.0。冻结安装、`contract:generate/contract:check`、完整 `check`、三端 `build`、64 项包/应用测试、1 项 HTTP 联调及 Web E2E 11/11 通过。隔离 PostgreSQL 首轮 Agent 专项通过，但本仓库旧 API 占用 3000 导致 9 个既有浏览器项失败（61/70）；确认进程 cwd 后正常停止，重跑 70/70。加入实际 API 重启恢复后一次末尾既有浏览器壳层 5 秒时序失败（68/70），再次完整重跑 70/70；最终再增加真实浏览器输入“把周二第二场比赛改到周三十点”并核对前后预览，完整 70/70、0 跳过通过。专项还覆盖歧义、多轮、跨账号、撤权、checkpoint、revision 失效和赛程 row/matches/version 数不变。真实千问未配置/调用；小程序只做未改动源码的构建回归，未新增入口，微信工具/真机未运行。
+验证：Context7/包元数据核验并固定 LangGraph 1.4.17、PostgreSQL checkpointer 1.0.5、OpenAI 适配 1.5.13，均兼容 Node 24.20.0。B1 初版冻结安装、契约、完整检查、三端构建、普通测试、Web E2E 及隔离 PostgreSQL 最终 70/70、0 跳过通过。本次流程补强增加“三轮调整”、连续赛事/场次候选选择、切换赛事、任务并发 200/409、撤权后消息 403 且模型调用零增长、等待补参停服重启后继续同一 task/thread、checkpoint 不含 token/消息原文，以及赛程 row/matches/version 不变。补强首轮为 66/70（测试漏传计数回调使授权恢复代码未执行并连带后续失败）；第二至第五轮为 68/70，Agent 专项均通过，诊断最终确认模拟解析器把“周三十点”连读为 30 点，而非授权或 checkpoint 恢复故障；修正星期分词并增加回归后，最终完整 `db:test` 为 70/70、0 跳过。Web 同时明确等待态继续、完成态页面首条消息显式新建的规则。最终冻结安装、契约检查、完整 `check`、三端 `build`、64 项包/应用测试、1 项 HTTP 联调及 Web E2E 11/11 通过。真实千问未配置/调用；小程序未新增入口，微信工具/真机未运行。
 
 后续：C 阶段写入前仍须拆分 schedule read/adjust/publish 能力，补持久命令回执与确认票据。小程序复用同一 API，但作为独立任务实施。真实模型需仅在服务端配置 `CAAU_QWEN_API_KEY`（不要在聊天或提交中提供），并单独验证中文结构化输出、超时与限流。
 

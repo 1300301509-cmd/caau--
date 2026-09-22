@@ -16,6 +16,7 @@ import { SchedulingModule } from './modules/scheduling/scheduling.module.js';
 import { EventSuppliesModule } from './modules/event-supplies/event-supplies.module.js';
 import { EventSituationModule } from './modules/event-situation/event-situation.module.js';
 import { AiModule } from './modules/ai/ai.module.js';
+import type { AgentModelAdapter } from './modules/ai/model-adapter.js';
 @Module({
   imports: [
     TeamsModule,
@@ -31,7 +32,10 @@ import { AiModule } from './modules/ai/ai.module.js';
 export class AppModule {
   static register(
     probe: DatabaseProbe,
-    config: AuthorizationConfig & { privateFileRoot?: string },
+    config: AuthorizationConfig & {
+      privateFileRoot?: string;
+      agentModel?: AgentModelAdapter;
+    },
   ): DynamicModule {
     return {
       module: AppModule,
@@ -39,7 +43,7 @@ export class AppModule {
         ReadinessModule.register(probe),
         AuthorizationModule.register(config),
         WorkflowModule.register(config.privateFileRoot),
-        AiModule.register(config.databaseUrl),
+        AiModule.register(config.databaseUrl, config.agentModel),
       ],
     };
   }

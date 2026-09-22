@@ -294,9 +294,14 @@ model AgentTask {
   event Event? @relation(fields: [eventId], references: [id], onDelete: Restrict)
   matchId String? @db.Uuid
   baselineRevision Int?
+  parameters Json @default("{}")
+  pendingFields Json @default("[]")
+  candidateEventIds Json @default("[]")
+  candidateMatchIds Json @default("[]")
   preview Json?
   previewExpiresAt DateTime? @db.Timestamptz(3)
   checkpointThreadId String @unique @db.Uuid
+  revision Int @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @db.Timestamptz(3)
 

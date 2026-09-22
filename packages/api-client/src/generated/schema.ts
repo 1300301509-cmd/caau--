@@ -2042,13 +2042,21 @@ export interface components {
       eventId?: string;
       matchId?: string;
       message: string;
+      newTask?: boolean;
+      taskId?: string;
     };
     AgentReplyDto: {
       candidates: components['schemas']['AgentCandidateDto'][];
       message: string;
       sessionId: string;
       /** @enum {string} */
-      status: 'NEED_EVENT' | 'NEED_MATCH' | 'PREVIEW' | 'STALE' | 'ERROR';
+      status:
+        | 'NEED_EVENT'
+        | 'NEED_MATCH'
+        | 'NEED_PARAMETERS'
+        | 'PREVIEW'
+        | 'STALE'
+        | 'ERROR';
       task?: components['schemas']['AgentTaskViewDto'] | null;
     };
     AgentSessionInputDto: {
@@ -2063,6 +2071,17 @@ export interface components {
       turns: components['schemas']['AgentTurnViewDto'][];
       updatedAt: string;
     };
+    AgentTaskParametersDto: {
+      sourceMatchId?: string;
+      sourceOrdinal?: number;
+      sourceWeekday?: number;
+      targetDate?: string;
+      targetHour?: number;
+      targetMinute?: number;
+      targetStartAt?: string;
+      targetWeekday?: number;
+      venue?: string;
+    };
     AgentTaskViewDto: {
       baselineRevision?: number | null;
       eventId?: string | null;
@@ -2070,11 +2089,14 @@ export interface components {
       goal: string;
       id: string;
       matchId?: string | null;
+      parameters: components['schemas']['AgentTaskParametersDto'];
+      pendingFields: string[];
       preview?: components['schemas']['ScheduleAdjustmentPreviewDto'] | null;
       /** @enum {string} */
       step:
         | 'LOCATE_EVENT'
         | 'LOCATE_MATCH'
+        | 'WAITING_PARAMETERS'
         | 'PREVIEW_READY'
         | 'STALE'
         | 'FAILED';
