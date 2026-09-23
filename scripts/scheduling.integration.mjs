@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { schedulingBrowserTest } from './scheduling-browser.integration.mjs';
+import { createApiClient } from '../packages/api-client/dist/index.js';
+import { createTaroTransport } from '../packages/api-client/dist/taro.js';
 
 export async function schedulingIntegration(t, context) {
   let { base } = context;
@@ -1160,6 +1162,173 @@ export async function schedulingIntegration(t, context) {
         'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
         [event.id, members.manager],
       );
+    },
+  );
+
+  await t.test(
+    'agent C1: organizer uses the portable miniapp transport on isolated synthetic data',
+    async () => {
+      const appointment = (
+        await sql.query(
+          'SELECT id,"eventId" FROM "EventOrganizerAppointment" WHERE "organizationId"=$1 AND active=true LIMIT 1',
+          [orgA],
+        )
+      ).rows[0];
+      assert.ok(appointment);
+      const eventId = appointment.eventId;
+      const mobile = createApiClient(
+        base,
+        createTaroTransport(async ({ url, method, header, data, timeout }) => {
+          const response = await fetch(url, {
+            method,
+            headers: header,
+            ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+            signal: AbortSignal.timeout(timeout),
+          });
+          return { statusCode: response.status, data: await response.json() };
+        }),
+      );
+      const token = tokens.a;
+      try {
+        const teamIds = [];
+        for (let index = 1; index <= 4; index++) {
+          const team = await call('super', 'POST', 'teams', {
+            id: randomUUID(),
+            organizationId: orgA,
+            eventId,
+            profile: {
+              name: `Miniapp agent synthetic team ${index}`,
+              contactName: 'Synthetic contact',
+              contactPhone: `1380000000${index}`,
+              province: '广东省',
+              city: '广州市',
+              district: '',
+              address: '',
+              shortName: '',
+              clubName: '',
+              introduction: '',
+              notes: '',
+            },
+          });
+          teamIds.push(team.id);
+        }
+        const attached = await mobile.request('listEventTeams', {
+          token,
+          path: { eventId },
+        });
+        const generated = await mobile.request('generateEventSchedule', {
+          token,
+          path: { eventId },
+          body: {
+            commandId: randomUUID(),
+            format: 'ROUND_ROBIN',
+            config: {
+              ...config,
+              teamIds: attached
+                .filter((item) => teamIds.includes(item.teamId))
+                .map((item) => item.id),
+              startDate: '2027-06-05',
+              endDate: '2027-06-06',
+            },
+          },
+        });
+        assert.equal(generated.matches.length, 6);
+        const agent = await mobile.request('createAgentSession', {
+          token,
+          body: { currentEventId: eventId },
+        });
+        const first = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: agent.id },
+          body: { eventId, message: '把周六第二场移到周日' },
+        });
+        assert.equal(first.status, 'NEED_PARAMETERS');
+        const second = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: agent.id },
+          body: { eventId, taskId: first.task.id, message: '上午十点' },
+        });
+        assert.equal(second.status, 'PREVIEW');
+        const third = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: agent.id },
+          body: { eventId, taskId: second.task.id, message: '再晚半小时' },
+        });
+        assert.equal(third.status, 'PREVIEW');
+        const ticket = third.task.confirmation;
+        assert.equal(
+          third.task.preview.after.startAt,
+          '2027-06-06T02:30:00.000Z',
+        );
+        assert.equal(
+          third.task.preview.after.venue,
+          third.task.preview.before.venue,
+        );
+        assert.equal(
+          (
+            await mobile.request('getEventSchedule', {
+              token,
+              path: { eventId },
+            })
+          ).revision,
+          generated.revision,
+        );
+        const body = {
+          eventId,
+          matchId: ticket.matchId,
+          parameterHash: ticket.parameterHash,
+        };
+        const result = await mobile.request('confirmAgentScheduleAdjustment', {
+          token,
+          path: { ticketId: ticket.id },
+          body,
+        });
+        assert.equal(result.status, 'DRAFT');
+        assert.equal(result.revision, generated.revision + 1);
+        const restored = await mobile.request('getAgentSession', {
+          token,
+          path: { sessionId: agent.id },
+        });
+        assert.equal(
+          restored.lastExecution?.result.commandId,
+          result.commandId,
+        );
+        assert.equal(
+          (
+            await mobile.request('confirmAgentScheduleAdjustment', {
+              token,
+              path: { ticketId: ticket.id },
+              body,
+            })
+          ).commandId,
+          result.commandId,
+        );
+        assert.equal(
+          (
+            await mobile.request('getEventSchedule', {
+              token,
+              path: { eventId },
+            })
+          ).revision,
+          result.revision,
+        );
+        await sql.query(
+          'UPDATE "HostingApplicationHandlerGrant" SET active=false WHERE "memberId"=$1',
+          [members.a],
+        );
+        await assert.rejects(
+          mobile.request('getAgentSession', {
+            token,
+            path: { sessionId: agent.id },
+          }),
+          { status: 403 },
+        );
+      } finally {
+        await sql.query(
+          'UPDATE "HostingApplicationHandlerGrant" SET active=true WHERE "memberId"=$1',
+          [members.a],
+        );
+      }
     },
   );
 

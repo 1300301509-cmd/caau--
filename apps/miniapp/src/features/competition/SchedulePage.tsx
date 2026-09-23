@@ -4,6 +4,7 @@ import { useDidShow } from '@tarojs/taro';
 import { client, newKey } from '../materials/session';
 import { Action, Field, Shell, confirm, saved, useCompetition } from './shared';
 import { bj, inWeek, monday, shift, scheduleDay, type S } from './model';
+import { ScheduleAgent } from './ScheduleAgent';
 type Schedule = S['ScheduleViewDto'];
 type Generate = S['GenerateScheduleDto'];
 type Adjust = S['AdjustScheduleMatchDto'];
@@ -240,6 +241,23 @@ export default function SchedulePage() {
       <Text className="competition-note">
         比赛时间均为北京时间；处理全部冲突后可发布赛程。
       </Text>
+      {!generate && !adjust && !frozen && (
+        <ScheduleAgent
+          key={ctx.eventId}
+          eventId={ctx.eventId}
+          schedule={data}
+          denied={ctx.error.includes('当前身份没有此赛事')}
+          onSaved={load}
+          onDenied={() => {
+            setData(undefined);
+            setTeams([]);
+            setGenerate(undefined);
+            setAdjust(undefined);
+            pending.current = undefined;
+            setFrozen(false);
+          }}
+        />
+      )}
       {frozen && (
         <View className="card">
           <Text>请求结果待核对，重试沿用原命令，不重复执行。</Text>

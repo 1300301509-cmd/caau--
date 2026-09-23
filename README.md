@@ -1,6 +1,6 @@
 # CAAU 正式工程
 
-CAAU-049 B1 已实现业务智能体首个只读闭环：Web 赛程页可用自然语言定位场次、处理歧义，并通过现有确定性规则生成不落库的调整预览；会话、任务和 LangGraph checkpoint 可恢复且逐次重新鉴权。当前不保存/发布赛程，真实千问与小程序入口仍待验证。见[业务智能体运行手册](docs/runbooks/agent-platform.md)。
+CAAU-049 C1 已实现业务智能体赛程预览→人工确认→单场 DRAFT 草稿闭环，禁止 Agent 发布；会话、任务、持久回执与 LangGraph checkpoint 可恢复且逐次重新鉴权。隔离真实千问 Web 验收已通过，“我的比赛 → 赛程编排”小程序入口已接入，微信开发者工具和真机仍待单独验收。见[业务智能体运行手册](docs/runbooks/agent-platform.md)和[小程序比赛模块](docs/runbooks/miniapp-competition.md)。
 
 CAAU-058 增加受控测试服务器身份切换：先用正式总部超级管理员登录，再在左下角切换固定测试身份；测试阶段与生产阶段由配置硬隔离，每次签发记录真实操作管理员。CAAU-057 的 `local` 回环模式继续用于本机开发。操作与安全边界见[身份与权限手册](docs/runbooks/authorization.md)。
 

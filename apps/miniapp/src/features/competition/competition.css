@@ -237,6 +237,29 @@
 .competition-mobile .match-schedule-card {
   border-left: 5px solid #195e50;
 }
+.competition-mobile .competition-agent {
+  border: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.competition-agent-receipt,
+.competition-agent-preview {
+  padding: 24px;
+  margin: 20px 0;
+  border-radius: 16px;
+  background: #edf5f1;
+}
+.competition-agent-receipt .subtitle,
+.competition-agent-preview .subtitle {
+  font-size: 28px;
+}
+.competition-agent-receipt .competition-line,
+.competition-agent-preview .competition-line {
+  font-size: 25px;
+}
+.competition-agent-preview {
+  background: #f8faf9;
+  border: 1px solid var(--border);
+}
 .competition-mobile .match-schedule-card .competition-row {
   align-items: center;
 }
