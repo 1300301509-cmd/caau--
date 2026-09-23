@@ -152,7 +152,7 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       timeout: 15000,
     });
     await page.getByRole('button', { name: '确认保存草稿' }).click();
-    await expect(page.getByText(/草稿已保存 · V/)).toBeVisible({
+    await expect(page.getByText(/该命令当时执行 · 草稿 V/)).toBeVisible({
       timeout: 15000,
     });
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
@@ -161,11 +161,146 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       '命令：',
     );
+    const originalReceipt = (
+      await sql.query(
+        'SELECT "commandId", result FROM "AgentCommandReceipt" WHERE "eventId"=$1 ORDER BY "createdAt" DESC LIMIT 1',
+        [eventId],
+      )
+    ).rows[0];
+    const apiOrigin = `http://127.0.0.1:${process.env.CAAU_BROWSER_API_PORT ?? 3000}`;
+    const webToken = await page.evaluate(() =>
+      sessionStorage.getItem('caau.local-test-session'),
+    );
+    const listing = await fetch(`${apiOrigin}/api/v1/agent/sessions`, {
+      headers: { Authorization: `Bearer ${webToken}` },
+    });
+    expect(listing.status).toBe(200);
+    const listed = await listing.json();
+    expect(
+      listed.some(
+        (item) =>
+          item.lastExecution?.result.commandId === originalReceipt.commandId,
+      ),
+    ).toBe(true);
+    await page.reload();
+    await expect(page.locator('.schedule-agent-result-details')).toContainText(
+      originalReceipt.commandId,
+    );
+    await expect(
+      page.locator('.schedule-agent > .ant-alert').last(),
+    ).toContainText(`草稿 V${originalReceipt.result.revision}`);
+    await expect(page.locator('.schedule-agent-result-details')).toContainText(
+      '持久执行回执（恢复）',
+    );
+    await page.evaluate(() =>
+      sessionStorage.removeItem('caau.local-test-session'),
+    );
+    await page.reload();
+    await expect(page.locator('.schedule-agent-result-details')).toContainText(
+      originalReceipt.commandId,
+      { timeout: 15000 },
+    );
     if ((await settings.getAttribute('open')) === null) {
       await settings.locator('> summary').click();
     }
     await generate.click();
     await expect(page.getByText('当前有')).toHaveCount(0);
+    await expect(
+      page.locator('.schedule-agent > .ant-alert').last(),
+    ).toContainText('该命令当时执行');
+    await expect(page.locator('.schedule-agent-result-details')).toContainText(
+      '赛程当前状态',
+    );
+    await page.getByLabel('调整要求').fill('把周二第二场比赛改到周三十点');
+    await page.getByRole('button', { name: '生成调整预览' }).click();
+    await expect(page.locator('.schedule-agent-preview')).toBeVisible();
+    const versionsBeforeLostResponse = (
+      await sql.query(
+        'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+        [eventId],
+      )
+    ).rows[0].n;
+    const browserToken = await page.evaluate(() =>
+      sessionStorage.getItem('caau.local-test-session'),
+    );
+    const sessionsBeforeLoss = await fetch(
+      `${apiOrigin}/api/v1/agent/sessions`,
+      {
+        headers: { Authorization: `Bearer ${browserToken}` },
+      },
+    ).then((response) => response.json());
+    const activeTicket = sessionsBeforeLoss.find(
+      (item) =>
+        item.currentEventId === eventId &&
+        item.task?.confirmation?.state === 'PENDING',
+    )?.task?.confirmation;
+    expect(activeTicket).toBeTruthy();
+    const committed = await fetch(
+      `${apiOrigin}/api/v1/agent/confirmation-tickets/${activeTicket.id}/confirm`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${browserToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventId,
+          matchId: activeTicket.matchId,
+          parameterHash: activeTicket.parameterHash,
+        }),
+      },
+    );
+    expect(committed.status).toBe(200);
+    const committedTicket = await committed.json();
+    await page.route('**/agent/confirmation-tickets/*/confirm', (route) =>
+      route.fulfill({ status: 503, body: '{}' }),
+    ); // The write committed, but the browser only observes a failed response.
+    await page.getByRole('button', { name: '确认保存草稿' }).click();
+    await expect(page.locator('.schedule-agent-result-details')).toContainText(
+      '命令：',
+    );
+    await page.unroute('**/agent/confirmation-tickets/*/confirm');
+    await page.reload();
+    await expect(page.locator('.schedule-agent-result-details')).toContainText(
+      committedTicket.commandId,
+    );
+    await expect(
+      page.locator('.schedule-agent > .ant-alert').last(),
+    ).toContainText(`草稿 V${committedTicket.revision}`);
+    const ticketId = committedTicket.ticketId;
+    const retry = await fetch(
+      `http://127.0.0.1:${process.env.CAAU_BROWSER_API_PORT ?? 3000}/api/v1/agent/confirmation-tickets/${ticketId}/confirm`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${browserToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventId,
+          matchId: committedTicket.matchId,
+          parameterHash: activeTicket.parameterHash,
+        }),
+      },
+    );
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).replayed).toBe(true);
+    expect(
+      (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [eventId],
+        )
+      ).rows[0].n,
+    ).toBe(versionsBeforeLostResponse + 1);
+    expect(
+      (
+        await sql.query(
+          'SELECT count(*)::int n FROM "AgentCommandReceipt" WHERE "ticketId"=$1',
+          [ticketId],
+        )
+      ).rows[0].n,
+    ).toBe(1);
     await page
       .locator('.schedule-week-table .schedule-match-card')
       .first()

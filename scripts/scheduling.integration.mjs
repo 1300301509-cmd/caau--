@@ -871,11 +871,21 @@ export async function schedulingIntegration(t, context) {
         confirmBody(bound),
         409,
       );
-      await call(
+      const cancelled = await call(
         'manager',
         'POST',
         `agent/confirmation-tickets/${boundId}/cancel`,
         {},
+      );
+      assert.deepEqual(cancelled, { id: boundId, state: 'CANCELLED' });
+      assert.deepEqual(
+        await call(
+          'manager',
+          'POST',
+          `agent/confirmation-tickets/${boundId}/cancel`,
+          {},
+        ),
+        cancelled,
       );
       await call(
         'manager',
@@ -896,6 +906,34 @@ export async function schedulingIntegration(t, context) {
         `agent/confirmation-tickets/${revoked.task.confirmation.id}/confirm`,
         confirmBody(revoked),
         403,
+      );
+      for (const ticketId of [revoked.task.confirmation.id, boundId]) {
+        const denial = await call(
+          'manager',
+          'POST',
+          `agent/confirmation-tickets/${ticketId}/cancel`,
+          {},
+          403,
+        );
+        assert.equal(denial.statusCode, 403);
+        const serialized = JSON.stringify(denial);
+        for (const privateValue of [
+          revoked.task.confirmation.eventName,
+          revoked.task.confirmation.parameterSummary.homeLabel,
+          revoked.task.confirmation.parameterSummary.afterVenue,
+          revoked.task.confirmation.parameterHash,
+        ])
+          assert.ok(!serialized.includes(privateValue));
+      }
+      assert.deepEqual(
+        await call(
+          'manager',
+          'POST',
+          `agent/confirmation-tickets/${revoked.task.confirmation.id}/cancel`,
+          {},
+          403,
+        ),
+        { message: 'Access denied', error: 'Forbidden', statusCode: 403 },
       );
       await sql.query(
         'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
@@ -1004,9 +1042,123 @@ export async function schedulingIntegration(t, context) {
       );
       assert.equal(replay.replayed, true);
       assert.equal(replay.revision, saved.revision);
+      const recovered = await call(
+        'manager',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+      );
+      assert.equal(recovered.lastExecution.result.commandId, replay.commandId);
+      assert.equal(recovered.lastExecution.result.revision, saved.revision);
+      assert.ok(recovered.lastExecution.executedAt);
       assert.equal(
         (await call('manager', 'GET', `events/${event.id}/schedule`)).revision,
         saved.revision,
+      );
+      const responseLost = await issue();
+      const sent = await fetch(
+        `${base}/api/v1/agent/confirmation-tickets/${responseLost.task.confirmation.id}/confirm`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${tokens.manager}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(confirmBody(responseLost)),
+        },
+      );
+      assert.equal(sent.status, 200);
+      // Deliberately discard the committed HTTP response, as if the client lost it.
+      await sent.body?.cancel();
+      const restored = await call(
+        'manager',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+      );
+      assert.equal(
+        restored.lastExecution.result.ticketId,
+        responseLost.task.confirmation.id,
+      );
+      assert.equal(restored.lastExecution.result.revision, saved.revision + 1);
+      assert.notEqual(
+        restored.lastExecution.result.commandId,
+        replay.commandId,
+      );
+      const historical = restored.lastExecution.result;
+      const otherAccount = await call(
+        'reviewer',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+        undefined,
+        403,
+      );
+      assert.ok(!JSON.stringify(otherAccount).includes(historical.commandId));
+      const retried = await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${responseLost.task.confirmation.id}/confirm`,
+        confirmBody(responseLost),
+      );
+      assert.equal(retried.replayed, true);
+      assert.equal(retried.commandId, historical.commandId);
+      assert.equal(retried.revision, historical.revision);
+      assert.equal(
+        (await call('manager', 'GET', `events/${event.id}/schedule`)).revision,
+        historical.revision,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        versionsBefore + 2,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentCommandReceipt" WHERE "ticketId"=$1',
+            [responseLost.task.confirmation.id],
+          )
+        ).rows[0].n,
+        1,
+      );
+      await call('manager', 'POST', `events/${event.id}/schedule/generate`, {
+        commandId: randomUUID(),
+        format: 'ROUND_ROBIN',
+        config: weekendConfig,
+      });
+      const currentSchedule = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      assert.ok(currentSchedule.revision > historical.revision);
+      assert.equal(
+        (await call('manager', 'GET', `agent/sessions/${agentSession.id}`))
+          .lastExecution.result.revision,
+        historical.revision,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      const deniedReceipt = await call(
+        'manager',
+        'GET',
+        `agent/sessions/${agentSession.id}`,
+        undefined,
+        403,
+      );
+      assert.ok(!JSON.stringify(deniedReceipt).includes(historical.commandId));
+      assert.ok(
+        !(await call('manager', 'GET', 'agent/sessions')).some(
+          (item) => item.id === agentSession.id,
+        ),
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
       );
     },
   );

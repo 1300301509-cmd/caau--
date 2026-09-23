@@ -20,6 +20,8 @@ C1 在上述真实模型理解与纯预览后增加单场草稿确认。预览�
 
 确认不会再次调用模型，也不接受新时间或场地。服务在 Serializable 事务内重新鉴权并校验票据、执行 scheduling CAS、消费票据并写不可变命令回执。双击、网络重试、API 重启及提交后响应中断都使用原 commandId 和回执返回原 revision/冲突结果；不会重复增加赛程 revision。票据过期、取消、参数/event/match 不匹配或 revision 变化返回 409；撤权、跨账号和跨范围访问返回 403。保存结果始终为 `DRAFT`，发布仍是独立人工操作。
 
+取消及重复取消都检查当前 owner 与赛事读取权限；只返回票据 ID 和 `CANCELLED` 状态，撤权后的 403 不含原赛事、球队或场地摘要。有权会话的 `lastExecution` 返回当前赛事最近一次持久执行回执（执行时间、原 commandId、当时 revision/status/冲突），不依赖浏览器内存或新任务状态。刷新、重新登录或确认响应丢失后，Web 重新读取有权会话并展示该回执；“该命令当时执行”与重新读取的“赛程当前状态”分开显示。当前状态可能已由其他命令推进，不可将历史执行结果视作当前草稿。会话撤权后连回执也不可读取。
+
 ## 三级记忆边界
 
 ### L1 会话记忆（已实现）
@@ -42,11 +44,11 @@ LangGraph checkpoint 只保存结构化流程/资源/版本状态，不保存 Co
 - `POST /api/v1/agent/model-status/test`：仅总部超级管理员显式执行连接测试；
 - `POST /api/v1/agent/sessions`：创建绑定当前用户的会话，可带当前 `eventId`；
 - `GET /api/v1/agent/sessions`：列出当前仍有权恢复的会话；
-- `GET /api/v1/agent/sessions/:sessionId`：恢复并重新校验会话/任务；
+- `GET /api/v1/agent/sessions/:sessionId`：恢复并重新校验会话/任务；返回当前赛事最近一条持久 `lastExecution` 或 null；有权会话列表同样携带该字段；
 - `POST /api/v1/agent/sessions/:sessionId/messages`：提交消息或结构化的 event/match 选择；可带 `taskId` 继续任务，或带 `newTask=true` 显式新建任务，两者不可同时提供；
 - `POST /api/v1/events/:eventId/schedule/preview-adjustment`：纯调整预览，无业务写入；
 - `POST /api/v1/agent/confirmation-tickets/:ticketId/confirm`：回显 ticket 的 eventId、matchId、parameterHash 后确认单场草稿调整；
-- `POST /api/v1/agent/confirmation-tickets/:ticketId/cancel`：取消当前 owner 的待确认票据。
+- `POST /api/v1/agent/confirmation-tickets/:ticketId/cancel`：当前 owner 且赛事仍可读时取消/重复取消；仅返回 `{id,state}`。
 
 前端只通过生成的 `@caau/api-client` 调用这些接口。小程序继续复用同一 API 的方案不变，但本批未增加小程序入口。
 

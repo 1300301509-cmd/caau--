@@ -99,6 +99,17 @@ export class AgentScheduleAdjustmentResultDto {
   @ApiProperty({ type: [ScheduleIssueDto] }) issues!: ScheduleIssueDto[];
 }
 
+export class AgentExecutionReceiptDto {
+  @ApiProperty() executedAt!: string;
+  @ApiProperty({ type: AgentScheduleAdjustmentResultDto })
+  result!: AgentScheduleAdjustmentResultDto;
+}
+
+export class AgentCancelConfirmationDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ enum: ['CANCELLED'] }) state!: 'CANCELLED';
+}
+
 export class AgentTaskViewDto {
   @ApiProperty() id!: string;
   @ApiProperty() goal!: string;
@@ -167,6 +178,8 @@ export class AgentSessionViewDto {
   @ApiProperty({ type: [AgentTurnViewDto] }) turns!: AgentTurnViewDto[];
   @ApiPropertyOptional({ type: AgentTaskViewDto, nullable: true })
   task!: AgentTaskViewDto | null;
+  @ApiPropertyOptional({ type: AgentExecutionReceiptDto, nullable: true })
+  lastExecution!: AgentExecutionReceiptDto | null;
 }
 
 export class AgentReplyDto {

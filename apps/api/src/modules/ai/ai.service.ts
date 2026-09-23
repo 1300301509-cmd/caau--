@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, OnModuleDestroy } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -485,6 +490,10 @@ export class AiService implements OnModuleDestroy {
             updatedAt: new Date(),
           },
         });
+        await tx.agentSession.update({
+          where: { id: ticket.task.sessionId },
+          data: { updatedAt: new Date() },
+        });
         return result;
       },
       { retries: 3, retryUnique: true, timeout: 10_000 },
@@ -503,9 +512,11 @@ export class AiService implements OnModuleDestroy {
           where: { id: ticketId },
         });
         if (!ticket || ticket.ownerId !== actor.id) deny();
+        await scheduleRead(tx, actor, ticket.eventId);
         if (ticket.state === 'EXECUTED')
           throw new ConflictException('Confirmation was already executed');
-        if (ticket.state === 'CANCELLED') return this.ticketView(ticket);
+        if (ticket.state === 'CANCELLED')
+          return { id: ticket.id, state: 'CANCELLED' as const };
         const updated = await tx.agentConfirmationTicket.update({
           where: { id: ticket.id },
           data: { state: 'CANCELLED', consumedAt: new Date() },
@@ -524,7 +535,7 @@ export class AiService implements OnModuleDestroy {
               updatedAt: new Date(),
             },
           });
-        return this.ticketView(updated);
+        return { id: updated.id, state: 'CANCELLED' as const };
       },
       { retries: 3 },
     );
@@ -558,19 +569,19 @@ export class AiService implements OnModuleDestroy {
       {},
       async (tx, actor) => {
         const rows = await tx.agentSession.findMany({
-          where: {
-            ownerId: actor.id,
-            OR: [
-              { currentEventId: null },
-              { currentEvent: scheduleReadScope(actor) },
-            ],
-          },
+          where: { ownerId: actor.id },
           orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
           take: 30,
         });
         const result = [];
-        for (const row of rows)
-          result.push(await this.sessionView(tx, actor, row.id));
+        for (const row of rows) {
+          try {
+            result.push(await this.sessionView(tx, actor, row.id));
+          } catch (error) {
+            if (!(error instanceof ForbiddenException)) throw error;
+            // A revoked session is not resumable; do not disclose its content.
+          }
+        }
         return result;
       },
     );
@@ -638,6 +649,17 @@ export class AiService implements OnModuleDestroy {
         });
       }
     }
+    const receiptEventId = loaded.currentEventId ?? task?.eventId;
+    const receipt = receiptEventId
+      ? await tx.agentCommandReceipt.findFirst({
+          where: {
+            ownerId: actor.id,
+            eventId: receiptEventId,
+            ticket: { task: { sessionId: session.id } },
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        })
+      : null;
     return {
       id: session.id,
       summary: loaded.summary,
@@ -651,6 +673,12 @@ export class AiService implements OnModuleDestroy {
         createdAt: turn.createdAt.toISOString(),
       })),
       task: task ? this.taskView(task) : null,
+      lastExecution: receipt
+        ? {
+            executedAt: receipt.createdAt.toISOString(),
+            result: receipt.result,
+          }
+        : null,
     };
   }
 

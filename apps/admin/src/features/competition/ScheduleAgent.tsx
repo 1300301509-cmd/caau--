@@ -21,8 +21,10 @@ function localTime(value: string) {
 export function ScheduleAgent({
   eventId,
   onDraftSaved,
+  currentSchedule,
 }: {
   eventId: string;
+  currentSchedule?: { revision: number; status: string };
   onDraftSaved?: () => void | Promise<void>;
 }) {
   const auth = useAuth();
@@ -54,9 +56,13 @@ export function ScheduleAgent({
     void client
       .request('listAgentSessions', { token })
       .then(async (sessions) => {
-        const current = sessions.find(
+        const forEvent = sessions.filter(
           (item) => item.currentEventId === eventId,
         );
+        const current =
+          forEvent.find(
+            (item) => item.lastExecution?.result.eventId === eventId,
+          ) ?? forEvent[0];
         return (
           current ??
           client.request('createAgentSession', {
@@ -165,12 +171,12 @@ export function ScheduleAgent({
 
   async function reloadSession() {
     if (!session) return;
-    setSession(
-      await client.request('getAgentSession', {
-        token,
-        path: { sessionId: session.id },
-      }),
-    );
+    const latest = await client.request('getAgentSession', {
+      token,
+      path: { sessionId: session.id },
+    });
+    setSession(latest);
+    return latest;
   }
 
   async function confirmAdjustment() {
@@ -194,12 +200,25 @@ export function ScheduleAgent({
       await reloadSession();
       await onDraftSaved?.();
     } catch (cause) {
+      if (!(cause instanceof ApiError && [403, 409].includes(cause.status))) {
+        try {
+          const latest = await reloadSession();
+          if (latest?.lastExecution?.result.ticketId === confirmation.id) {
+            setResult(latest.lastExecution.result);
+            setReply(undefined);
+            await onDraftSaved?.();
+            return;
+          }
+        } catch {
+          // Keep the original ticket for an explicit retry if recovery is unavailable.
+        }
+      }
       setError(
         cause instanceof ApiError && cause.status === 403
           ? '当前账号没有保存赛程草稿的权限，未执行调整。'
           : cause instanceof ApiError && cause.status === 409
             ? '确认已失效或赛程版本已变化，请重新生成预览。'
-            : '保存草稿未完成；系统不会自动重复修改，请重试确认。',
+            : '保存草稿结果尚未确认，请刷新核对回执或重试原确认。',
       );
     } finally {
       setLoading(false);
@@ -229,6 +248,7 @@ export function ScheduleAgent({
   const task = reply?.task ?? session?.task;
   const preview = task?.preview;
   const confirmation = task?.confirmation;
+  const execution = result ?? session?.lastExecution?.result;
   const canDraftAdjust = auth.identity?.roles.some((role) =>
     ['HEADQUARTERS_SUPER_ADMIN', 'EVENT_MANAGER', 'ORGANIZER'].includes(role),
   );
@@ -313,22 +333,38 @@ export function ScheduleAgent({
           ))}
         </div>
       )}
-      {result && (
+      {execution && execution.eventId === eventId && (
         <Alert
-          type={result.issues.length ? 'warning' : 'success'}
+          type={execution.issues.length ? 'warning' : 'success'}
           showIcon
-          title={`草稿已保存 · V${result.revision}`}
+          title={`该命令当时执行 · 草稿 V${execution.revision}`}
           description={
             <div className="schedule-agent-result-details">
-              <span>状态：{result.status}</span>
-              <span>赛事：{result.eventId}</span>
-              <span>比赛：{result.matchId}</span>
-              <span>命令：{result.commandId}</span>
-              <span>{result.replayed ? '持久回执回放' : '首次执行回执'}</span>
               <span>
-                {result.issues.length
-                  ? `${result.issues.length} 项确定性冲突，发布前需处理`
-                  : '未发现确定性冲突'}
+                执行回执：
+                {session?.lastExecution?.executedAt
+                  ? localTime(session.lastExecution.executedAt)
+                  : '刚刚'}
+              </span>
+              <span>当时状态：{execution.status}</span>
+              <span>赛事：{execution.eventId}</span>
+              <span>比赛：{execution.matchId}</span>
+              <span>命令：{execution.commandId}</span>
+              <span>
+                {result
+                  ? result.replayed
+                    ? '持久回执回放'
+                    : '首次执行回执'
+                  : '持久执行回执（恢复）'}
+              </span>
+              <span>
+                {execution.issues.length
+                  ? `执行时有 ${execution.issues.length} 项确定性冲突`
+                  : '执行时未发现确定性冲突'}
+              </span>
+              <span>
+                赛程当前状态：{currentSchedule?.status ?? '未读取'} · V
+                {currentSchedule?.revision ?? '—'}（以当前赛程为准）
               </span>
             </div>
           }

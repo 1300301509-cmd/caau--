@@ -2097,6 +2097,11 @@ export interface components {
       startAt: string;
       venue: string;
     };
+    AgentCancelConfirmationDto: {
+      id: string;
+      /** @enum {string} */
+      state: 'CANCELLED';
+    };
     AgentCandidateDto: {
       detail?: string;
       id: string;
@@ -2124,6 +2129,10 @@ export interface components {
       /** @enum {string} */
       state: 'PENDING' | 'EXECUTED' | 'CANCELLED';
       toolVersion: string;
+    };
+    AgentExecutionReceiptDto: {
+      executedAt: string;
+      result: components['schemas']['AgentScheduleAdjustmentResultDto'];
     };
     AgentMessageInputDto: {
       eventId?: string;
@@ -2178,6 +2187,7 @@ export interface components {
       currentEventId?: string | null;
       currentMatchId?: string | null;
       id: string;
+      lastExecution?: components['schemas']['AgentExecutionReceiptDto'] | null;
       summary: string;
       task?: components['schemas']['AgentTaskViewDto'] | null;
       turns: components['schemas']['AgentTurnViewDto'][];
@@ -3554,7 +3564,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['AgentConfirmationTicketViewDto'];
+          'application/json': components['schemas']['AgentCancelConfirmationDto'];
         };
       };
     };

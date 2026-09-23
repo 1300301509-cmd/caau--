@@ -249,6 +249,19 @@
         "required": ["commandId", "expectedRevision", "startAt", "venue"],
         "type": "object"
       },
+      "AgentCancelConfirmationDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": ["CANCELLED"],
+            "type": "string"
+          }
+        },
+        "required": ["id", "state"],
+        "type": "object"
+      },
       "AgentCandidateDto": {
         "properties": {
           "detail": {
@@ -349,6 +362,18 @@
           "state",
           "parameterSummary"
         ],
+        "type": "object"
+      },
+      "AgentExecutionReceiptDto": {
+        "properties": {
+          "executedAt": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/AgentScheduleAdjustmentResultDto"
+          }
+        },
+        "required": ["executedAt", "result"],
         "type": "object"
       },
       "AgentMessageInputDto": {
@@ -518,6 +543,15 @@
           },
           "id": {
             "type": "string"
+          },
+          "lastExecution": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentExecutionReceiptDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
           },
           "summary": {
             "type": "string"
@@ -4586,7 +4620,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AgentConfirmationTicketViewDto"
+                  "$ref": "#/components/schemas/AgentCancelConfirmationDto"
                 }
               }
             },

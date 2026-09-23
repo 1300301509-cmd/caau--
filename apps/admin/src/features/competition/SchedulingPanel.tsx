@@ -264,7 +264,11 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
           }
         />
       )}
-      <ScheduleAgent eventId={eventId} onDraftSaved={load} />
+      <ScheduleAgent
+        eventId={eventId}
+        currentSchedule={state.schedule}
+        onDraftSaved={load}
+      />
       <div className="schedule-layout">
         <details className="schedule-settings" open={!schedule?.exists}>
           <summary>编排条件 · 点击展开或收起</summary>

@@ -18,7 +18,7 @@ import type { AuthRequest } from '../authorization/authorization.service.js';
 import { Permission } from '../authorization/authorization.guard.js';
 import { AiService } from './ai.service.js';
 import {
-  AgentConfirmationTicketViewDto,
+  AgentCancelConfirmationDto,
   AgentMessageInputDto,
   AgentModelStatusDto,
   AgentReplyDto,
@@ -73,7 +73,7 @@ export class AiController {
   @HttpCode(200)
   @Permission('agent.schedule.cancel')
   @ApiOperation({ operationId: 'cancelAgentScheduleAdjustment' })
-  @ApiOkResponse({ type: AgentConfirmationTicketViewDto })
+  @ApiOkResponse({ type: AgentCancelConfirmationDto })
   cancelScheduleAdjustment(
     @Req() request: AuthRequest,
     @Param('ticketId') ticketId: string,
