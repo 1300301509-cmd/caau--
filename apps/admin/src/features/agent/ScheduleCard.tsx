@@ -4,6 +4,7 @@ import { ApiError, type components } from '@caau/api-client';
 import { client } from '../materials/client';
 import { useAuth } from '../auth/AuthContext';
 import { CandidateCard } from './CandidateCard';
+import { AgentIcon } from './AgentIcon';
 
 type S = components['schemas'];
 type Session = S['AgentSessionViewDto'];
@@ -647,7 +648,7 @@ export function ScheduleCard({
         {!turns.length && !loading && (
           <div className="agent-welcome">
             <span className="agent-welcome-mark" aria-hidden="true">
-              AI
+              <AgentIcon />
             </span>
             <h4>你好，有什么想聊的？</h4>
             <p>可以直接提问、整理想法，也可以聊聊当前的赛事工作。</p>
@@ -670,7 +671,7 @@ export function ScheduleCard({
             >
               {turn.role === 'ASSISTANT' && (
                 <span className="agent-message-avatar" aria-hidden="true">
-                  AI
+                  <AgentIcon />
                 </span>
               )}
               <div

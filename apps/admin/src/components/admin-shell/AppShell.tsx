@@ -106,16 +106,6 @@ export function AppShell({
                 <span>平台治理与监控</span>
               </a>
             )}
-            {auth.identity?.canManageAccounts && (
-              <a
-                className={`hq-nav-item ${active === 'accounts' ? 'active' : ''}`}
-                href="/accounts"
-                aria-current={active === 'accounts' ? 'page' : undefined}
-              >
-                <NavIcon name="account" />
-                <span>账号与权限</span>
-              </a>
-            )}
           </nav>
           <div className="hq-sidebar-note">
             <strong>每一场热爱，都值得认真对待。</strong>

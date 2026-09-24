@@ -27,6 +27,7 @@ type S = components['schemas'];
 type Row = S['GovernanceRowDto'];
 type Page = S['GovernancePageDto'];
 type Metric = S['GovernanceFieldDto'];
+const isLongMetric = (value: string) => value.length > 72;
 const sections = [
   ['overview', '平台总览'],
   ['accounts', '账号与权限'],
@@ -100,6 +101,7 @@ export function GovernancePage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [detail, setDetail] = useState<Row>();
+  const [metricDetail, setMetricDetail] = useState<Metric>();
   const [account, setAccount] = useState<Metric[]>();
   const [review, setReview] = useState<Page>();
   const [reviewReason, setReviewReason] = useState('');
@@ -624,12 +626,28 @@ export function GovernancePage() {
                     ? /技术|微信|更新/.test(m.label)
                     : true,
             )
-            .map((m) => (
-              <article className="governance-metric" key={m.label}>
-                <span>{m.label}</span>
-                <strong>{m.value}</strong>
-              </article>
-            ))}
+            .map((m) => {
+              const long = isLongMetric(m.value);
+              return (
+                <article
+                  className={`governance-metric${long ? ' governance-metric--dense' : ''}`}
+                  key={m.label}
+                >
+                  <span>{m.label}</span>
+                  <strong>{m.value}</strong>
+                  {long && (
+                    <Button
+                      className="governance-metric-more"
+                      type="link"
+                      onClick={() => setMetricDetail(m)}
+                      aria-label={`查看${m.label}完整内容`}
+                    >
+                      查看完整内容
+                    </Button>
+                  )}
+                </article>
+              );
+            })}
         </section>
       )}
       {tab === 'system' && (
@@ -738,6 +756,17 @@ export function GovernancePage() {
           </footer>
         </section>
       )}
+      <Drawer
+        width="min(520px, 100vw)"
+        title={metricDetail?.label ?? '指标详情'}
+        open={!!metricDetail}
+        onClose={() => setMetricDetail(undefined)}
+        destroyOnHidden
+      >
+        {metricDetail && (
+          <p className="governance-metric-detail">{metricDetail.value}</p>
+        )}
+      </Drawer>
       <Drawer
         width={680}
         title={detail?.title ?? '详情'}

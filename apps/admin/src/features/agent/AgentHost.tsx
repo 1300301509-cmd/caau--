@@ -9,6 +9,7 @@ import {
 import { Button, Drawer } from 'antd';
 import { useAuth } from '../auth/AuthContext';
 import { ScheduleCard } from './ScheduleCard';
+import { AgentIcon } from './AgentIcon';
 import './agent.css';
 
 type AgentWindow = { open: (eventId?: string) => void };
@@ -57,20 +58,24 @@ export function AgentHost({ children }: { children: ReactNode }) {
   return (
     <AgentWindowContext.Provider value={{ open }}>
       {children}
-      <Button
+      <button
         ref={trigger}
         className="agent-float"
-        type="primary"
+        type="button"
         aria-label="打开 CAAU 智能助手"
+        aria-expanded={shown}
+        aria-haspopup="dialog"
         onClick={() => open()}
       >
-        <span aria-hidden="true" className="agent-float-mark">
-          ◈
-        </span>
-        <span className="agent-float-label">智能助手</span>
-      </Button>
+        <AgentIcon />
+      </button>
       <Drawer
-        title="CAAU 智能助手"
+        title={
+          <span className="agent-title">
+            <AgentIcon />
+            CAAU 智能助手
+          </span>
+        }
         open={shown}
         onClose={close}
         width={620}

@@ -664,8 +664,30 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       path: '.local/evidence/governance/audit-desktop.png',
       fullPage: true,
     });
-    await page.getByRole('tab', { name: '平台总览', exact: true }).click();
+    await page
+      .getByRole('tab', { name: '平台总览', exact: true })
+      .evaluate((tab) => tab.click());
     await page.setViewportSize({ width: 390, height: 844 });
+    const overviewCardHeights = await page
+      .locator('.governance-metric')
+      .evaluateAll((cards) =>
+        cards.map((card) => card.getBoundingClientRect().height),
+      );
+    expect(overviewCardHeights.length).toBeGreaterThan(0);
+    expect(Math.max(...overviewCardHeights)).toBeLessThanOrEqual(176);
+    expect(Math.min(...overviewCardHeights)).toBeGreaterThanOrEqual(176);
+    const operationCard = page
+      .locator('.governance-metric')
+      .filter({ hasText: '操作分布' });
+    await operationCard
+      .getByRole('button', { name: '查看操作分布完整内容' })
+      .click();
+    const metricDialog = page.getByRole('dialog');
+    await expect(metricDialog).toContainText('操作分布');
+    await expect(
+      metricDialog.locator('.governance-metric-detail'),
+    ).not.toBeEmpty();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     await expect
       .poll(() =>
         page.evaluate(
