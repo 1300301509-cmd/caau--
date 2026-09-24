@@ -23,3 +23,13 @@ ignoredBuiltDependencies:
   - core-js-pure
 # Frontend frameworks must resolve peers in their own application, not the root.
 resolvePeersFromWorkspaceRoot: false
+
+# Keep checkpoint and database pools on the project's pinned pg type contract.
+overrides:
+  '@types/pg': 8.23.1
+
+# LangGraph API 1.5.0 requires node-server 2; node-ws retains a v1 peer range.
+# Limit the exception to this existing Studio dependency, not application peers.
+peerDependencyRules:
+  allowedVersions:
+    '@hono/node-ws>@hono/node-server': 2.1.1

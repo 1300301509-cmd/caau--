@@ -1,0 +1,6 @@
+{
+  "node_version": "24",
+  "graphs": {
+    "caau_agent": "./dist/studio/graph.js:graph"
+  }
+}

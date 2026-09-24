@@ -1,3 +1,4 @@
+import { GovernanceModule } from './modules/governance/governance.module.js';
 import { Module, type DynamicModule } from '@nestjs/common';
 import type { DatabaseProbe } from '@caau/database';
 import { ReadinessModule } from './modules/readiness/readiness.module.js';
@@ -41,6 +42,7 @@ export class AppModule {
       module: AppModule,
       imports: [
         ReadinessModule.register(probe),
+        GovernanceModule.register(config.databaseUrl),
         AuthorizationModule.register(config),
         WorkflowModule.register(config.privateFileRoot),
         AiModule.register(config.databaseUrl, config.agentModel),

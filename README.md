@@ -1,6 +1,12 @@
 # CAAU 正式工程
 
-CAAU-049 C1 已实现业务智能体赛程预览→人工确认→单场 DRAFT 草稿闭环，禁止 Agent 发布；会话、任务、持久回执与 LangGraph checkpoint 可恢复且逐次重新鉴权。隔离真实千问 Web 验收已通过，“我的比赛 → 赛程编排”小程序入口已接入，微信开发者工具和真机仍待单独验收。见[业务智能体运行手册](docs/runbooks/agent-platform.md)和[小程序比赛模块](docs/runbooks/miniapp-competition.md)。
+CAAU-064 在已确认的排程需求基础上提供独立、可恢复的**整套候选赛程预览**：目前仅显式配置的单循环；程序分配并独立校验硬条件、逐条报告偏好，区分合规/确定冲突/搜索未找到。候选不覆盖正式赛程，不增正式版本或执行票据，也不提供保存/发布入口。见[候选边界](docs/product/agent-schedule-candidates.md)及[运行手册](docs/runbooks/agent-platform.md)。
+
+CAAU-063 在统一助手中独立收集排程需求（赛事日期、参赛球队时段、对阵偏好），可逐轮修订、查看来源/冲突并由本人确认**需求版本**；不生成或保存赛程，单场改期仍另走原预览/确认链路。见[需求边界](docs/product/agent-schedule-planning.md)与[运行手册](docs/runbooks/agent-platform.md)。
+
+独立智能体可视化调试：`corepack pnpm agent:studio` 启动官方 LangSmith Studio 的本地服务，使用隔离合成赛事，操作见 [工作台手册](docs/runbooks/agent-studio.md)。
+
+CAAU-060 在原全局助手上新增无赛事自由对话，并由服务端把普通讨论与明确单场改期任务分流：聊天不创建业务任务/票据，确认仍只由人工按钮触发。CAAU-049 C1 已实现业务智能体赛程预览→人工确认→单场 DRAFT 草稿闭环，禁止 Agent 发布；会话、任务、持久回执与 LangGraph checkpoint 可恢复且逐次重新鉴权。隔离真实千问 Web 验收已通过，CAAU-059 已将 Web 已登录业务页和小程序多个业务页接入固定悬浮“CAAU 智能助手”统一对话：页面赛事只作提示，任务、预览与确认仍由原后端逐次鉴权。原小程序赛程页内嵌入口已合并；微信开发者工具对新页面、真机及小程序真实千问仍待单独验收。见[业务智能体运行手册](docs/runbooks/agent-platform.md)和[小程序比赛模块](docs/runbooks/miniapp-competition.md)。
 
 CAAU-058 增加受控测试服务器身份切换：先用正式总部超级管理员登录，再在左下角切换固定测试身份；测试阶段与生产阶段由配置硬隔离，每次签发记录真实操作管理员。CAAU-057 的 `local` 回环模式继续用于本机开发。操作与安全边界见[身份与权限手册](docs/runbooks/authorization.md)。
 
@@ -99,3 +105,7 @@ corepack pnpm test:e2e
 ## 本地 Git
 
 默认集成分支为 `main`，开发使用短期 `codex/<任务号>-<简述>` 分支。远程仓库尚未配置；组织、可见性与访问权限确定后再接入。具体操作见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 平台治理与监控中心
+
+总部超级管理员从 Web `/governance` 查看账号、会话、审计、AI用量与额度、对话审查和运行状态。新增监控栈与业务数据库独立；启动、配置、备份恢复及待环境验收见 [运行手册](docs/runbooks/platform-governance.md)，逐阶段状态见 [计划](docs/planning/caau-governance.md)。

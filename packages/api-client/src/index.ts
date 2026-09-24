@@ -129,9 +129,11 @@ export function createApiClient(baseUrl: string, transport: Transport) {
       url: baseUrl.replace(/\/$/, '') + path + (query ? `?${query}` : ''),
       method: operation.method,
       timeout:
-        operation.requestMediaType === 'application/octet-stream'
-          ? 15000
-          : 5000,
+        name === 'sendAgentMessage'
+          ? 75000 // 18s route + up to 45s chat (or 18s intent), plus API/database overhead.
+          : operation.requestMediaType === 'application/octet-stream'
+            ? 15000
+            : 5000,
       ...(operation.responseMediaType === 'application/octet-stream'
         ? { responseType: 'arraybuffer' as const }
         : {}),

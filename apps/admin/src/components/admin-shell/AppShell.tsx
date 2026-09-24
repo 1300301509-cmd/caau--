@@ -10,7 +10,13 @@ export function AppShell({
   active = 'materials',
 }: {
   children: ReactNode;
-  active?: 'materials' | 'events' | 'hosting' | 'accounts' | 'competition';
+  active?:
+    | 'materials'
+    | 'events'
+    | 'hosting'
+    | 'accounts'
+    | 'competition'
+    | 'governance';
 }) {
   const auth = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -90,6 +96,16 @@ export function AppShell({
               <NavIcon name="calendar" />
               <span>比赛管理中心</span>
             </a>
+            {auth.identity?.roles.includes('HEADQUARTERS_SUPER_ADMIN') && (
+              <a
+                className={`hq-nav-item ${active === 'governance' ? 'active' : ''}`}
+                href="/governance"
+                aria-current={active === 'governance' ? 'page' : undefined}
+              >
+                <NavIcon name="account" />
+                <span>平台治理与监控</span>
+              </a>
+            )}
             {auth.identity?.canManageAccounts && (
               <a
                 className={`hq-nav-item ${active === 'accounts' ? 'active' : ''}`}
@@ -178,13 +194,15 @@ export function AppShell({
           <div className="hq-breadcrumb">
             总部工作台 <span>/</span>{' '}
             <strong>
-              {competition
-                ? '比赛管理中心'
-                : events
-                  ? '赛事详情'
-                  : active === 'accounts'
-                    ? '账号与权限'
-                    : '赛事审核中心'}
+              {active === 'governance'
+                ? '平台治理与监控'
+                : competition
+                  ? '比赛管理中心'
+                  : events
+                    ? '赛事详情'
+                    : active === 'accounts'
+                      ? '账号与权限'
+                      : '赛事审核中心'}
             </strong>
           </div>
         </header>
@@ -193,7 +211,10 @@ export function AppShell({
           className="review-content hq-content"
           tabIndex={-1}
         >
-          <header className="hq-page-heading">
+          <header
+            className="hq-page-heading"
+            style={active === 'governance' ? { display: 'none' } : undefined}
+          >
             <div>
               <p className="hq-eyebrow">
                 {competition ? 'COMPETITION MANAGEMENT' : 'EVENT REVIEW CENTER'}

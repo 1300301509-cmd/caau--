@@ -1,3 +1,4 @@
+import './telemetry.js';
 import { createApplication } from './application.js';
 import { readConfig } from './config.js';
 

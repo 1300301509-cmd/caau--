@@ -16,7 +16,7 @@ import { ApiError, type components } from '@caau/api-client';
 import { client } from '../materials/client';
 import { useAuth } from '../auth/AuthContext';
 import { ScheduleWeek } from './ScheduleWeek';
-import { ScheduleAgent } from './ScheduleAgent';
+import { useAgentWindow } from '../agent/AgentHost';
 
 type Schedule = components['schemas']['ScheduleViewDto'];
 type EventTeam = components['schemas']['TeamViewDto'];
@@ -91,6 +91,7 @@ function defaultDate() {
 
 export function SchedulingPanel({ eventId }: { eventId: string }) {
   const auth = useAuth();
+  const assistant = useAgentWindow();
   const token =
     auth.mode === 'local'
       ? (sessionStorage.getItem('caau.local-test-session') ?? '')
@@ -150,6 +151,14 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
   }
   useEffect(() => {
     void load();
+    const refresh = (event: Event) => {
+      if (
+        (event as CustomEvent<{ eventId: string }>).detail.eventId === eventId
+      )
+        void load();
+    };
+    window.addEventListener('caau:schedule-changed', refresh);
+    return () => window.removeEventListener('caau:schedule-changed', refresh);
   }, [eventId, token]);
 
   async function generate() {
@@ -264,11 +273,9 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
           }
         />
       )}
-      <ScheduleAgent
-        eventId={eventId}
-        currentSchedule={state.schedule}
-        onDraftSaved={load}
-      />
+      <Button disabled={!eventId} onClick={() => assistant.open(eventId)}>
+        在 CAAU 智能助手中调整单场赛程
+      </Button>
       <div className="schedule-layout">
         <details className="schedule-settings" open={!schedule?.exists}>
           <summary>编排条件 · 点击展开或收起</summary>

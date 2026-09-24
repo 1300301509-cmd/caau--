@@ -1,4 +1,6 @@
 import { HostingApplicationPage } from '../../features/hosting/HostingApplicationPage';
-export default function EventMaterials() {
+import { withAgentEntry } from '../../features/agent/AgentEntry';
+function EventMaterials() {
   return <HostingApplicationPage materials />;
 }
+export default withAgentEntry(EventMaterials);

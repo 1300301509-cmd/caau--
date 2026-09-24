@@ -69,6 +69,8 @@ model InternalUser {
   teamMemberships TeamMembership[]
   agentSessions AgentSession[]
   agentTasks AgentTask[]
+  agentPlanningRequests AgentPlanningRequest[]
+  agentScheduleCandidates AgentScheduleCandidate[]
   agentConfirmationTickets AgentConfirmationTicket[]
   agentCommandReceipts AgentCommandReceipt[]
 
@@ -207,13 +209,130 @@ model AuditRecord {
   outcome    String   @db.VarChar(16)
   requestId  String   @db.Uuid
   context    Json     @default("{}")
+  result     String?  @db.VarChar(24)
+  traceId    String?  @db.VarChar(32)
+  eventId    String?  @db.Uuid
+  commandId  String?  @db.Uuid
 
   @@index([occurredAt])
+  @@index([occurredAt, id])
+  @@index([actorId, occurredAt, id])
+  @@index([action, occurredAt, id])
+  @@index([eventId, occurredAt, id])
+  @@index([requestId])
+}
+
+model AiCostAssignment {
+  userId String @id @db.Uuid
+  organizationId String? @db.Uuid
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model AiUsageCall {
+  id String @id @db.Uuid
+  actorId String? @db.Uuid
+  organizationId String? @db.Uuid
+  requestId String @db.Uuid
+  traceId String? @db.VarChar(32)
+  sessionId String? @db.Uuid
+  taskId String? @db.Uuid
+  mode String @db.VarChar(16)
+  provider String @db.VarChar(160)
+  model String @db.VarChar(120)
+  phase String @db.VarChar(32)
+  status String @default("RESERVED") @db.VarChar(24)
+  usageStatus String @default("PENDING") @db.VarChar(24)
+  reservedTokens Int
+  inputTokens Int?
+  outputTokens Int?
+  cachedTokens Int?
+  elapsedMs Int?
+  errorCategory String? @db.VarChar(32)
+  providerRequestId String? @db.VarChar(200)
+  priceId String? @db.Uuid
+  estimatedMicros BigInt?
+  currency String? @db.VarChar(8)
+  resolvedReason String? @db.VarChar(300)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  completedAt DateTime? @db.Timestamptz(3)
+  @@index([actorId, createdAt, id])
+  @@index([organizationId, createdAt, id])
+  @@index([createdAt, id])
+  @@index([requestId])
+}
+
+model AiQuotaPolicy {
+  id String @id @db.Uuid
+  scope String @db.VarChar(16)
+  subjectId String @db.Uuid
+  enabled Boolean @default(false)
+  paused Boolean @default(false)
+  dailyTokens Int?
+  monthlyTokens Int?
+  revision Int @default(1)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([scope, subjectId])
+}
+
+model AiQuotaBucket {
+  id String @id @db.VarChar(100)
+  scope String @db.VarChar(16)
+  subjectId String @db.Uuid
+  period String @db.VarChar(16)
+  used BigInt @default(0)
+  reserved BigInt @default(0)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model AiModelPrice {
+  id String @id @db.Uuid
+  provider String @db.VarChar(160)
+  model String @db.VarChar(120)
+  currency String @db.VarChar(8)
+  inputMicrosPerMillion BigInt
+  outputMicrosPerMillion BigInt
+  cachedMicrosPerMillion BigInt?
+  effectiveAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([provider, model, effectiveAt])
+}
+
+model AiSupplierBill {
+  id String @id @db.Uuid
+  provider String @db.VarChar(160)
+  currency String @db.VarChar(8)
+  from DateTime @db.Timestamptz(3)
+  to DateTime @db.Timestamptz(3)
+  amountMicros BigInt
+  note String @db.VarChar(300)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model GovernanceAlert {
+  id String @id @db.Uuid
+  fingerprint String @db.VarChar(200)
+  source String @db.VarChar(40)
+  severity String @db.VarChar(16)
+  title String @db.VarChar(200)
+  state String @db.VarChar(16)
+  acknowledgedBy String? @db.Uuid
+  acknowledgedAt DateTime? @db.Timestamptz(3)
+  ownerId String? @db.Uuid
+  note String? @db.VarChar(300)
+  firstSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  recoveredAt DateTime? @db.Timestamptz(3)
+  deliveryState String @default("PENDING") @db.VarChar(24)
+  notifiedAt DateTime? @db.Timestamptz(3)
+  deliveryAttempts Int @default(0)
+  @@index([state, lastSeenAt, id])
 }
 
 model Event {
   agentSessions AgentSession[]
   agentTasks AgentTask[]
+  agentPlanningRequests AgentPlanningRequest[]
+  agentScheduleCandidates AgentScheduleCandidate[]
   staff EventStaff[]
   teams EventTeam[]
   schedule EventSchedule?
@@ -263,6 +382,7 @@ model AgentSession {
   ownerId String @db.Uuid
   owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   summary String @default("") @db.VarChar(2000)
+  nextTurnSequence Int @default(1)
   currentEventId String? @db.Uuid
   currentEvent Event? @relation(fields: [currentEventId], references: [id], onDelete: Restrict)
   currentMatchId String? @db.Uuid
@@ -270,6 +390,8 @@ model AgentSession {
   updatedAt DateTime @default(now()) @db.Timestamptz(3)
   turns AgentTurn[]
   tasks AgentTask[]
+  planningRequests AgentPlanningRequest[]
+  scheduleCandidates AgentScheduleCandidate[]
 
   @@index([ownerId, updatedAt])
 }
@@ -279,11 +401,12 @@ model AgentTurn {
   sessionId String @db.Uuid
   session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   role String @db.VarChar(16)
-  content String @db.VarChar(2000)
+  content String @db.VarChar(4000)
+  sequence Int
   structured Json @default("{}")
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
-  @@index([sessionId, createdAt])
+  @@unique([sessionId, sequence])
 }
 
 model AgentTask {
@@ -312,6 +435,61 @@ model AgentTask {
 
   @@index([ownerId, updatedAt])
   @@index([sessionId, updatedAt])
+}
+
+// Deliberately distinct from AgentTask: requirements are not executable
+// schedule commands and cannot create confirmation tickets or schedule drafts.
+model AgentPlanningRequest {
+  id String @id @db.Uuid
+  sessionId String @db.Uuid
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  type String @default("SCHEDULE_PLANNING") @db.VarChar(32)
+  status String @default("COLLECTING") @db.VarChar(16)
+  revision Int @default(1)
+  confirmedRevision Int?
+  conditions Json @default("[]")
+  pending Json @default("[]")
+  unresolved Json @default("[]")
+  candidates AgentScheduleCandidate[]
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([sessionId, eventId])
+  @@index([ownerId, updatedAt])
+}
+
+// Immutable, non-executable preview. Never linked to schedule commands/versions.
+model AgentScheduleCandidate {
+  id String @id @db.Uuid
+  planningId String @db.Uuid
+  planning AgentPlanningRequest @relation(fields: [planningId], references: [id], onDelete: Restrict)
+  sessionId String @db.Uuid
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  planningRevision Int
+  baselineRevision Int
+  format ScheduleFormat
+  config Json
+  configSource String @db.VarChar(32)
+  teamSnapshot Json
+  baselineSnapshot Json
+  fixedMatchIds Json
+  matches Json
+  issues Json
+  preferences Json
+  outcome String @db.VarChar(24)
+  explored Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([planningId, createdAt])
+  @@index([ownerId, createdAt])
 }
 
 model AgentConfirmationTicket {

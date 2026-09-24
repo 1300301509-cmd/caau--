@@ -129,6 +129,72 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/agent/planning-requests/{planningId}/candidates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Calculate and persist a non-executable whole-schedule candidate only; never saves a formal schedule. */
+    post: operations['previewAgentScheduleCandidate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/planning-requests/{planningId}/candidates/latest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getLatestAgentScheduleCandidate'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/planning-requests/{planningId}/candidates/{candidateId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getAgentScheduleCandidate'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/planning-requests/{planningId}/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Confirm a requirements revision only; does not generate schedules or issue execution tickets. */
+    post: operations['confirmAgentPlanningRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/agent/sessions': {
     parameters: {
       query?: never;
@@ -170,7 +236,88 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** @description Route authorized chat, read-only queries, requirement collection and single-match scheduling; requirement confirmation cannot write a schedule. */
     post: operations['sendAgentMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/ai-usage/accounts/{id}/assignment': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['setAiCostAssignment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/ai-usage/bills': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['createAiSupplierBill'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/ai-usage/calls/{id}/resolve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['resolveAiUsage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/ai-usage/prices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['createAiModelPrice'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/ai-usage/quotas': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['setAiUsageQuota'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1745,6 +1892,134 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/observability/accounts/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getGovernanceAccount'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/accounts/{id}/permission': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['explainGovernancePermission'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/accounts/{id}/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['revokeGovernanceSessions'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/alerts/{id}/acknowledge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['acknowledgeGovernanceAlert'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/audit/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['exportGovernanceAudit'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/dialogues/{id}/review': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['reviewGovernanceDialogue'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/overview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getGovernanceOverview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/{kind}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listGovernanceRecords'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/ready': {
     parameters: {
       query?: never;
@@ -2102,10 +2377,25 @@ export interface components {
       /** @enum {string} */
       state: 'CANCELLED';
     };
+    AgentCandidateChangeDto: {
+      afterStartAt: string;
+      afterVenue: string;
+      awayLabel: string;
+      beforeStartAt: string;
+      beforeVenue: string;
+      homeLabel: string;
+      matchId: string;
+    };
     AgentCandidateDto: {
       detail?: string;
       id: string;
       label: string;
+    };
+    AgentCandidatePreferenceDto: {
+      conditionId: string;
+      reason: string;
+      /** @enum {string} */
+      status: 'SATISFIED' | 'UNMET' | 'NOT_APPLICABLE';
     };
     AgentConfirmationSummaryDto: {
       afterStartAt: string;
@@ -2139,7 +2429,10 @@ export interface components {
       matchId?: string;
       message: string;
       newTask?: boolean;
+      planningId?: string;
+      planningRevision?: number;
       taskId?: string;
+      teamId?: string;
     };
     AgentModelConnectionResultDto: {
       message: string;
@@ -2155,9 +2448,58 @@ export interface components {
       mode: 'SIMULATED' | 'QWEN';
       modelName: string;
     };
+    AgentPlanningConditionDto: {
+      /** @enum {string} */
+      availability?: 'AVAILABLE' | 'ONLY' | 'BLOCK';
+      /** @enum {string} */
+      confirmation: 'PENDING' | 'CONFIRMED';
+      dates?: string[];
+      endTime?: string;
+      eventId: string;
+      from?: string;
+      id: string;
+      /** @enum {string} */
+      kind: 'DATE_RANGE' | 'TEAM_WINDOW' | 'MATCHUP';
+      /** @enum {string} */
+      matchup?: 'PREFER' | 'AVOID';
+      opponentId?: string;
+      opponentLabel?: string;
+      /** @enum {string} */
+      priority: 'MUST' | 'PREFER';
+      sourceTurnIds: string[];
+      startTime?: string;
+      teamId?: string;
+      teamLabel?: string;
+      to?: string;
+      weekdays?: number[];
+    };
+    AgentPlanningRequestViewDto: {
+      conditions: components['schemas']['AgentPlanningConditionDto'][];
+      confirmedRevision?: number | null;
+      eventId: string;
+      eventName: string;
+      id: string;
+      issues: string[];
+      pending: string[];
+      revision: number;
+      sourceTurns: components['schemas']['AgentPlanningSourceTurnDto'][];
+      /** @enum {string} */
+      status: 'COLLECTING' | 'CONFIRMED' | 'STALE';
+      summary: string;
+      /** @enum {string} */
+      type: 'SCHEDULE_PLANNING';
+      updatedAt: string;
+    };
+    AgentPlanningSourceTurnDto: {
+      content: string;
+      id: string;
+    };
     AgentReplyDto: {
       candidates: components['schemas']['AgentCandidateDto'][];
       message: string;
+      planningRequest?:
+        | components['schemas']['AgentPlanningRequestViewDto']
+        | null;
       sessionId: string;
       /** @enum {string} */
       status:
@@ -2166,7 +2508,13 @@ export interface components {
         | 'NEED_PARAMETERS'
         | 'PREVIEW'
         | 'STALE'
-        | 'ERROR';
+        | 'ERROR'
+        | 'CHAT'
+        | 'CLARIFY'
+        | 'UNSUPPORTED'
+        | 'QUERY'
+        | 'PLAN'
+        | 'NEED_TEAM';
       task?: components['schemas']['AgentTaskViewDto'] | null;
     };
     AgentScheduleAdjustmentResultDto: {
@@ -2180,6 +2528,27 @@ export interface components {
       status: 'DRAFT';
       ticketId: string;
     };
+    AgentScheduleCandidateViewDto: {
+      baselineRevision: number;
+      changes: components['schemas']['AgentCandidateChangeDto'][];
+      config: components['schemas']['ScheduleConfigDto'];
+      configSource: string;
+      createdAt: string;
+      eventId: string;
+      explored: number;
+      fixedMatchIds: string[];
+      /** @enum {string} */
+      format: 'ROUND_ROBIN';
+      id: string;
+      issues: components['schemas']['ScheduleIssueDto'][];
+      matches: components['schemas']['ScheduleMatchDto'][];
+      planningId: string;
+      planningRevision: number;
+      preferences: components['schemas']['AgentCandidatePreferenceDto'][];
+      /** @enum {string} */
+      status: 'FOUND' | 'PROVEN_CONFLICT' | 'SEARCH_LIMIT' | 'STALE';
+      warning: string;
+    };
     AgentSessionInputDto: {
       currentEventId?: string;
     };
@@ -2188,6 +2557,9 @@ export interface components {
       currentMatchId?: string | null;
       id: string;
       lastExecution?: components['schemas']['AgentExecutionReceiptDto'] | null;
+      planningRequest?:
+        | components['schemas']['AgentPlanningRequestViewDto']
+        | null;
       summary: string;
       task?: components['schemas']['AgentTaskViewDto'] | null;
       turns: components['schemas']['AgentTurnViewDto'][];
@@ -2234,6 +2606,44 @@ export interface components {
       id: string;
       /** @enum {string} */
       role: 'USER' | 'ASSISTANT';
+    };
+    AiAssignmentDto: {
+      organizationId: string | null;
+      reason: string;
+    };
+    AiBillInputDto: {
+      amountMicros: string;
+      currency: string;
+      from: string;
+      note: string;
+      provider: string;
+      to: string;
+    };
+    AiPriceInputDto: {
+      cachedMicrosPerMillion: string | null;
+      currency: string;
+      effectiveAt: string;
+      inputMicrosPerMillion: string;
+      model: string;
+      outputMicrosPerMillion: string;
+      provider: string;
+      reason: string;
+    };
+    AiQuotaInputDto: {
+      dailyTokens: number | null;
+      enabled: boolean;
+      expectedRevision: number;
+      monthlyTokens: number | null;
+      paused: boolean;
+      reason: string;
+      /** @enum {string} */
+      scope: 'ACCOUNT' | 'ORGANIZATION';
+      subjectId: string;
+    };
+    AiResolveUsageDto: {
+      inputTokens: number;
+      outputTokens: number;
+      reason: string;
     };
     AuditDto: {
       action: string;
@@ -2287,6 +2697,9 @@ export interface components {
     ConfigureTaskDto: {
       expectedRevision: number;
       requirements: components['schemas']['RequirementsDto'];
+    };
+    ConfirmAgentPlanningRequestDto: {
+      expectedRevision: number;
     };
     ConfirmAgentScheduleAdjustmentDto: {
       eventId: string;
@@ -2575,11 +2988,80 @@ export interface components {
       name: string;
       originalNameKnown: boolean;
     };
+    GenerateAgentScheduleCandidateDto: {
+      baselineRevision: number;
+      config: components['schemas']['ScheduleConfigDto'];
+      /** @enum {string} */
+      configSource: 'EVENT_SCHEDULE' | 'EXPLICIT';
+      expectedRevision: number;
+      fixedMatchIds: string[];
+      /** @enum {string} */
+      format: 'ROUND_ROBIN';
+    };
     GenerateScheduleDto: {
       commandId: string;
       config: components['schemas']['ScheduleConfigDto'];
       /** @enum {string} */
       format: 'ROUND_ROBIN' | 'SINGLE_ELIMINATION';
+    };
+    GovernanceAlertUpdateDto: {
+      note: string;
+      ownerId: string | null;
+    };
+    GovernanceExportDto: {
+      count: number;
+      csv: string;
+    };
+    GovernanceFieldDto: {
+      label: string;
+      value: string;
+    };
+    GovernanceOverviewDto: {
+      asOf: string;
+      metrics: components['schemas']['GovernanceFieldDto'][];
+    };
+    GovernancePageDto: {
+      asOf: string;
+      items: components['schemas']['GovernanceRowDto'][];
+      nextCursor: string | null;
+    };
+    GovernanceQueryDto: {
+      action?: string;
+      actorId?: string;
+      cursor?: string;
+      eventId?: string;
+      from?: string;
+      limit?: string;
+      mode?: string;
+      model?: string;
+      organizationId?: string;
+      outcome?: string;
+      phase?: string;
+      requestId?: string;
+      resourceId?: string;
+      to?: string;
+    };
+    GovernanceReasonDto: {
+      cursor?: string;
+      reason: string;
+    };
+    GovernanceResultDto: {
+      id: string;
+      message: string;
+    };
+    GovernanceRevokeDto: {
+      reason: string;
+      sessionId?: string;
+    };
+    GovernanceRowDto: {
+      actorId: string | null;
+      at: string;
+      fields: components['schemas']['GovernanceFieldDto'][];
+      id: string;
+      requestId: string | null;
+      resourceId: string | null;
+      status: string;
+      title: string;
     };
     GrantDto: {
       /** Format: uuid */
@@ -3632,6 +4114,100 @@ export interface operations {
       };
     };
   };
+  previewAgentScheduleCandidate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        planningId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GenerateAgentScheduleCandidateDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentScheduleCandidateViewDto'];
+        };
+      };
+    };
+  };
+  getLatestAgentScheduleCandidate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        planningId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Most recent candidate; 404 when absent. Re-authorized and freshness-checked. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentScheduleCandidateViewDto'];
+        };
+      };
+    };
+  };
+  getAgentScheduleCandidate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        planningId: string;
+        candidateId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentScheduleCandidateViewDto'];
+        };
+      };
+    };
+  };
+  confirmAgentPlanningRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        planningId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConfirmAgentPlanningRequestDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentPlanningRequestViewDto'];
+        };
+      };
+    };
+  };
   listAgentSessions: {
     parameters: {
       query?: never;
@@ -3716,6 +4292,125 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['AgentReplyDto'];
+        };
+      };
+    };
+  };
+  setAiCostAssignment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiAssignmentDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceResultDto'];
+        };
+      };
+    };
+  };
+  createAiSupplierBill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiBillInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceResultDto'];
+        };
+      };
+    };
+  };
+  resolveAiUsage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiResolveUsageDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceResultDto'];
+        };
+      };
+    };
+  };
+  createAiModelPrice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiPriceInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceResultDto'];
+        };
+      };
+    };
+  };
+  setAiUsageQuota: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiQuotaInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceResultDto'];
         };
       };
     };
@@ -8931,6 +9626,231 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  getGovernanceAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceOverviewDto'];
+        };
+      };
+    };
+  };
+  explainGovernancePermission: {
+    parameters: {
+      query?: {
+        actorId?: string;
+        eventId?: string;
+        requestId?: string;
+        resourceId?: string;
+        phase?: string;
+        mode?: string;
+        action?: string;
+        outcome?: string;
+        organizationId?: string;
+        model?: string;
+        from?: string;
+        to?: string;
+        cursor?: string;
+        limit?: string;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceOverviewDto'];
+        };
+      };
+    };
+  };
+  revokeGovernanceSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GovernanceRevokeDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceResultDto'];
+        };
+      };
+    };
+  };
+  acknowledgeGovernanceAlert: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GovernanceAlertUpdateDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceResultDto'];
+        };
+      };
+    };
+  };
+  exportGovernanceAudit: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GovernanceQueryDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceExportDto'];
+        };
+      };
+    };
+  };
+  reviewGovernanceDialogue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GovernanceReasonDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernancePageDto'];
+        };
+      };
+    };
+  };
+  getGovernanceOverview: {
+    parameters: {
+      query?: {
+        actorId?: string;
+        eventId?: string;
+        requestId?: string;
+        resourceId?: string;
+        phase?: string;
+        mode?: string;
+        action?: string;
+        outcome?: string;
+        organizationId?: string;
+        model?: string;
+        from?: string;
+        to?: string;
+        cursor?: string;
+        limit?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernanceOverviewDto'];
+        };
+      };
+    };
+  };
+  listGovernanceRecords: {
+    parameters: {
+      query?: {
+        actorId?: string;
+        eventId?: string;
+        requestId?: string;
+        resourceId?: string;
+        phase?: string;
+        mode?: string;
+        action?: string;
+        outcome?: string;
+        organizationId?: string;
+        model?: string;
+        from?: string;
+        to?: string;
+        cursor?: string;
+        limit?: string;
+      };
+      header?: never;
+      path: {
+        kind: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GovernancePageDto'];
+        };
       };
     };
   };

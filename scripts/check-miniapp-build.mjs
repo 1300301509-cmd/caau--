@@ -12,6 +12,7 @@ assert.deepEqual(app.pages, [
   'pages/competition-schedule/index',
   'pages/competition-supplies/index',
   'pages/competition-situation/index',
+  'pages/agent/index',
   'pages/hosting/index',
   'pages/hosting-hub/index',
   'pages/hosting-progress/index',

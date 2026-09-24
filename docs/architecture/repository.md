@@ -78,3 +78,13 @@ CAAU-042 新增 `scheduling` 模块，算法、校验、版本和发布门槛均
 CAAU-049 B1 新增 `ai` 模块和 Web `ScheduleAgent`：LangGraph 以鉴权、意图增量解析、资源定位、缺参等待、确定性预览和结果返回节点编排会话/任务状态；业务读取与纯预览继续复用 scheduling 权限及确定性校验。`AgentSession/Turn/Task` 与 `caau_agent` checkpoint 的连接/初始化位于 `@caau/database` 边界；模型 SDK 仅在 API，前端只消费生成客户端。checkpoint 不含 token、消息原文或密钥，长期记忆本批不建表。见 [ADR-0019](../adr/0019-agent-orchestration.md)和[运行手册](../runbooks/agent-platform.md)。
 
 CAAU-046 A阶段规划独立球队端小程序。后续 `apps/team-miniapp` 只消费 `@caau/api-client`，不得引用承办方小程序源码；继续复用 `InternalUser`、`Team` 与 `TeamMembership`，不授予球队用户承办方角色。新 AppID 需要多客户端微信认证，赛事读取需要独立公开发布投影，不能开放内部 Event/Profile。实施时还须把新应用加入边界检查器的受检单元、前端集合以及两小程序构建产物检查。见[ADR-0018](../adr/0018-team-miniapp-boundaries.md)。
+
+CAAU-061 独立 Studio 图入口位于 `apps/api/src/studio`，启动器位于 `scripts/agent-studio.mjs`；复用 ai 模块业务方法，仅接独立本地合成库，不增加前端应用。见 [ADR-0023](../adr/0023-independent-agent-studio.md)。
+
+CAAU-063 在 `apps/api/src/modules/ai/planning.ts`/`planning.service.ts` 收集独立排程需求，使用 ai 控制器/DTO、authorization 当前赛事操作权限与 database 的前向 `AgentPlanningRequest` 模型。与单场 `AgentTask`/票据、只读查询来源以及 scheduling 写入用例互不替代；确认需求不进入 scheduling。Web 与 Taro 各自 `features/agent` 展示同一生成契约的需求卡/来源/人工确认，不跨应用引用源码；Studio 复用规划方法而不增加确认或执行节点。见 [ADR-0025](../adr/0025-agent-planning-requirement-revisions.md)。
+
+CAAU-064 的 `apps/api/src/modules/ai/candidate.service.ts` 使用经鉴权的需求/配置/参赛快照，`candidate.algorithm.ts` 复用 scheduling 算法层的单循环对阵和时隙，不调用会写 `EventSchedule` 的服务端 `generate`；独立 `AgentScheduleCandidate` 前向迁移只存不可执行候选/校验/偏好。DTO/控制器生成 `@caau/api-client`，Web 与小程序各自 `features/agent/CandidateCard.tsx` 只消费该客户端并展示恢复/失效状态；Studio 图复用候选服务并加计算/校验节点，不增加正式赛程写入节点。见[ADR 0026](../adr/0026-agent-whole-schedule-candidate-preview.md)。
+
+## 平台治理与可观测边界
+
+总部入口由 `apps/admin/src/features/governance` 承载，API 位于 `apps/api/src/modules/governance`；仅服务端经数据库包访问账本。独立采集配置位于 `deploy/monitoring`，通知和维护入口位于 `scripts`。详见 [ADR-0027](../adr/0027-platform-governance.md) 与 [运行手册](../runbooks/platform-governance.md)。

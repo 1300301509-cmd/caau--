@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { withAgentEntry } from '../../features/agent/AgentEntry';
 import { Button, Text, View } from '@tarojs/components';
 import Taro, { useDidShow, useRouter } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
@@ -24,7 +25,7 @@ type EventProfile = {
   };
 };
 
-export default function EventInfo() {
+function EventInfo() {
   const router = useRouter();
   const id = router.params.id ?? '';
   const [event, setEvent] = useState<S['EventViewDto']>();
@@ -121,3 +122,4 @@ export default function EventInfo() {
     </View>
   );
 }
+export default withAgentEntry(EventInfo);

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { withAgentEntry } from '../../features/agent/AgentEntry';
 import { Button, Image, ScrollView, Text, View } from '@tarojs/components';
 import Taro, { useDidShow } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
@@ -12,7 +13,7 @@ import logo from '../../assets/caau-logo.jpg';
 
 type S = components['schemas'];
 
-export default function Home() {
+function Home() {
   const [events, setEvents] = useState<S['CompetitionEventViewDto'][]>([]);
   const [selectedEventId, setSelectedEventId] = useState(session.eventId);
   const [eventExpanded, setEventExpanded] = useState(false);
@@ -199,3 +200,4 @@ export default function Home() {
     </View>
   );
 }
+export default withAgentEntry(Home);

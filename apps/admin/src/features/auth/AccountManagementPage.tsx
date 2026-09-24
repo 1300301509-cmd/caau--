@@ -38,6 +38,10 @@ const errorText = (error: unknown) =>
 
 export function AccountManagementPage() {
   const auth = useAuth();
+  const token =
+    auth.mode === 'local'
+      ? (sessionStorage.getItem('caau.local-test-session') ?? '')
+      : undefined;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -65,8 +69,8 @@ export function AccountManagementPage() {
     setLoading(true);
     try {
       const [nextAccounts, nextEvents] = await Promise.all([
-        client.request('listAccounts'),
-        client.request('listEvents'),
+        client.request('listAccounts', { token }),
+        client.request('listEvents', { token }),
       ]);
       setAccounts(nextAccounts);
       setEvents(nextEvents);
@@ -76,7 +80,7 @@ export function AccountManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -226,6 +230,7 @@ export function AccountManagementPage() {
                               : '账号已停用并撤销全部会话。',
                             () =>
                               client.request('setUserActive', {
+                                token,
                                 path: { id: account.id },
                                 body: { active },
                               }),
@@ -267,6 +272,7 @@ export function AccountManagementPage() {
                     onChange={(active) =>
                       void complete('角色状态已更新。', () =>
                         client.request('setMemberActive', {
+                          token,
                           path: { id: membership.id },
                           body: { active },
                         }),
@@ -294,6 +300,7 @@ export function AccountManagementPage() {
                   onClick={() =>
                     void complete('角色已添加。', () =>
                       client.request('createOrganizationMember', {
+                        token,
                         body: {
                           userId: access.id,
                           organizationId: newOrganization,
@@ -328,6 +335,7 @@ export function AccountManagementPage() {
                     onChange={(active) =>
                       void complete('赛事授权已更新。', () =>
                         client.request('setEventGrantActive', {
+                          token,
                           path: { id: grant.id },
                           body: { active },
                         }),
@@ -370,6 +378,7 @@ export function AccountManagementPage() {
                   onClick={() =>
                     void complete('赛事授权已添加。', () =>
                       client.request('createEventGrant', {
+                        token,
                         body: { eventId: grantEvent, memberId: grantMember },
                       }),
                     )
@@ -416,13 +425,17 @@ export function AccountManagementPage() {
                                   handler
                                     ? 'HostingController_handlerGrantActive'
                                     : 'HostingController_reviewGrantActive',
-                                  { path: { id: grant.id }, body: { active } },
+                                  {
+                                    token,
+                                    path: { id: grant.id },
+                                    body: { active },
+                                  },
                                 )
                               : client.request(
                                   handler
                                     ? 'HostingController_handlerGrant'
                                     : 'HostingController_reviewGrant',
-                                  { body: { memberId: membership.id } },
+                                  { token, body: { memberId: membership.id } },
                                 ),
                           )
                         }
@@ -457,6 +470,7 @@ export function AccountManagementPage() {
           }) =>
             void complete('账号已创建；请通过受控渠道交付临时密码。', () =>
               client.request('createAccount', {
+                token,
                 body: {
                   loginName: values.loginName,
                   displayName: values.displayName,
@@ -549,6 +563,7 @@ export function AccountManagementPage() {
             reset &&
             void complete('密码已重置，旧会话已全部撤销。', () =>
               client.request('resetAccountPassword', {
+                token,
                 path: { id: reset.id },
                 body: values,
               }),

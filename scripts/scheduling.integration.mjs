@@ -15,6 +15,7 @@ export async function schedulingIntegration(t, context) {
     runtime,
     session,
     getAgentModelCalls,
+    getAgentHistory,
     restartApi,
   } = context;
   for (const key of ['super', 'manager', 'reviewer', 'a'])
@@ -28,7 +29,8 @@ export async function schedulingIntegration(t, context) {
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    const result = await response.json();
+    const content = await response.text();
+    const result = content ? JSON.parse(content) : null;
     assert.equal(
       response.status,
       status,
@@ -413,6 +415,23 @@ export async function schedulingIntegration(t, context) {
       assert.equal(ten.task.parameters.targetHour, 10);
       assert.equal(ten.task.parameters.targetMinute, 0);
       assert.match(ten.task.parameters.targetStartAt, /T02:00:00\.000Z$/);
+      const queryDuringTask = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${agentSession.id}/messages`,
+        { message: '查2027-06-05的赛程', taskId: waiting.task.id },
+      );
+      assert.equal(queryDuringTask.status, 'QUERY');
+      assert.match(
+        queryDuringTask.message,
+        /赛事：.*草稿 V\d+.*北京日期：2027-06-05/,
+      );
+      assert.equal(queryDuringTask.task.revision, ten.task.revision);
+      assert.deepEqual(queryDuringTask.task.parameters, ten.task.parameters);
+      assert.equal(
+        queryDuringTask.task.preview.before.id,
+        ten.task.preview.before.id,
+      );
       const later = await call(
         'manager',
         'POST',
@@ -634,7 +653,7 @@ export async function schedulingIntegration(t, context) {
         'POST',
         `agent/sessions/${selectionSession.id}/messages`,
         {
-          message: '切换赛事后重新处理',
+          message: '把周六第二场比赛改到周日十点',
           taskId: selected.task.id,
           eventId: otherEvent.id,
         },
@@ -708,6 +727,309 @@ export async function schedulingIntegration(t, context) {
         ).rows[0].n,
         baseline.versions + 1,
       );
+    },
+  );
+
+  await t.test(
+    'agent CAAU-062: query-only provenance, follow-up, ambiguity, revocation and failure isolation',
+    async () => {
+      const before = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      const versionCount = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      const ticketCount = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "AgentConfirmationTicket" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      const querySession = await call('manager', 'POST', 'agent/sessions', {});
+      const endpoint = `agent/sessions/${querySession.id}/messages`;
+      const noEvent = await call('manager', 'POST', endpoint, {
+        message: '查2027-06-05赛程',
+      });
+      assert.equal(noEvent.status, 'NEED_EVENT');
+      assert.ok(
+        noEvent.candidates.some((candidate) => candidate.id === event.id),
+      );
+      const list = await call('manager', 'POST', endpoint, {
+        message: '查2027-06-05比赛',
+        eventId: event.id,
+      });
+      assert.equal(list.status, 'QUERY');
+      assert.equal(list.task, null);
+      assert.match(list.message, new RegExp(`草稿 V${before.revision}`));
+      assert.match(list.message, /北京日期：2027-06-05/);
+      assert.match(list.message, /北京时间.*场地：/);
+      const teamName = before.matches[0].homeLabel;
+      const teamMatches = before.matches.filter(
+        (match) =>
+          new Date(Date.parse(match.startAt) + 8 * 3600000)
+            .toISOString()
+            .slice(0, 10) === '2027-06-05' &&
+          [match.homeLabel, match.awayLabel].includes(teamName),
+      );
+      const teamList = await call('manager', 'POST', endpoint, {
+        message: `查${teamName}在2027-06-05的比赛`,
+        eventId: event.id,
+      });
+      assert.equal(teamList.status, 'QUERY');
+      assert.match(teamList.message, new RegExp(`共 ${teamMatches.length} 场`));
+      const teamAmbiguity = await call('manager', 'POST', endpoint, {
+        message: '查合成赛程球队的比赛',
+        eventId: event.id,
+      });
+      assert.equal(teamAmbiguity.status, 'CLARIFY');
+      assert.match(teamAmbiguity.message, /找到 4 支同名\/近似球队/);
+      const detail = await call('manager', 'POST', endpoint, {
+        message: '查看2027-06-05第二场详情',
+        eventId: event.id,
+      });
+      assert.equal(detail.status, 'QUERY');
+      assert.match(detail.message, /比赛详情/);
+      const referred = await call('manager', 'POST', endpoint, {
+        message: '刚才那场的场地呢？',
+        eventId: event.id,
+      });
+      assert.equal(referred.status, 'QUERY');
+      assert.ok(
+        referred.message.includes(
+          /比赛 ID：([0-9a-f-]+)/.exec(detail.message)[1],
+        ),
+      );
+      const ambiguous = await call('manager', 'POST', endpoint, {
+        message: '查2027-06-05哪场比赛的详情',
+        eventId: event.id,
+      });
+      assert.equal(ambiguous.status, 'NEED_MATCH');
+      assert.ok(ambiguous.candidates.length > 1);
+      const chosen = await call('manager', 'POST', endpoint, {
+        message: '查2027-06-05哪场比赛的详情',
+        eventId: event.id,
+        matchId: ambiguous.candidates[0].id,
+      });
+      assert.equal(chosen.status, 'QUERY');
+      assert.match(chosen.message, /比赛详情/);
+      const nothing = await call('manager', 'POST', endpoint, {
+        message: '查2027-06-07比赛',
+        eventId: event.id,
+      });
+      assert.equal(nothing.status, 'QUERY');
+      assert.match(nothing.message, /不能据此断言球队有空/);
+      const badDate = await call('manager', 'POST', endpoint, {
+        message: '查2027-02-30比赛',
+        eventId: event.id,
+      });
+      assert.equal(badDate.status, 'CLARIFY');
+      assert.match(badDate.message, /有效的北京时间日期/);
+      const history = await call(
+        'manager',
+        'GET',
+        `agent/sessions/${querySession.id}`,
+      );
+      assert.ok(history.turns.some((turn) => turn.content === detail.message));
+      assert.equal(history.task, null);
+      const sources = (
+        await sql.query(
+          'SELECT structured FROM "AgentTurn" WHERE "sessionId"=$1 AND role=$2 ORDER BY sequence',
+          [querySession.id, 'ASSISTANT'],
+        )
+      ).rows
+        .map((row) => row.structured)
+        .filter((record) => record.kind === 'QUERY');
+      assert.ok(sources.length >= 5);
+      assert.ok(
+        sources.every(
+          (record) =>
+            record.source.eventId === event.id &&
+            record.source.revision === before.revision,
+        ),
+      );
+      assert.ok(sources.some((record) => record.source.matchId));
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentTask" WHERE "sessionId"=$1',
+            [querySession.id],
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentConfirmationTicket" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        ticketCount,
+      );
+      const callCount = getAgentModelCalls();
+      await call(
+        'manager',
+        'POST',
+        endpoint,
+        { message: '__CAAU_SYNTHETIC_QUERY_TIMEOUT__', eventId: event.id },
+        503,
+      );
+      assert.ok(getAgentModelCalls() > callCount);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentTurn" WHERE "sessionId"=$1',
+            [querySession.id],
+          )
+        ).rows[0].n,
+        history.turns.length,
+      );
+      await call(
+        'reviewer',
+        'GET',
+        `agent/sessions/${querySession.id}`,
+        undefined,
+        403,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      const deniedCalls = getAgentModelCalls();
+      await call(
+        'manager',
+        'GET',
+        `agent/sessions/${querySession.id}`,
+        undefined,
+        403,
+      );
+      const filtered = await call('manager', 'GET', 'agent/sessions');
+      assert.ok(!filtered.some((session) => session.id === querySession.id));
+      await call('manager', 'POST', endpoint, { message: '你好' }, 403);
+      assert.equal(getAgentModelCalls(), deniedCalls);
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      const recovered = await call(
+        'manager',
+        'GET',
+        `agent/sessions/${querySession.id}`,
+      );
+      assert.ok(
+        recovered.turns.some((turn) => turn.content === detail.message),
+      );
+      const otherEvent = await call('super', 'POST', 'events', {
+        name: '合成查询第二赛事',
+        description: 'isolated query provenance',
+      });
+      await sql.query(
+        'INSERT INTO "EventGrant" (id,"eventId","memberId",active) VALUES ($1,$2,$3,true)',
+        [randomUUID(), otherEvent.id, members.manager],
+      );
+      const crossEvent = await call('manager', 'POST', endpoint, {
+        message: '查询合成查询第二赛事赛程',
+        eventId: otherEvent.id,
+      });
+      assert.equal(crossEvent.status, 'QUERY');
+      assert.match(crossEvent.message, /尚未生成 V0/);
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [otherEvent.id, members.manager],
+      );
+      const revokedCalls = getAgentModelCalls();
+      await call(
+        'manager',
+        'GET',
+        `agent/sessions/${querySession.id}`,
+        undefined,
+        403,
+      );
+      await call('manager', 'POST', endpoint, { message: '查赛程' }, 403);
+      assert.equal(getAgentModelCalls(), revokedCalls);
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [otherEvent.id, members.manager],
+      );
+      const after = await call('manager', 'GET', `events/${event.id}/schedule`);
+      assert.equal(after.revision, before.revision);
+      assert.deepEqual(after.matches, before.matches);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        versionCount,
+      );
+    },
+  );
+
+  await t.test(
+    'agent CAAU-062: fresh query detail can start a separate single-match preview, never auto-confirm',
+    async () => {
+      const session = await call('manager', 'POST', 'agent/sessions', {});
+      const path = `agent/sessions/${session.id}/messages`;
+      const current = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      const detail = await call('manager', 'POST', path, {
+        message: '查2027-06-05第二场详情',
+        eventId: event.id,
+      });
+      assert.equal(detail.status, 'QUERY');
+      const sourceId = /比赛 ID：([0-9a-f-]+)/.exec(detail.message)?.[1];
+      assert.ok(sourceId);
+      const preview = await call('manager', 'POST', path, {
+        message: '把刚才那场改到2027-06-08上午十点',
+        eventId: event.id,
+      });
+      assert.equal(preview.status, 'PREVIEW');
+      assert.equal(preview.task.preview.before.id, sourceId);
+      assert.equal(preview.task.matchId, sourceId);
+      assert.equal(preview.task.confirmation.state, 'PENDING');
+      assert.equal(
+        (await call('manager', 'GET', `events/${event.id}/schedule`)).revision,
+        current.revision,
+      );
+      const ticket = preview.task.confirmation;
+      const confirmed = await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${ticket.id}/confirm`,
+        {
+          eventId: event.id,
+          matchId: sourceId,
+          parameterHash: ticket.parameterHash,
+        },
+      );
+      assert.equal(confirmed.replayed, false);
+      assert.equal(confirmed.matchId, sourceId);
+      assert.equal(confirmed.status, 'DRAFT');
+      assert.equal(
+        (await call('manager', 'GET', `events/${event.id}/schedule`)).revision,
+        current.revision + 1,
+      );
+      const replay = await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${ticket.id}/confirm`,
+        {
+          eventId: event.id,
+          matchId: sourceId,
+          parameterHash: ticket.parameterHash,
+        },
+      );
+      assert.equal(replay.replayed, true);
+      assert.equal(replay.commandId, confirmed.commandId);
     },
   );
 
@@ -1233,6 +1555,32 @@ export async function schedulingIntegration(t, context) {
           },
         });
         assert.equal(generated.matches.length, 6);
+        const conversation = await mobile.request('createAgentSession', {
+          token,
+          body: {},
+        });
+        const greeting = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: conversation.id },
+          body: { message: '你好' },
+        });
+        assert.equal(greeting.status, 'CHAT');
+        assert.equal(greeting.task, null);
+        const discussion = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: conversation.id },
+          body: { message: '七支球队适合什么赛制？' },
+        });
+        assert.equal(discussion.status, 'CHAT');
+        assert.equal(
+          (
+            await mobile.request('getAgentSession', {
+              token,
+              path: { sessionId: conversation.id },
+            })
+          ).task,
+          null,
+        );
         const agent = await mobile.request('createAgentSession', {
           token,
           body: { currentEventId: eventId },
@@ -1387,6 +1735,1125 @@ export async function schedulingIntegration(t, context) {
         config,
       });
       await schedulingBrowserTest({ ...context, eventId: event.id });
+    },
+  );
+
+  await t.test(
+    'agent turns: full answer bounds, durable order and concurrent recovery',
+    async () => {
+      const chat = await call('manager', 'POST', 'agent/sessions', {});
+      const path = `agent/sessions/${chat.id}`;
+      for (const length of [2000, 2001, 4000]) {
+        const input = `__CAAU_SYNTHETIC_CHAT_LENGTH_${length}__`;
+        const reply = await call('manager', 'POST', `${path}/messages`, {
+          message: input,
+        });
+        assert.equal(reply.status, 'CHAT');
+        assert.equal(reply.message, '答'.repeat(length));
+        const recovered = await call('manager', 'GET', path);
+        assert.equal(recovered.turns.at(-2).content, input);
+        assert.equal(recovered.turns.at(-1).content, reply.message);
+      }
+      const beforeOverflow = await sql.query(
+        'SELECT count(*)::int n FROM "AgentTurn" WHERE "sessionId"=$1',
+        [chat.id],
+      );
+      const overflow = await call(
+        'manager',
+        'POST',
+        `${path}/messages`,
+        { message: '__CAAU_SYNTHETIC_CHAT_LENGTH_4001__' },
+        502,
+      );
+      assert.match(overflow.message, /4000/);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentTurn" WHERE "sessionId"=$1',
+            [chat.id],
+          )
+        ).rows[0].n,
+        beforeOverflow.rows[0].n,
+      );
+      const observed = await call('manager', 'POST', `${path}/messages`, {
+        message: '__CAAU_SYNTHETIC_HISTORY__',
+      });
+      assert.equal(observed.status, 'CHAT');
+      const history = getAgentHistory();
+      assert.deepEqual(
+        history.map((turn) => turn.role),
+        ['USER', 'ASSISTANT', 'USER', 'ASSISTANT', 'USER', 'ASSISTANT'],
+      );
+      assert.ok(
+        history.every((turn) => Array.from(turn.content).length <= 600),
+      );
+      assert.match(history.at(-1).content, /仅模型上下文节选/);
+      assert.equal(
+        (await call('manager', 'GET', path)).turns[5].content,
+        '答'.repeat(4000),
+      );
+      const incoming = Array.from(
+        { length: 8 },
+        (_, index) => `并发闲聊${index}`,
+      );
+      const [parallel, snapshots] = await Promise.all([
+        Promise.all(
+          incoming.map((message) =>
+            call('manager', 'POST', `${path}/messages`, { message }),
+          ),
+        ),
+        Promise.all(
+          Array.from({ length: 8 }, () => call('manager', 'GET', path)),
+        ),
+      ]);
+      for (const snapshot of snapshots) {
+        assert.ok(
+          snapshot.turns.every(
+            (turn, index) =>
+              turn.role === (index % 2 === 0 ? 'USER' : 'ASSISTANT'),
+          ),
+        );
+      }
+      assert.ok(parallel.every((reply) => reply.status === 'CHAT'));
+      const restored = await call('manager', 'GET', path);
+      const fromList = (await call('manager', 'GET', 'agent/sessions')).find(
+        (item) => item.id === chat.id,
+      );
+      assert.deepEqual(fromList.turns, restored.turns);
+      const rows = (
+        await sql.query(
+          'SELECT "sequence",role,content FROM "AgentTurn" WHERE "sessionId"=$1 ORDER BY "sequence"',
+          [chat.id],
+        )
+      ).rows;
+      assert.deepEqual(
+        rows.map((row) => row.sequence),
+        Array.from({ length: rows.length }, (_, index) => index + 1),
+      );
+      for (let index = 0; index < rows.length; index += 2) {
+        assert.equal(rows[index].role, 'USER');
+        assert.equal(rows[index + 1].role, 'ASSISTANT');
+      }
+      assert.deepEqual(
+        restored.turns.map((turn) => turn.content),
+        rows.slice(-20).map((row) => row.content),
+      );
+      await call('manager', 'POST', `${path}/messages`, {
+        message: '__CAAU_SYNTHETIC_HISTORY__',
+      });
+      assert.deepEqual(
+        getAgentHistory().map((turn) => turn.role),
+        rows.slice(-10).map((row) => row.role),
+      );
+      assert.deepEqual(
+        getAgentHistory().map((turn) => turn.content),
+        rows.slice(-10).map((row) => row.content),
+      );
+      assert.deepEqual(
+        incoming.slice().sort(),
+        rows
+          .filter((row) => incoming.includes(row.content))
+          .map((row) => row.content)
+          .sort(),
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentTask" WHERE "sessionId"=$1',
+            [chat.id],
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentConfirmationTicket" t JOIN "AgentTask" a ON a.id=t."taskId" WHERE a."sessionId"=$1',
+            [chat.id],
+          )
+        ).rows[0].n,
+        0,
+      );
+    },
+  );
+
+  await t.test(
+    'agent dialogue: no-context chat, task insertion, denial and exactly-once draft',
+    async () => {
+      const chat = await call('manager', 'POST', 'agent/sessions', {});
+      assert.equal(chat.currentEventId, null);
+      const counts = async () =>
+        (
+          await sql.query(
+            'SELECT (SELECT count(*)::int FROM "AgentTask" WHERE "sessionId"=$1) tasks, (SELECT count(*)::int FROM "AgentConfirmationTicket" t JOIN "AgentTask" a ON a.id=t."taskId" WHERE a."sessionId"=$1) tickets',
+            [chat.id],
+          )
+        ).rows[0];
+      const before = await counts();
+      assert.deepEqual(before, { tasks: 0, tickets: 0 });
+      const hello = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '你好' },
+      );
+      assert.equal(hello.status, 'CHAT');
+      assert.equal(hello.task, null);
+      const ideas = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '七支球队适合什么赛制？' },
+      );
+      assert.equal(ideas.status, 'CHAT');
+      assert.match(ideas.message, /21场/);
+      const unsupported = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '帮我登记俱乐部并批量重排整周比赛' },
+      );
+      assert.equal(unsupported.status, 'UNSUPPORTED');
+      assert.equal(unsupported.task, null);
+      const unclear = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '安排一下' },
+      );
+      assert.equal(unclear.status, 'CLARIFY');
+      await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '__CAAU_SYNTHETIC_CHAT_TIMEOUT__' },
+        503,
+      );
+      assert.deepEqual(await counts(), before);
+      const saved = await call('manager', 'GET', `agent/sessions/${chat.id}`);
+      assert.equal(saved.task, null);
+      assert.equal(saved.turns.length, 8);
+      await call('a', 'GET', `agent/sessions/${chat.id}`, undefined, 403);
+
+      const baseline = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      const waiting = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '把周二第二场移到周三', eventId: event.id },
+      );
+      assert.equal(waiting.status, 'NEED_PARAMETERS');
+      const row = async () =>
+        (
+          await sql.query(
+            'SELECT revision,"checkpointThreadId" FROM "AgentTask" WHERE id=$1',
+            [waiting.task.id],
+          )
+        ).rows[0];
+      const taskBefore = await row();
+      const question = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        {
+          message: '赛制规则是什么？',
+          taskId: waiting.task.id,
+          eventId: event.id,
+        },
+      );
+      assert.equal(question.status, 'CHAT');
+      assert.equal(question.task.id, waiting.task.id);
+      assert.deepEqual(await row(), taskBefore);
+      const preview = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '上午十点', taskId: waiting.task.id, eventId: event.id },
+      );
+      assert.equal(preview.status, 'PREVIEW');
+      assert.equal(preview.task.id, waiting.task.id);
+      assert.equal(
+        (await row()).checkpointThreadId,
+        taskBefore.checkpointThreadId,
+      );
+      const businessTurns = (
+        await sql.query(
+          'SELECT "sequence",role FROM "AgentTurn" WHERE "sessionId"=$1 AND structured->>\'taskId\'=$2 ORDER BY "sequence"',
+          [chat.id, waiting.task.id],
+        )
+      ).rows;
+      assert.deepEqual(
+        businessTurns.map((turn) => turn.role),
+        ['USER', 'ASSISTANT', 'USER', 'ASSISTANT'],
+      );
+      assert.equal(businessTurns[0].sequence + 1, businessTurns[1].sequence);
+      assert.equal(businessTurns[2].sequence + 1, businessTurns[3].sequence);
+      const revision = (await row()).revision;
+      const ticket = preview.task.confirmation;
+      const impact = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        {
+          message: '如果改到周日有什么影响？',
+          taskId: waiting.task.id,
+          eventId: event.id,
+        },
+      );
+      assert.equal(impact.status, 'CHAT');
+      assert.equal(impact.task.confirmation.id, ticket.id);
+      const okay = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '好的', taskId: waiting.task.id, eventId: event.id },
+      );
+      assert.equal(okay.status, 'CHAT');
+      const noTool = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        {
+          message: '请整周重排全部场次',
+          taskId: waiting.task.id,
+          eventId: event.id,
+        },
+      );
+      assert.equal(noTool.status, 'UNSUPPORTED');
+      assert.equal(noTool.task.confirmation.id, ticket.id);
+      assert.equal((await row()).revision, revision);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        baseline,
+      );
+      const confirmation = {
+        eventId: event.id,
+        matchId: ticket.matchId,
+        parameterHash: ticket.parameterHash,
+      };
+      const executed = await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${ticket.id}/confirm`,
+        confirmation,
+      );
+      assert.equal(executed.status, 'DRAFT');
+      const replay = await call(
+        'manager',
+        'POST',
+        `agent/confirmation-tickets/${ticket.id}/confirm`,
+        confirmation,
+      );
+      assert.equal(replay.replayed, true);
+      assert.equal(replay.commandId, executed.commandId);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        baseline + 1,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      await call('manager', 'GET', `agent/sessions/${chat.id}`, undefined, 403);
+      await call(
+        'manager',
+        'POST',
+        `agent/sessions/${chat.id}/messages`,
+        { message: '你好' },
+        403,
+      );
+      assert.ok(
+        !(await call('manager', 'GET', 'agent/sessions')).some(
+          (item) => item.id === chat.id,
+        ),
+      );
+      const fresh = await call('manager', 'POST', 'agent/sessions', {});
+      assert.equal(
+        (
+          await call('manager', 'POST', `agent/sessions/${fresh.id}/messages`, {
+            message: '你好',
+          })
+        ).status,
+        'CHAT',
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+    },
+  );
+
+  await t.test(
+    'agent planning: persistent requirements, CAS confirmation, authorization and no schedule writes',
+    async () => {
+      const chat = await call('manager', 'POST', 'agent/sessions', {});
+      const route = `agent/sessions/${chat.id}`;
+      const before = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      const send = (message, extra = {}, status = 200) =>
+        call(
+          'manager',
+          'POST',
+          `${route}/messages`,
+          { message, ...extra },
+          status,
+        );
+      assert.equal((await send('你好')).planningRequest, null);
+      assert.equal(
+        (await send('请批量重排整套赛程', { eventId: event.id })).status,
+        'UNSUPPORTED',
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentPlanningRequest" WHERE "sessionId"=$1',
+            [chat.id],
+          )
+        ).rows[0].n,
+        0,
+      );
+      const prompt = '请收集排程需求，赛事日期范围 2027-06-01 到 2027-06-07';
+      const choose = await send(prompt);
+      assert.equal(choose.status, 'NEED_EVENT');
+      assert.ok(choose.candidates.some((item) => item.id === event.id));
+      let reply = await send(prompt, { eventId: event.id });
+      assert.equal(reply.status, 'PLAN');
+      let plan = reply.planningRequest;
+      assert.equal(plan.conditions[0].from, '2027-06-01');
+      assert.equal(plan.conditions[0].to, '2027-06-07');
+      assert.equal(plan.status, 'COLLECTING');
+      assert.equal(plan.revision, 1);
+      assert.equal(plan.conditions[0].sourceTurnIds.length, 1);
+      assert.equal(
+        (await call('manager', 'GET', route)).planningRequest.sourceTurns[0].id,
+        plan.conditions[0].sourceTurnIds[0],
+      );
+      const details = {
+        eventId: event.id,
+        planningId: plan.id,
+        planningRevision: plan.revision,
+      };
+      reply = await send('合成赛程球队4只能周三', details);
+      assert.equal(reply.status, 'PLAN');
+      plan = reply.planningRequest;
+      assert.deepEqual(
+        plan.conditions.find((item) => item.kind === 'TEAM_WINDOW').dates,
+        ['2027-06-02'],
+      );
+      assert.equal(
+        plan.conditions.find((item) => item.kind === 'TEAM_WINDOW').teamId,
+        eventTeams.find((item) => item.profile.name === '合成赛程球队4').id,
+      );
+      await send(
+        '合成赛程球队4只能周五',
+        { ...details, planningRevision: plan.revision, teamId: randomUUID() },
+        403,
+      );
+      await send('改成周三和周五', details, 409);
+      reply = await send('改成周三和周五', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      assert.equal(reply.status, 'PLAN');
+      plan = reply.planningRequest;
+      assert.deepEqual(
+        plan.conditions.find((item) => item.kind === 'TEAM_WINDOW').dates,
+        ['2027-06-02', '2027-06-04'],
+      );
+      reply = await send('取消合成赛程球队4时间限制', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      assert.equal(reply.status, 'PLAN');
+      plan = reply.planningRequest;
+      assert.equal(
+        plan.conditions.filter((item) => item.kind === 'TEAM_WINDOW').length,
+        0,
+      );
+      reply = await send('合成赛程球队4只能周三', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      plan = reply.planningRequest;
+      reply = await send('合成赛程球队4周三不能比赛', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      plan = reply.planningRequest;
+      assert.equal(plan.issues.length, 1);
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${plan.id}/confirm`,
+        { expectedRevision: plan.revision },
+        409,
+      );
+      reply = await send('取消合成赛程球队4时间限制', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      plan = reply.planningRequest;
+      reply = await send('合成赛程球队4只能周三', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      plan = reply.planningRequest;
+      assert.equal(plan.issues.length, 0);
+      const unclearMatchup = await send('优先对阵', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      assert.equal(unclearMatchup.status, 'CLARIFY');
+      assert.equal(unclearMatchup.planningRequest.revision, plan.revision);
+      reply = await send('希望合成赛程球队1与合成赛程球队2尽量对阵', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      assert.equal(reply.status, 'PLAN');
+      plan = reply.planningRequest;
+      assert.equal(
+        plan.conditions.find((item) => item.kind === 'MATCHUP').priority,
+        'PREFER',
+      );
+      assert.equal(
+        plan.conditions.find((item) => item.kind === 'MATCHUP').matchup,
+        'PREFER',
+      );
+      assert.equal(plan.issues.length, 0);
+      await call(
+        'a',
+        'POST',
+        `agent/planning-requests/${plan.id}/confirm`,
+        { expectedRevision: plan.revision },
+        403,
+      );
+      const confirmed = await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${plan.id}/confirm`,
+        { expectedRevision: plan.revision },
+      );
+      assert.equal(confirmed.status, 'CONFIRMED');
+      assert.equal(confirmed.confirmedRevision, plan.revision);
+      assert.ok(
+        confirmed.conditions.every((item) => item.confirmation === 'CONFIRMED'),
+      );
+      assert.equal(
+        (
+          await call(
+            'manager',
+            'POST',
+            `agent/planning-requests/${plan.id}/confirm`,
+            { expectedRevision: plan.revision },
+          )
+        ).revision,
+        plan.revision,
+      );
+      assert.equal(
+        (await send('好的', { ...details, planningRevision: plan.revision }))
+          .status,
+        'CHAT',
+      );
+      assert.equal(
+        (await call('manager', 'GET', route)).planningRequest.status,
+        'CONFIRMED',
+      );
+      const confirmedTeam = plan.conditions.find(
+        (item) => item.kind === 'TEAM_WINDOW',
+      ).teamId;
+      const teamRecord = (
+        await call('super', 'GET', `events/${event.id}/teams`)
+      ).find((item) => item.id === confirmedTeam);
+      const archived = await call(
+        'super',
+        'PUT',
+        `events/${event.id}/teams/${confirmedTeam}`,
+        {
+          expectedRevision: teamRecord.revision,
+          active: false,
+          profile: teamRecord.profile,
+        },
+      );
+      const staleTeam = await call('manager', 'GET', route);
+      assert.equal(staleTeam.planningRequest.status, 'STALE');
+      assert.ok(
+        staleTeam.planningRequest.issues.some((issue) =>
+          issue.includes('停用'),
+        ),
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${plan.id}/confirm`,
+        { expectedRevision: plan.revision },
+        409,
+      );
+      await call('super', 'PUT', `events/${event.id}/teams/${confirmedTeam}`, {
+        expectedRevision: archived.revision,
+        active: true,
+        profile: archived.profile,
+      });
+      assert.equal(
+        (await call('manager', 'GET', route)).planningRequest.status,
+        'CONFIRMED',
+      );
+      reply = await send('改成周三和周五', {
+        ...details,
+        planningRevision: plan.revision,
+      });
+      plan = reply.planningRequest;
+      assert.equal(plan.status, 'COLLECTING');
+      assert.equal(plan.confirmedRevision, null);
+      assert.ok(
+        plan.conditions.every((item) => item.confirmation === 'PENDING'),
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${plan.id}/confirm`,
+        { expectedRevision: confirmed.revision },
+        409,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentTask" WHERE "sessionId"=$1',
+            [chat.id],
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentConfirmationTicket" t JOIN "AgentTask" a ON a.id=t."taskId" WHERE a."sessionId"=$1',
+            [chat.id],
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        before,
+      );
+      const pendingSession = await call(
+        'manager',
+        'POST',
+        'agent/sessions',
+        {},
+      );
+      const pendingRoute = `agent/sessions/${pendingSession.id}`;
+      const pendingFirst = await call(
+        'manager',
+        'POST',
+        `${pendingRoute}/messages`,
+        {
+          message: '合成赛程球队4只能周三',
+          eventId: event.id,
+        },
+      );
+      assert.equal(pendingFirst.status, 'PLAN');
+      assert.equal(pendingFirst.planningRequest.conditions.length, 0);
+      assert.ok(
+        pendingFirst.planningRequest.pending.some((item) =>
+          item.includes('日期范围'),
+        ),
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${pendingFirst.planningRequest.id}/confirm`,
+        {
+          expectedRevision: pendingFirst.planningRequest.revision,
+        },
+        409,
+      );
+      const pendingResolved = await call(
+        'manager',
+        'POST',
+        `${pendingRoute}/messages`,
+        {
+          message: '赛事日期范围 2027-06-01 到 2027-06-07',
+          eventId: event.id,
+          planningId: pendingFirst.planningRequest.id,
+          planningRevision: pendingFirst.planningRequest.revision,
+        },
+      );
+      assert.equal(pendingResolved.status, 'PLAN');
+      assert.deepEqual(
+        pendingResolved.planningRequest.conditions.find(
+          (item) => item.kind === 'TEAM_WINDOW',
+        ).dates,
+        ['2027-06-02'],
+      );
+      assert.equal(
+        pendingResolved.planningRequest.conditions.find(
+          (item) => item.kind === 'TEAM_WINDOW',
+        ).sourceTurnIds.length,
+        2,
+      );
+      assert.equal(
+        (await call('manager', 'GET', pendingRoute)).planningRequest.sourceTurns
+          .length,
+        2,
+      );
+      assert.deepEqual(pendingResolved.planningRequest.pending, []);
+      const other = await call('manager', 'POST', 'agent/sessions', {});
+      await call(
+        'manager',
+        'POST',
+        `agent/sessions/${other.id}/messages`,
+        {
+          message: '取消合成赛程球队4时间限制',
+          eventId: event.id,
+          planningId: pendingFirst.planningRequest.id,
+          planningRevision: pendingResolved.planningRequest.revision,
+        },
+        403,
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/sessions/${other.id}/messages`,
+        {
+          message: '请收集排程需求',
+          eventId: randomUUID(),
+        },
+        403,
+      );
+      const duplicate = await call('super', 'POST', 'teams', {
+        id: randomUUID(),
+        organizationId: orgA,
+        eventId: event.id,
+        profile: profile(4),
+      });
+      const attached = (
+        await call('super', 'GET', `events/${event.id}/teams`)
+      ).find((item) => item.teamId === duplicate.id);
+      assert.ok(attached);
+      const ambiguousSession = await call('manager', 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const ambiguousPath = `agent/sessions/${ambiguousSession.id}/messages`;
+      const period = await call('manager', 'POST', ambiguousPath, {
+        message: '收集排程需求，赛事日期范围 2027-06-01 到 2027-06-07',
+        eventId: event.id,
+      });
+      assert.equal(period.status, 'PLAN');
+      const ambiguous = await call('manager', 'POST', ambiguousPath, {
+        message: '合成赛程球队4只能周三',
+        eventId: event.id,
+        planningId: period.planningRequest.id,
+        planningRevision: period.planningRequest.revision,
+      });
+      assert.equal(ambiguous.status, 'NEED_TEAM');
+      assert.ok(ambiguous.candidates.some((item) => item.id === attached.id));
+      assert.equal(
+        (await call('manager', 'GET', `agent/sessions/${ambiguousSession.id}`))
+          .planningRequest.revision,
+        period.planningRequest.revision,
+      );
+      const selected = await call('manager', 'POST', ambiguousPath, {
+        message: '合成赛程球队4只能周三',
+        eventId: event.id,
+        teamId: attached.id,
+        planningId: period.planningRequest.id,
+        planningRevision: period.planningRequest.revision,
+      });
+      assert.equal(selected.status, 'PLAN');
+      assert.equal(
+        selected.planningRequest.conditions.find(
+          (item) => item.kind === 'TEAM_WINDOW',
+        ).teamId,
+        attached.id,
+      );
+      const compoundSession = await call(
+        'manager',
+        'POST',
+        'agent/sessions',
+        {},
+      );
+      const compound = await call(
+        'manager',
+        'POST',
+        `agent/sessions/${compoundSession.id}/messages`,
+        {
+          message:
+            '收集排程需求，赛事日期范围 2027-06-01 到 2027-06-07，合成赛程球队2只能周三',
+          eventId: event.id,
+        },
+      );
+      assert.equal(compound.status, 'PLAN');
+      assert.deepEqual(
+        compound.planningRequest.conditions.map((item) => item.kind),
+        ['DATE_RANGE', 'TEAM_WINDOW'],
+      );
+      assert.deepEqual(compound.planningRequest.conditions[1].dates, [
+        '2027-06-02',
+      ]);
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      await call('manager', 'GET', route, undefined, 403);
+      await call(
+        'manager',
+        'POST',
+        `${route}/messages`,
+        { message: '你好' },
+        403,
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${plan.id}/confirm`,
+        { expectedRevision: plan.revision },
+        403,
+      );
+      assert.ok(
+        !(await call('manager', 'GET', 'agent/sessions')).some(
+          (item) => item.id === chat.id,
+        ),
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      assert.equal(
+        (await call('manager', 'GET', route)).planningRequest.revision,
+        plan.revision,
+      );
+    },
+  );
+
+  await t.test(
+    'agent whole-schedule candidates: isolated preview, deterministic audit, restore/stale and authorization',
+    async () => {
+      const session = await call('manager', 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const path = `agent/sessions/${session.id}/messages`;
+      let reply = await call('manager', 'POST', path, {
+        message: '收集排程需求，赛事日期范围 2027-06-01 到 2027-06-07',
+        eventId: event.id,
+      });
+      const planId = reply.planningRequest.id;
+      const send = async (message) => {
+        reply = await call('manager', 'POST', path, {
+          message,
+          eventId: event.id,
+          planningId: planId,
+          planningRevision: reply.planningRequest.revision,
+        });
+        assert.equal(reply.status, 'PLAN');
+      };
+      await send('合成赛程球队2只能周三（模型短ID回归）');
+      await send('尽量让合成赛程球队3只能周二');
+      let planning = reply.planningRequest;
+      assert.equal(planning.issues.length, 0);
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${planId}/candidates`,
+        {},
+        400,
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${planId}/confirm`,
+        { expectedRevision: planning.revision },
+      );
+      planning = (await call('manager', 'GET', `agent/sessions/${session.id}`))
+        .planningRequest;
+      const baseline = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      const currentTeams = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/teams`,
+      );
+      const cfg = {
+        ...baseline.config,
+        teamIds: currentTeams
+          .filter((item) => item.active)
+          .map((item) => item.id),
+        startDate: '2027-06-01',
+        endDate: '2027-06-07',
+      };
+      const url = `agent/planning-requests/${planId}/candidates`;
+      const input = {
+        expectedRevision: planning.revision,
+        baselineRevision: baseline.revision,
+        format: 'ROUND_ROBIN',
+        configSource: 'EXPLICIT',
+        config: cfg,
+        fixedMatchIds: [],
+      };
+      const before = await sql.query(
+        'SELECT config,matches,revision FROM "EventSchedule" WHERE "eventId"=$1',
+        [event.id],
+      );
+      const versionsBefore = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      const receiptsBefore = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "AgentCommandReceipt" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      await call('manager', 'GET', `${url}/latest`, undefined, 404);
+      await call('reviewer', 'POST', url, input, 403);
+      await call(
+        'manager',
+        'POST',
+        url,
+        { ...input, format: 'SINGLE_ELIMINATION' },
+        400,
+      );
+      await call(
+        'manager',
+        'POST',
+        url,
+        { ...input, baselineRevision: baseline.revision - 1 },
+        409,
+      );
+      await call(
+        'manager',
+        'POST',
+        url,
+        { ...input, configSource: 'EVENT_SCHEDULE' },
+        409,
+      );
+      const candidate = await call('manager', 'POST', url, input);
+      assert.equal(candidate.status, 'FOUND');
+      assert.equal(
+        candidate.matches.length,
+        (cfg.teamIds.length * (cfg.teamIds.length - 1)) / 2,
+      );
+      assert.equal(
+        new Set(
+          candidate.matches.map((match) =>
+            [match.homeEventTeamId, match.awayEventTeamId].sort().join(':'),
+          ),
+        ).size,
+        candidate.matches.length,
+      );
+      assert.ok(
+        candidate.matches.every(
+          (match) => match.startAt && cfg.venues.includes(match.venue),
+        ),
+      );
+      assert.ok(
+        candidate.matches
+          .filter((match) =>
+            [match.homeEventTeamId, match.awayEventTeamId].includes(
+              currentTeams.find((item) => item.profile.name === '合成赛程球队2')
+                .id,
+            ),
+          )
+          .every((match) => match.startAt.startsWith('2027-06-02')),
+      );
+      assert.ok(
+        candidate.preferences.some(
+          (preference) => preference.status === 'UNMET',
+        ),
+      );
+      assert.deepEqual(candidate.issues, []);
+      assert.equal(
+        (await call('manager', 'GET', `${url}/latest`)).id,
+        candidate.id,
+      );
+      assert.equal(
+        (await call('manager', 'GET', `${url}/${candidate.id}`)).status,
+        'FOUND',
+      );
+      await call('reviewer', 'GET', `${url}/${candidate.id}`, undefined, 403);
+      const assignedMatchId = baseline.matches[0].id;
+      const assignmentId = randomUUID();
+      await sql.query(
+        'INSERT INTO "EventMatchStaff" (id,"eventId","scheduleRevision","matchId",staff,"createdBy","updatedBy") VALUES ($1,$2,$3,$4,$5::jsonb,$6,$6)',
+        [
+          assignmentId,
+          event.id,
+          baseline.revision,
+          assignedMatchId,
+          JSON.stringify([{ id: randomUUID() }]),
+          users.manager,
+        ],
+      );
+      await call('manager', 'POST', url, input, 409);
+      assert.equal(
+        (await call('manager', 'GET', `${url}/${candidate.id}`)).status,
+        'STALE',
+      );
+      await sql.query('DELETE FROM "EventMatchStaff" WHERE id=$1', [
+        assignmentId,
+      ]);
+      assert.equal(
+        (await call('manager', 'GET', `${url}/${candidate.id}`)).status,
+        'FOUND',
+      );
+      assert.deepEqual(
+        (
+          await sql.query(
+            'SELECT config,matches,revision FROM "EventSchedule" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows,
+        before.rows,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        versionsBefore,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentCommandReceipt" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        receiptsBefore,
+      );
+      // Synthetic fixture only: simulate an external forward schedule change.
+      await sql.query(
+        'UPDATE "EventSchedule" SET revision=revision+1 WHERE "eventId"=$1',
+        [event.id],
+      );
+      assert.equal(
+        (await call('manager', 'GET', `${url}/${candidate.id}`)).status,
+        'STALE',
+      );
+      await call('manager', 'POST', url, input, 409);
+      const renewed = await call('manager', 'POST', url, {
+        ...input,
+        baselineRevision: baseline.revision + 1,
+      });
+      assert.equal(renewed.status, 'FOUND');
+      await sql.query(
+        'UPDATE "EventTeam" SET revision=revision+1 WHERE id=$1',
+        [cfg.teamIds[0]],
+      );
+      assert.equal(
+        (await call('manager', 'GET', `${url}/${renewed.id}`)).status,
+        'STALE',
+      );
+      await call(
+        'manager',
+        'POST',
+        url,
+        { ...input, expectedRevision: planning.revision - 1 },
+        409,
+      );
+      await send('合成赛程球队1周二不能比赛');
+      assert.equal(
+        (await call('manager', 'GET', `${url}/${candidate.id}`)).status,
+        'STALE',
+      );
+      await send('请记录排程需求：希望合成赛程球队1与合成赛程球队3尽量交手');
+      const revised = reply.planningRequest;
+      assert.equal(
+        revised.conditions.some((item) => item.kind === 'MATCHUP'),
+        true,
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${planId}/confirm`,
+        { expectedRevision: revised.revision },
+      );
+      await call(
+        'manager',
+        'POST',
+        url,
+        {
+          ...input,
+          baselineRevision: baseline.revision + 1,
+          expectedRevision: revised.revision,
+        },
+        409,
+      );
+      const availableSession = await call(
+        'manager',
+        'POST',
+        'agent/sessions',
+        {},
+      );
+      const availableRoute = `agent/sessions/${availableSession.id}/messages`;
+      const availablePeriod = await call('manager', 'POST', availableRoute, {
+        message: '收集排程需求，赛事日期范围 2027-06-01 到 2027-06-07',
+        eventId: event.id,
+      });
+      const availablePlan = await call('manager', 'POST', availableRoute, {
+        message: '合成赛程球队1周三可用',
+        eventId: event.id,
+        planningId: availablePeriod.planningRequest.id,
+        planningRevision: availablePeriod.planningRequest.revision,
+      });
+      assert.equal(availablePlan.status, 'PLAN');
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${availablePlan.planningRequest.id}/confirm`,
+        { expectedRevision: availablePlan.planningRequest.revision },
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${availablePlan.planningRequest.id}/candidates`,
+        {
+          ...input,
+          expectedRevision: availablePlan.planningRequest.revision,
+          baselineRevision: baseline.revision + 1,
+        },
+        409,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      await call('manager', 'GET', `${url}/${candidate.id}`, undefined, 403);
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
     },
   );
 }

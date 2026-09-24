@@ -78,6 +78,11 @@ export async function individualBrowserTest({
     return data;
   }
   async function login(page, key) {
+    // Wait for the shared AuthContext bootstrap before replacing its session;
+    // the legacy page's own selector can render before bootstrap finishes.
+    await page
+      .getByLabel('全局切换测试账号权限')
+      .waitFor({ state: 'attached' });
     await expect(page.getByLabel('选择测试身份')).toBeVisible({
       timeout: 15000,
     });
@@ -103,8 +108,19 @@ export async function individualBrowserTest({
     const page = await context.newPage();
     page.on('pageerror', (e) => pageErrors.push(e.message));
     page.on('dialog', (d) => d.accept());
+    // Seed the tab before either auth bootstrap starts. Replacing storage while
+    // the legacy page is restoring its first session races its failure cleanup.
+    await page.addInitScript((token) => {
+      if (!sessionStorage.getItem('caau.integration.seeded')) {
+        sessionStorage.setItem('caau.local-test-session', token);
+        sessionStorage.setItem('caau.integration.seeded', '1');
+      }
+    }, tokens[key]);
     await page.goto(`http://127.0.0.1:4173${url}`);
-    await login(page, key);
+    await expect(page.getByLabel('选择测试身份')).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByTestId('sync-status')).toHaveCount(0);
     await expect(
       page.getByRole('heading', { name: '承办方列表', exact: true }),
     ).toBeVisible();

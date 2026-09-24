@@ -1,3 +1,4 @@
+import { GovernancePage } from '../features/governance/GovernancePage';
 import { CompetitionPage } from '../features/competition/CompetitionPage';
 import { useEffect } from 'react';
 import { Button, Result } from 'antd';
@@ -27,21 +28,23 @@ export function App() {
 
   useEffect(() => {
     document.title =
-      path === '/competition'
-        ? '比赛管理中心 · CAAU'
-        : reviewPage
-          ? '办赛材料审核 · CAAU'
-          : hostingPage
-            ? '赛事审核中心 · CAAU'
-            : eventPage
-              ? '赛事管理 · CAAU'
-              : path === '/accounts'
-                ? '账号与权限 · CAAU'
-                : path === '/account/password'
-                  ? '账号安全 · CAAU'
-                  : path === '/system/health'
-                    ? '工程连接检查 · CAAU'
-                    : '页面未找到 · CAAU';
+      path === '/governance'
+        ? '平台治理与监控 · CAAU'
+        : path === '/competition'
+          ? '比赛管理中心 · CAAU'
+          : reviewPage
+            ? '办赛材料审核 · CAAU'
+            : hostingPage
+              ? '赛事审核中心 · CAAU'
+              : eventPage
+                ? '赛事管理 · CAAU'
+                : path === '/accounts'
+                  ? '账号与权限 · CAAU'
+                  : path === '/account/password'
+                    ? '账号安全 · CAAU'
+                    : path === '/system/health'
+                      ? '工程连接检查 · CAAU'
+                      : '页面未找到 · CAAU';
   }, [eventPage, hostingPage, path, reviewPage]);
 
   if (reviewPage) {
@@ -80,6 +83,12 @@ export function App() {
       </AppShell>
     );
   }
+  if (path === '/governance')
+    return (
+      <AppShell active="governance">
+        <GovernancePage />
+      </AppShell>
+    );
   if (path === '/accounts') {
     return (
       <AppShell active="accounts">

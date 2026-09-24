@@ -1,8 +1,8 @@
-# 业务智能体赛程预览与草稿确认（CAAU-049 C1）
+# 业务智能体：自由对话与单场草稿确认（CAAU-049/059/060）
 
 ## 已实现范围
 
-Nest `ai` 模块使用 LangGraph.js 编排并在 PostgreSQL `caau_agent` schema 保存 checkpoint。当前 Web【比赛管理中心 → 赛程编排】提供最小对话入口，支持：
+Nest `ai` 模块使用 LangGraph.js 编排并在 PostgreSQL `caau_agent` schema 保存 checkpoint。Web 已登录业务页的固定“CAAU 智能助手”浮动入口打开同一 Drawer；小程序多个已登录业务页的浮动入口打开同一独立对话页（登录页与健康诊断页没有入口）。两端共用现有 API 和各自的会话/任务状态，不另建模型系统，支持：
 
 - 从当前登录账号的 `competition-events` 同等权限范围定位赛事；
 - 读取最新赛程，以星期、当天序号或用户明确选择的 match ID 定位场次；
@@ -45,16 +45,53 @@ LangGraph checkpoint 只保存结构化流程/资源/版本状态，不保存 Co
 - `POST /api/v1/agent/sessions`：创建绑定当前用户的会话，可带当前 `eventId`；
 - `GET /api/v1/agent/sessions`：列出当前仍有权恢复的会话；
 - `GET /api/v1/agent/sessions/:sessionId`：恢复并重新校验会话/任务；返回当前赛事最近一条持久 `lastExecution` 或 null；有权会话列表同样携带该字段；
-- `POST /api/v1/agent/sessions/:sessionId/messages`：提交消息或结构化的 event/match 选择；可带 `taskId` 继续任务，或带 `newTask=true` 显式新建任务，两者不可同时提供；
+- `POST /api/v1/agent/sessions/:sessionId/messages`：提交消息或结构化的 event/match/team 选择；可带 `taskId` 继续单场任务，或带 `newTask=true` 显式新建任务，两者不可同时提供；修改排程需求单带本会话 `planningId`、当前 `planningRevision`，同名参赛记录候选带 `teamId`；
 - `POST /api/v1/events/:eventId/schedule/preview-adjustment`：纯调整预览，无业务写入；
+- `POST /api/v1/agent/planning-requests/:planningId/confirm`：仅提交 `{expectedRevision}` 人工确认排程**需求**，绝不生成/保存赛程，不签发单场执行票据；
+- `POST /api/v1/agent/planning-requests/:planningId/candidates`：提交已确认 `expectedRevision`、`baselineRevision`、`format=ROUND_ROBIN`、明确 `configSource`（EVENT_SCHEDULE 或 EXPLICIT）、完整配置和明确固定场次数组；只计算并独立存候选快照，不写赛程；
+- `GET /api/v1/agent/planning-requests/:planningId/candidates/latest` 和 `.../:candidateId`：逐次鉴权/检查需求、基础赛程和参赛快照；无候选 404、失效返回 `STALE`，不允许执行；
 - `POST /api/v1/agent/confirmation-tickets/:ticketId/confirm`：回显 ticket 的 eventId、matchId、parameterHash 后确认单场草稿调整；
 - `POST /api/v1/agent/confirmation-tickets/:ticketId/cancel`：当前 owner 且赛事仍可读时取消/重复取消；仅返回 `{id,state}`。
 
-前端只通过生成的 `@caau/api-client` 调用这些接口。小程序继续复用同一 API 的方案不变，但本批未增加小程序入口。
+前端只通过生成的 `@caau/api-client` 调用这些接口。业务页传入的 `event` 仅是页面提示：无明确选择时不默认选第一场；恢复中的 task.eventId 优先于页面事件，跨赛事须明确从有权赛事列表切换对话；“新任务”创建独立的持久会话，旧预览和票据仅可从有权历史对话明确找回，不随新任务复制。小程序的返回/最小化保留未发送输入和当前对话于本次登录内存，重新打开重新读取服务器会话；关闭不调用取消或确认。登录身份/票据 epoch 改变和撤权后清理内存；后端仍逐次重新鉴权。会话 `turns` 只显示数据库近期历史，旧候选在刷新后须重新发描述，不用模型推断来补选。CAAU-060 后，未支持的跨模块/整套重排/发布请求由服务端路由为说明能力边界的对话（同时有防止模型误路由进排赛工具的程序约束），只保存 turn，不创建 `FAILED` 业务任务、预览、确认票据或赛程版本；仍不代表提供其它业务工具。
+
+## 授权赛程查询（CAAU-062）
+
+普通聊天专项：在已按数据库手册准备本地隔离 test 服务并完成 API 构建后，运行 `CAAU_CHAT_ONLY=1 CAAU_DATABASE_INTEGRATION=test node --env-file=apps/api/.env --env-file=.local/db/test.env scripts/qwen-planning.manual.mjs`。该显式真实模型测试验证无赛事自我介绍、通用问答/追问、任务中插话和消息恢复；只创建并清理自身临时合成库，不访问开发库，不自动回退模拟模型。普通日志不记录用户原文；该模式只显示脚本内合成提问的回答供人工质量复核，不能将一次通过外推为供应商长期稳定或 Web/微信运行时验收。
+
+全局助手先在当前身份下路由：普通聊天不读赛程；“查这周赛事比赛”“查 2027-06-05 第二场详情”“刚才那场的场地”走只读 `schedule.list`／`schedule.match`，明确“把刚才那场改到……”才可转为新单场预览。服务端闭合注册表、结构化参数校验与 `schedule.read` 的事务读取，不允许模型选写工具、执行 SQL 或执行确认。回答显示赛事、北京时间日期、草稿／已发布和 V 版本，未生成／零结果不推断球队有空；缺赛事和歧义显示候选，页面当前赛事仅作提示、活动任务赛事优先。多条结果只列前五场并提示缩小范围。查询结果来源（eventId、revision、status、所展示 matchIds 与唯一引用 matchId）写入助手 turn 的结构化字段；历史读取和模型上下文必须对**所有**查询来源重新鉴权，撤权后无任务会话同样不可恢复。赛程版本在读写结果之间变化时 409 重新查询；不覆盖用户工作或重用旧预览。详细边界：[ADR 0024](../adr/0024-agent-readonly-schedule-tools.md)。
+
+隔离 `CAAU_BROWSER_API_PORT=3100 VITE_API_BASE_URL=http://127.0.0.1:3100 corepack pnpm db:test` 验证模拟模型、真实 API 与 Web 浏览器；真实 Qwen 手工专项 `CAAU_DATABASE_INTEGRATION=test node --env-file=apps/api/.env --env-file=.local/db/test.env scripts/qwen-browser.manual.mjs` 只操作隔离临时合成库并清理，切勿将凭据或原文输出到公共日志。二者不代替微信开发者工具、真机及远程环境。不主动终止已有 Studio 进程；可只读核验 `/assistants/{id}/graph` 是否已热加载查询节点。本机现有 2024 Studio 返回三个查询节点，但这不代表官方页面登录后已手动执行新分支。重启仅按 [Studio 手册](agent-studio.md) 使用独立临时库，不动开发库或其它进程。
+
+## 独立排程需求单（CAAU-063）
+
+统一助手支持明确“收集排程需求，赛事日期范围 2027-06-01 到 2027-06-07”→“D 队只能周三”→“改成周三和周五”→“取消 D 队时间限制”→“希望 A 队和 B 队尽量交手”。这些是**演示文本**，不能推导真实赛程规则或赛事日期。仅当前有赛事操作权限的 owner 可创建/修改/确认；服务端以 active EventTeam 识别球队、以具体日期记录星期条件，标记 MUST/PREFER、原 USER turn 来源和 PENDING/CONFIRMED 状态。日期/球队/“优先对阵”不明确时澄清，不猜测完整条件；无日期时先存待补描述，补日期后将两条来源关联。同名参赛球队选择 `teamId`；普通闲聊、已有赛程查询和单场改期原任务不受影响。
+
+每次带最新 `planningId` + `planningRevision` 编辑，409 时刷新同一有权会话并重新核对条件，不能静默重试旧修改。`planningRequest` 返回赛事、revision、原话 `sourceTurns`、条件、待补与冲突；确认按钮仅在有明确条件且无待补/矛盾时启用。人工确认只冻结需求的当前 revision：**不**调用赛程生成/调整、不签发票据、不新增草稿或发布。后续修订令旧确认失效；参赛记录停用后即使历史曾确认，当前视图标 `STALE`，要移除无效条件再重新确认。恢复会话及送模型前扫描所有历史规划来源按**当前**权限鉴权，撤权后 403/会话列表隐藏；`sourceTurns` 只在该会话/身份下返回。业务规则与技术边界见[规格](../product/agent-schedule-planning.md)及[ADR 0025](../adr/0025-agent-planning-requirement-revisions.md)。Studio 共用业务分支 `plan_requirements → save_requirements`，无规划执行节点；运行中的独立 Studio 不需为新增 UI 强行停止或清理临时库。
+
+隔离真实 Qwen 专项与既有单场 Web 专项**分别**运行；先确认本机 test 服务与构建 API 可用，不输出或提交 env 内容：
+
+```sh
+CAAU_DATABASE_INTEGRATION=test node --env-file=apps/api/.env --env-file=.local/db/test.env scripts/qwen-planning.manual.mjs
+```
+
+该脚本仅创建并清理本轮随机 `caau_qwen_plan_*` 合成库。默认模式仍核对 CAAU-063 日期→参赛时段→替换→取消→对阵偏好→独立确认，随后另一个独立需求单验证 CAAU-064 候选；指定 `CAAU_CANDIDATE_ONLY=1` 时只测两轮真实模型日期/球队时段→确认→纯程序候选，适合独立分层验收。两种模式都核对 0 正式赛程版本/票据/单场任务增长；供应商失败保持失败，不用模拟结果冒充。小程序编译/Node 替身不算微信开发者工具 `wx.request` 或真机验收。
+
+## 整套候选赛程预览（CAAU-064）
+
+已确认的规划需求卡下新增**单独的“仅生成候选预览，不保存赛程”**入口。Web/小程序逐项核对全部有效参赛队、完整赛事日期和每天时段、场地、每场时长/场地缓冲/球队最短休息及配置来源；沿用已有赛程配置时如与确认需求冲突，不会自动覆盖，须显式提供全部配置。已有赛程需选择明确固定范围（可以明确空集）；过去已开始的时间或有本版本工作人员安排的场次必固定，已发布/淘汰赛基线从严拒绝。仅单循环：每队两两交手一次；没有明确日期/轮次含义的“希望这两队交手”在单循环必然发生，须先澄清或修订，不以它声称优化成功。`AVAILABLE` 不暗示其它日子禁止；若标 MUST 仍只表示“可在”，需先修订为明确 ONLY/BLOCK 或 PREFER，不能当成已验证的硬安排约束；ONLY/BLOCK 的 MUST 不可放宽。搜索与独立校验分开，FOUND/PROVEN_CONFLICT/SEARCH_LIMIT 不能混用，偏好逐条报告。候选含北京时间整周对阵与新旧时间场地差异、快照/失效标志；需求、基础版本、参赛或人员配置变更后旧结果只作 STALE 查看，恢复前鉴权。不触发原 scheduling.generate() 写草稿，不产生版本/票据/回执，也没有保存/发布按钮。具体边界见[需求规格](../product/agent-schedule-candidates.md)与[ADR 0026](../adr/0026-agent-whole-schedule-candidate-preview.md)。
+
+Studio Graph 限明确填写 candidateConfig/candidateConfigSource/candidateBaselineRevision/candidateFixedMatchIds，并在已确认需求规划 ID + revision 下以**精确消息**“生成整套候选赛程预览”进入 `generate_candidate → validate_candidate`；结果在 `candidateResult` 中，不依赖模型编排，不提供正式赛程写入节点。Studio HTTP 图可读不代表官方页面手动通过，且原已运行实例和测试临时库不应被清理。真实千问专项 `scripts/qwen-planning.manual.mjs` 后段会在**另一个合成会话**用模型理解日期+球队硬时段，再显式确认、调用纯程序候选接口并检查 0 正式版本/票据/任务增长；失败轮次不计为通过。微信工具 `wx.request`、真机及远程待分别验收。
+
+## 自由对话与业务衔接（CAAU-060）
+
+登录后无需先选择赛事，可直接问候、讨论赛制和排程思路；没有有权业务数据时只提供注明假设的一般建议，不联网查询或编造赛事事实。通用对话使用现有千问配置和无业务写入的 LangGraph 路由/回答子图；本地确定性适配器只供模拟回归，不算真实模型。模型结合本轮消息、当前权限下的近期 turn 和活动任务分类 `CHAT`、`CLARIFY`、`UNSUPPORTED`、`START` 或 `CONTINUE`；明确启动/继续单场改期才进入原有带 PostgreSQL checkpoint 的业务图。任务中穿插聊天只追加会话 turn，不改 `AgentTask` revision、参数、旧票据或预览。仅点击票据绑定的按钮才进入执行事务，“好的”不代替确认。
+
+模型不负责授权。服务端在将历史 turn/预览送入模型之前重新核验会话 owner、所有历史任务的当前赛事读取权及显式传入赛事的读取权；回答阶段再核验，持久化回答前再次核验。撤权后的旧会话列表不返回、读取/发消息 403；仍可新建无赛事的空会话聊天，但旧内容不得混入新模型上下文。对无法确定是否要操作的消息先追问；明确要求整套重排、增加指定比赛、登记俱乐部等只说明不支持并可讨论思路，不创建失败业务任务。模型连接/供应商异常返回 503，不降级为模拟回复或伪成功；普通聊天不依赖赛程确定性预览工具。回答原文最多 4000 Unicode 字符（`AgentTurn.content` 为 VARCHAR(4000)，接口完整回显），超限明确返回 **502** 且不保存问答，不误报为连接失败、不静默截断。最近 10 条模型历史每条最多取 600 字带标记的节选；数据库原文、接口会话恢复及两端展示不截断。新写入的 USER/ASSISTANT 在一个事务里连续分配会话内唯一序号，服务端历史和恢复按此序号排序；旧时间戳并列的准确先后无法从历史数据还原。路由/意图各限 18 秒、自由回答限 45 秒，均不自动重试；两端共用客户端仅对 `sendAgentMessage` 设置 75 秒（最长路由 18 秒 + 聊天 45 秒 + 服务端开销），其它接口原时限不变。失败保留输入，须先核对当前历史/票据再主动重试；不自动确认，不放宽数据库 CAS/幂等。服务端 `CAAU agent model` 诊断按阶段 `route`/`chat`/`intent`（连接测试另为 `connection`）记录耗时、固定错误类别、可取得的供应商状态码及 Token 用量，缺失项记 null；不输出请求原文、供应商报错消息、响应体、密钥或令牌。不以三次本地通过宣称外部供应商长期稳定或真机通过。
 
 ## 模型配置
 
-无模型凭据时，服务使用确定性模拟解析器支持固定中文验收表达，用于本地和 CI 业务链路测试；这不等于真实模型接入通过。千问使用服务端 OpenAI 兼容适配：
+无模型凭据时，服务使用确定性模拟解析器支持固定中文验收表达，用于本地和 CI 业务链路测试；这不等于真实模型接入通过。千问使用服务端 OpenAI 兼容适配（受控 18/45 秒阶段预算及客户端 75 秒总预算；外部网络/限流仍可能失败）：
 
 ```sh
 CAAU_QWEN_API_KEY=...                 # 仅放服务端忽略的环境文件
@@ -62,7 +99,7 @@ CAAU_QWEN_MODEL=qwen-plus             # 可选，默认 qwen-plus
 CAAU_QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1 # 可选
 ```
 
-不要把密钥放在前端、数据库、checkpoint、日志、提交或聊天中。模型状态接口和总部 Web 只返回 `SIMULATED/QWEN`、模型名称、Base URL 主机、是否配置凭据，以及当前 API 进程内最近一次脱敏连接测试结果；永不返回 API Key、完整供应商响应或请求头。连接测试只在总部超级管理员明确点击时执行，进程重启后结果恢复为“尚未测试”。设置 `CAAU_QWEN_API_KEY` 后模型异常返回 503，不降级为可能改变理解结果的静默模拟；模型异常不会签发新票据或写赛程。模型只参与确认前的理解，确认执行完全由固定程序完成；原赛程页面仍可使用。
+不要把密钥放在前端、数据库、checkpoint、日志、提交或聊天中。模型状态接口和总部 Web 只返回 `SIMULATED/QWEN`、模型名称、Base URL 主机、是否配置凭据，以及当前 API 进程内最近一次脱敏连接测试结果；永不返回 API Key、完整供应商响应或请求头。连接测试只在总部超级管理员明确点击时执行，进程重启后结果恢复为“尚未测试”。设置 `CAAU_QWEN_API_KEY` 后模型异常返回 503，不降级为可能改变理解结果的静默模拟；模型异常不会签发新票据或写赛程。模型只参与聊天及确认前的路由/理解，确认执行完全由固定程序完成；原赛程页面仍可使用。
 
 千问结构化 schema 对来源星期、来源当天序号、目标星期、明确日期、北京时间小时/分钟和相对分钟偏移分别提供字段说明。系统提示明确区分“来源比赛在哪一天的第几场”和“目标改到哪一天几点”，只提取本轮新增或修改，不选择赛事、不执行修改。
 
@@ -84,6 +121,18 @@ corepack pnpm agent:qwen:test
 - “改到2027-06-08上午十点”。
 
 缺少凭据时命令以状态 2 退出，不回退到模拟模型；供应商调用失败时只输出脱敏失败信息。它只验收真实模型意图提取，不代表业务 API、数据库预览、浏览器或生产环境通过。
+
+### 真实千问自由对话与单场任务 Web 专项（显式手工执行）
+
+先检查 3100/4173 空闲和本地隔离 Docker test 服务；`apps/api/.env` 与 `.local/db/test.env` 必须是被忽略的服务端/本机配置文件，**不得打印内容或用于开发/生产库**。按 [数据库手册](database-contract.md)准备 test 服务，不 reset：
+
+```sh
+corepack pnpm db:test:up
+VITE_API_BASE_URL=http://127.0.0.1:3100 corepack pnpm build
+CAAU_DATABASE_INTEGRATION=test node --env-file=apps/api/.env --env-file=.local/db/test.env scripts/qwen-browser.manual.mjs
+```
+
+脚本只在隔离 test 服务创建本次随机 `caau_qwen_*` 合成临时库，运行实际千问模型、Web 和 API；结束后仅清理本次临时库。4000 字边界与并发顺序使用隔离 API 注入模拟回答回归，真实千问脚本验收实际短回答的正常路径，**不代表真实千问曾返回 4000 字**。验收无赛事“你好/七支球队赛制”、同一对话进入单场改期、待补时间中插话再续同一任务/线程、预览前不写、明确确认后一次 DRAFT 及原命令回执恢复。它不进入默认 CI，不替代微信工具、真机、正式域名或远程环境。若模型连接或外部请求超时，记录失败，不把模拟回归记成真实通过。
 
 ## 启动与验证
 
@@ -114,4 +163,4 @@ VITE_API_BASE_URL=http://127.0.0.1:3100 \
 corepack pnpm db:test
 ```
 
-这只改变隔离测试服务，不重用或修改 3000 上的进程。真实模型、模拟模型、浏览器、小程序和真机必须分别报告；数据库浏览器回归不等于真实模型、小程序或真机验收。
+这只改变隔离测试服务，不重用或修改 3000 上的进程。真实模型、模拟模型、浏览器、小程序和真机必须分别报告；数据库浏览器回归不等于真实模型、小程序微信运行时或真机验收。3000 被本地已有服务占用时不要停止该服务，可使用上面的隔离端口配置；若在此之后运行 Web E2E，保持同一构建 API 地址并设置 `CAAU_BROWSER_API_PORT=3100 corepack pnpm test:e2e`。不对远程数据库运行这些合成用例。

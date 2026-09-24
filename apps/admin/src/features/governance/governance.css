@@ -1,0 +1,135 @@
+.governance-page {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 32px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  color: #263c35;
+}
+.governance-page > * {
+  min-width: 0;
+}
+.governance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.governance-header h1 {
+  font-size: 30px;
+  margin: 8px 0;
+}
+.governance-header p,
+.governance-muted {
+  color: #62756d;
+}
+.governance-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: #23695b;
+}
+.governance-panel {
+  border: 1px solid #dbe5df;
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  min-width: 0;
+}
+.governance-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 10px;
+}
+.governance-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.governance-toolbar label {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+}
+.governance-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.governance-metric {
+  border: 1px solid #dbe5df;
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.governance-metric > span {
+  font-size: 13px;
+  color: #62756d;
+}
+.governance-metric strong {
+  font-size: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.governance-metric strong:not(:first-child) {
+  line-height: 1.6;
+}
+.governance-pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  color: #62756d;
+}
+.governance-turn {
+  padding: 16px;
+  border: 1px solid #dbe5df;
+  border-radius: 12px;
+  margin: 14px 0;
+}
+.governance-turn small {
+  display: block;
+  color: #62756d;
+  margin-top: 6px;
+}
+.governance-turn p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.governance-page .ant-btn {
+  min-height: 40px;
+}
+.governance-actions:empty {
+  display: none;
+}
+@media (max-width: 640px) {
+  .governance-page {
+    padding: 16px;
+  }
+  .governance-header {
+    align-items: flex-start;
+  }
+  .governance-header h1 {
+    font-size: 24px;
+  }
+  .governance-metrics {
+    grid-template-columns: 1fr;
+  }
+  .governance-page .ant-btn {
+    min-height: 44px;
+  }
+  .governance-toolbar label {
+    width: 100%;
+  }
+}

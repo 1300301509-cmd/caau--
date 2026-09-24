@@ -1,4 +1,5 @@
 import { Button, Text, View } from '@tarojs/components';
+import { withAgentEntry } from '../../features/agent/AgentEntry';
 import Taro, { useDidShow } from '@tarojs/taro';
 import { session } from '../../features/materials/session';
 
@@ -19,7 +20,7 @@ const entries = [
     page: 'hosting-progress',
   },
 ];
-export default function HostingHub() {
+function HostingHub() {
   useDidShow(() => {
     if (!session.token) void Taro.reLaunch({ url: '/pages/login/index' });
   });
@@ -61,3 +62,4 @@ export default function HostingHub() {
     </View>
   );
 }
+export default withAgentEntry(HostingHub);

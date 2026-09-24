@@ -41,7 +41,10 @@
     "dev:miniapp": "corepack pnpm --filter @caau/api-client build && corepack pnpm --filter @caau/miniapp dev",
     "check:docs": "node scripts/check-doc-links.mjs",
     "check:format": "prettier --check package.json pnpm-workspace.yaml .prettierrc.json tsconfig*.json *.mjs playwright.config.ts scripts apps/*/src apps/*/test apps/*/config apps/admin/e2e apps/*/*.json apps/*/*.ts apps/*/*.cjs apps/admin/index.html packages/api-client/src packages/api-client/test packages/api-client/*.json database/src/index.ts database/test database/*.json database/*.ts deploy/*.yml .github/workflows/*.yml --ignore-unknown",
-    "test:tooling": "node --test scripts/*.test.mjs"
+    "test:tooling": "node --test scripts/*.test.mjs",
+    "agent:studio": "corepack pnpm --filter @caau/api... build && node scripts/agent-studio.mjs",
+    "monitoring": "node scripts/monitoring.mjs",
+    "governance:maintenance": "node scripts/governance-maintenance.mjs"
   },
   "devDependencies": {
     "pg": "8.23.0",

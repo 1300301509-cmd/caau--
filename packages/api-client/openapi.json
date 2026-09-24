@@ -262,6 +262,41 @@
         "required": ["id", "state"],
         "type": "object"
       },
+      "AgentCandidateChangeDto": {
+        "properties": {
+          "afterStartAt": {
+            "type": "string"
+          },
+          "afterVenue": {
+            "type": "string"
+          },
+          "awayLabel": {
+            "type": "string"
+          },
+          "beforeStartAt": {
+            "type": "string"
+          },
+          "beforeVenue": {
+            "type": "string"
+          },
+          "homeLabel": {
+            "type": "string"
+          },
+          "matchId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "matchId",
+          "homeLabel",
+          "awayLabel",
+          "beforeStartAt",
+          "beforeVenue",
+          "afterStartAt",
+          "afterVenue"
+        ],
+        "type": "object"
+      },
       "AgentCandidateDto": {
         "properties": {
           "detail": {
@@ -275,6 +310,22 @@
           }
         },
         "required": ["id", "label"],
+        "type": "object"
+      },
+      "AgentCandidatePreferenceDto": {
+        "properties": {
+          "conditionId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "enum": ["SATISFIED", "UNMET", "NOT_APPLICABLE"],
+            "type": "string"
+          }
+        },
+        "required": ["conditionId", "status", "reason"],
         "type": "object"
       },
       "AgentConfirmationSummaryDto": {
@@ -390,7 +441,16 @@
           "newTask": {
             "type": "boolean"
           },
+          "planningId": {
+            "type": "string"
+          },
+          "planningRevision": {
+            "type": "number"
+          },
           "taskId": {
+            "type": "string"
+          },
+          "teamId": {
             "type": "string"
           }
         },
@@ -442,6 +502,172 @@
         ],
         "type": "object"
       },
+      "AgentPlanningConditionDto": {
+        "properties": {
+          "availability": {
+            "enum": ["AVAILABLE", "ONLY", "BLOCK"],
+            "type": "string"
+          },
+          "confirmation": {
+            "enum": ["PENDING", "CONFIRMED"],
+            "type": "string"
+          },
+          "dates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": ["DATE_RANGE", "TEAM_WINDOW", "MATCHUP"],
+            "type": "string"
+          },
+          "matchup": {
+            "enum": ["PREFER", "AVOID"],
+            "type": "string"
+          },
+          "opponentId": {
+            "type": "string"
+          },
+          "opponentLabel": {
+            "type": "string"
+          },
+          "priority": {
+            "enum": ["MUST", "PREFER"],
+            "type": "string"
+          },
+          "sourceTurnIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "teamId": {
+            "type": "string"
+          },
+          "teamLabel": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "weekdays": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "eventId",
+          "priority",
+          "confirmation",
+          "sourceTurnIds"
+        ],
+        "type": "object"
+      },
+      "AgentPlanningRequestViewDto": {
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/AgentPlanningConditionDto"
+            },
+            "type": "array"
+          },
+          "confirmedRevision": {
+            "nullable": true,
+            "type": "number"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pending": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "sourceTurns": {
+            "items": {
+              "$ref": "#/components/schemas/AgentPlanningSourceTurnDto"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": ["COLLECTING", "CONFIRMED", "STALE"],
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "type": {
+            "enum": ["SCHEDULE_PLANNING"],
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "eventId",
+          "eventName",
+          "revision",
+          "status",
+          "conditions",
+          "sourceTurns",
+          "pending",
+          "issues",
+          "summary",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "AgentPlanningSourceTurnDto": {
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "content"],
+        "type": "object"
+      },
       "AgentReplyDto": {
         "properties": {
           "candidates": {
@@ -451,7 +677,17 @@
             "type": "array"
           },
           "message": {
+            "maxLength": 4000,
             "type": "string"
+          },
+          "planningRequest": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentPlanningRequestViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
           },
           "sessionId": {
             "type": "string"
@@ -463,7 +699,13 @@
               "NEED_PARAMETERS",
               "PREVIEW",
               "STALE",
-              "ERROR"
+              "ERROR",
+              "CHAT",
+              "CLARIFY",
+              "UNSUPPORTED",
+              "QUERY",
+              "PLAN",
+              "NEED_TEAM"
             ],
             "type": "string"
           },
@@ -523,6 +765,98 @@
         ],
         "type": "object"
       },
+      "AgentScheduleCandidateViewDto": {
+        "properties": {
+          "baselineRevision": {
+            "type": "number"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCandidateChangeDto"
+            },
+            "type": "array"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ScheduleConfigDto"
+          },
+          "configSource": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "explored": {
+            "type": "number"
+          },
+          "fixedMatchIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "format": {
+            "enum": ["ROUND_ROBIN"],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleIssueDto"
+            },
+            "type": "array"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleMatchDto"
+            },
+            "type": "array"
+          },
+          "planningId": {
+            "type": "string"
+          },
+          "planningRevision": {
+            "type": "number"
+          },
+          "preferences": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCandidatePreferenceDto"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": ["FOUND", "PROVEN_CONFLICT", "SEARCH_LIMIT", "STALE"],
+            "type": "string"
+          },
+          "warning": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "planningId",
+          "planningRevision",
+          "eventId",
+          "baselineRevision",
+          "status",
+          "warning",
+          "format",
+          "config",
+          "configSource",
+          "fixedMatchIds",
+          "matches",
+          "changes",
+          "issues",
+          "preferences",
+          "explored",
+          "createdAt"
+        ],
+        "type": "object"
+      },
       "AgentSessionInputDto": {
         "properties": {
           "currentEventId": {
@@ -548,6 +882,15 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/AgentExecutionReceiptDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "planningRequest": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentPlanningRequestViewDto"
               }
             ],
             "nullable": true,
@@ -681,6 +1024,7 @@
       "AgentTurnViewDto": {
         "properties": {
           "content": {
+            "maxLength": 4000,
             "type": "string"
           },
           "createdAt": {
@@ -695,6 +1039,147 @@
           }
         },
         "required": ["id", "role", "content", "createdAt"],
+        "type": "object"
+      },
+      "AiAssignmentDto": {
+        "properties": {
+          "organizationId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["organizationId", "reason"],
+        "type": "object"
+      },
+      "AiBillInputDto": {
+        "properties": {
+          "amountMicros": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "currency",
+          "from",
+          "to",
+          "amountMicros",
+          "note"
+        ],
+        "type": "object"
+      },
+      "AiPriceInputDto": {
+        "properties": {
+          "cachedMicrosPerMillion": {
+            "nullable": true,
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "effectiveAt": {
+            "type": "string"
+          },
+          "inputMicrosPerMillion": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "outputMicrosPerMillion": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "currency",
+          "inputMicrosPerMillion",
+          "outputMicrosPerMillion",
+          "cachedMicrosPerMillion",
+          "effectiveAt",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "AiQuotaInputDto": {
+        "properties": {
+          "dailyTokens": {
+            "nullable": true,
+            "type": "number"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "number"
+          },
+          "monthlyTokens": {
+            "nullable": true,
+            "type": "number"
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": ["ACCOUNT", "ORGANIZATION"],
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "subjectId",
+          "enabled",
+          "paused",
+          "dailyTokens",
+          "monthlyTokens",
+          "expectedRevision",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "AiResolveUsageDto": {
+        "properties": {
+          "inputTokens": {
+            "type": "number"
+          },
+          "outputTokens": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["inputTokens", "outputTokens", "reason"],
         "type": "object"
       },
       "AuditDto": {
@@ -861,6 +1346,15 @@
           }
         },
         "required": ["expectedRevision", "requirements"],
+        "type": "object"
+      },
+      "ConfirmAgentPlanningRequestDto": {
+        "properties": {
+          "expectedRevision": {
+            "type": "number"
+          }
+        },
+        "required": ["expectedRevision"],
         "type": "object"
       },
       "ConfirmAgentScheduleAdjustmentDto": {
@@ -1818,6 +2312,42 @@
         "required": ["id", "name", "extension", "bytes", "originalNameKnown"],
         "type": "object"
       },
+      "GenerateAgentScheduleCandidateDto": {
+        "properties": {
+          "baselineRevision": {
+            "type": "number"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ScheduleConfigDto"
+          },
+          "configSource": {
+            "enum": ["EVENT_SCHEDULE", "EXPLICIT"],
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "number"
+          },
+          "fixedMatchIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "format": {
+            "enum": ["ROUND_ROBIN"],
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "baselineRevision",
+          "format",
+          "configSource",
+          "config",
+          "fixedMatchIds"
+        ],
+        "type": "object"
+      },
       "GenerateScheduleDto": {
         "properties": {
           "commandId": {
@@ -1832,6 +2362,205 @@
           }
         },
         "required": ["commandId", "format", "config"],
+        "type": "object"
+      },
+      "GovernanceAlertUpdateDto": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "ownerId": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": ["note", "ownerId"],
+        "type": "object"
+      },
+      "GovernanceExportDto": {
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "csv": {
+            "type": "string"
+          }
+        },
+        "required": ["csv", "count"],
+        "type": "object"
+      },
+      "GovernanceFieldDto": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": ["label", "value"],
+        "type": "object"
+      },
+      "GovernanceOverviewDto": {
+        "properties": {
+          "asOf": {
+            "type": "string"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/GovernanceFieldDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["metrics", "asOf"],
+        "type": "object"
+      },
+      "GovernancePageDto": {
+        "properties": {
+          "asOf": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GovernanceRowDto"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": ["items", "nextCursor", "asOf"],
+        "type": "object"
+      },
+      "GovernanceQueryDto": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GovernanceReasonDto": {
+        "properties": {
+          "cursor": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["reason"],
+        "type": "object"
+      },
+      "GovernanceResultDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "message"],
+        "type": "object"
+      },
+      "GovernanceRevokeDto": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": ["reason"],
+        "type": "object"
+      },
+      "GovernanceRowDto": {
+        "properties": {
+          "actorId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/GovernanceFieldDto"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "requestId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "resourceId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "at",
+          "actorId",
+          "requestId",
+          "resourceId",
+          "fields"
+        ],
         "type": "object"
       },
       "GrantDto": {
@@ -4742,6 +5471,184 @@
         "tags": ["agent"]
       }
     },
+    "/api/v1/agent/planning-requests/{planningId}/candidates": {
+      "post": {
+        "description": "Calculate and persist a non-executable whole-schedule candidate only; never saves a formal schedule.",
+        "operationId": "previewAgentScheduleCandidate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "planningId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateAgentScheduleCandidateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentScheduleCandidateViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/planning-requests/{planningId}/candidates/latest": {
+      "get": {
+        "operationId": "getLatestAgentScheduleCandidate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "planningId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentScheduleCandidateViewDto"
+                }
+              }
+            },
+            "description": "Most recent candidate; 404 when absent. Re-authorized and freshness-checked."
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/planning-requests/{planningId}/candidates/{candidateId}": {
+      "get": {
+        "operationId": "getAgentScheduleCandidate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "planningId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "candidateId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentScheduleCandidateViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/planning-requests/{planningId}/confirm": {
+      "post": {
+        "description": "Confirm a requirements revision only; does not generate schedules or issue execution tickets.",
+        "operationId": "confirmAgentPlanningRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "planningId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmAgentPlanningRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPlanningRequestViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
     "/api/v1/agent/sessions": {
       "get": {
         "operationId": "listAgentSessions",
@@ -4848,6 +5755,7 @@
     },
     "/api/v1/agent/sessions/{sessionId}/messages": {
       "post": {
+        "description": "Route authorized chat, read-only queries, requirement collection and single-match scheduling; requirement confirmation cannot write a schedule.",
         "operationId": "sendAgentMessage",
         "parameters": [
           {
@@ -4891,6 +5799,214 @@
         ],
         "summary": "",
         "tags": ["agent"]
+      }
+    },
+    "/api/v1/ai-usage/accounts/{id}/assignment": {
+      "post": {
+        "operationId": "setAiCostAssignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiAssignmentDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["ai-usage"]
+      }
+    },
+    "/api/v1/ai-usage/bills": {
+      "post": {
+        "operationId": "createAiSupplierBill",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiBillInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["ai-usage"]
+      }
+    },
+    "/api/v1/ai-usage/calls/{id}/resolve": {
+      "post": {
+        "operationId": "resolveAiUsage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiResolveUsageDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["ai-usage"]
+      }
+    },
+    "/api/v1/ai-usage/prices": {
+      "post": {
+        "operationId": "createAiModelPrice",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiPriceInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["ai-usage"]
+      }
+    },
+    "/api/v1/ai-usage/quotas": {
+      "post": {
+        "operationId": "setAiUsageQuota",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiQuotaInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["ai-usage"]
       }
     },
     "/api/v1/authentication/change-password": {
@@ -10705,6 +11821,661 @@
         ],
         "summary": "",
         "tags": ["Workflow"]
+      }
+    },
+    "/api/v1/observability/accounts/{id}": {
+      "get": {
+        "operationId": "getGovernanceAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceOverviewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/accounts/{id}/permission": {
+      "get": {
+        "operationId": "explainGovernancePermission",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actorId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "eventId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requestId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resourceId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "phase",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "organizationId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceOverviewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/accounts/{id}/revoke": {
+      "post": {
+        "operationId": "revokeGovernanceSessions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernanceRevokeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/alerts/{id}/acknowledge": {
+      "post": {
+        "operationId": "acknowledgeGovernanceAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernanceAlertUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/audit/export": {
+      "post": {
+        "operationId": "exportGovernanceAudit",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernanceQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceExportDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/dialogues/{id}/review": {
+      "post": {
+        "operationId": "reviewGovernanceDialogue",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernanceReasonDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernancePageDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/overview": {
+      "get": {
+        "operationId": "getGovernanceOverview",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "actorId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "eventId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requestId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resourceId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "phase",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "organizationId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceOverviewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/{kind}": {
+      "get": {
+        "operationId": "listGovernanceRecords",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actorId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "eventId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requestId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resourceId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "phase",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "organizationId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernancePageDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
       }
     },
     "/api/v1/ready": {

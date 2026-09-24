@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { withAgentEntry } from '../../features/agent/AgentEntry';
 import { Button, Text, View } from '@tarojs/components';
 import Taro, { useDidShow, useRouter } from '@tarojs/taro';
 import { ApiError, workflowError } from '@caau/api-client';
@@ -10,7 +11,7 @@ import {
   session,
 } from '../../features/materials/session';
 
-export default function TaskPage() {
+function TaskPage() {
   const id = useRouter().params.id ?? '';
   const [individual, setIndividual] = useState<boolean>();
   const [error, setError] = useState('');
@@ -70,3 +71,4 @@ export default function TaskPage() {
     </View>
   );
 }
+export default withAgentEntry(TaskPage);

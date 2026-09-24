@@ -1,3 +1,4 @@
+import { governanceIntegration } from './governance.integration.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { rm, readFile } from 'node:fs/promises';
@@ -88,7 +89,9 @@ export async function authorizationIntegration(t) {
                   ? "to_jsonb(t)-'loginName'-'passwordHash'-'mustChangePassword'-'passwordChangedAt'"
                   : table === 'Session'
                     ? "to_jsonb(t)-'createdAt'-'clientType'"
-                    : 'to_jsonb(t)';
+                    : table === 'AuditRecord'
+                      ? "to_jsonb(t)-'result'-'traceId'-'eventId'-'commandId'"
+                      : 'to_jsonb(t)';
           const rows = (
             await sql.query(
               `SELECT ${expr} data FROM "${table}" t ORDER BY (${expr})::text`,
@@ -120,6 +123,14 @@ export async function authorizationIntegration(t) {
                   '202609220001_agent_platform',
                   '202609220002_agent_workflow_state',
                   '202609230001_agent_schedule_confirmation',
+                  '202609240001_agent_turn_content_order',
+                  '202609250001_agent_planning_request',
+                  '202609250002_agent_planning_runtime_grant',
+                  '202609260001_agent_schedule_candidate',
+                  '202609270001_platform_governance',
+                  '202609270002_governance_retention',
+                  '202609270003_governance_delivery',
+                  '202609270004_governance_acknowledgement',
                 ],
               ],
             )
@@ -241,6 +252,7 @@ export async function authorizationIntegration(t) {
     await session('sys', sys);
     const simulatedAgentModel = new RuleAgentModelAdapter();
     let agentModelCalls = 0;
+    let observedAgentHistory = [];
     const config = {
       ...readConfig({ CAAU_IDENTITY_MODE: 'local' }),
       databaseUrl: appUrl.href,
@@ -252,6 +264,53 @@ export async function authorizationIntegration(t) {
           if (message === '__CAAU_SYNTHETIC_MODEL_TIMEOUT__')
             throw agentModelUnavailable();
           return simulatedAgentModel.parse(message, known);
+        },
+        route(message, context) {
+          agentModelCalls += 1;
+          if (message === '__CAAU_SYNTHETIC_HISTORY__')
+            observedAgentHistory = structuredClone(context.history);
+          if (message === '__CAAU_SYNTHETIC_MODEL_TIMEOUT__')
+            throw agentModelUnavailable();
+          if (message === '__CAAU_SYNTHETIC_QUERY_TIMEOUT__') return 'QUERY';
+          if (
+            message === '__CAAU_SYNTHETIC_CHAT_TIMEOUT__' ||
+            message === '__CAAU_SYNTHETIC_HISTORY__' ||
+            /^__CAAU_SYNTHETIC_CHAT_LENGTH_\d+__$/.test(message) ||
+            /^并发闲聊\d+$/.test(message)
+          )
+            return 'CHAT';
+          return simulatedAgentModel.route(message, context);
+        },
+        planQuery(message, context) {
+          agentModelCalls += 1;
+          if (message === '__CAAU_SYNTHETIC_QUERY_TIMEOUT__')
+            throw agentModelUnavailable();
+          return simulatedAgentModel.planQuery(message, context);
+        },
+        async planPlanning(message, context) {
+          agentModelCalls += 1;
+          const result = await simulatedAgentModel.planPlanning(
+            message,
+            context,
+          );
+          // A model hint like "2" may appear inside a team name but is not
+          // an explicit user-typed EventTeam UUID; it must never be trusted.
+          if (message.includes('（模型短ID回归）'))
+            return {
+              changes: result.changes.map((change) => ({
+                ...change,
+                teamId: '2',
+              })),
+            };
+          return result;
+        },
+        chat(message, context, kind) {
+          agentModelCalls += 1;
+          const length = /^__CAAU_SYNTHETIC_CHAT_LENGTH_(\d+)__$/.exec(message);
+          if (length) return '答'.repeat(Number(length[1]));
+          if (message === '__CAAU_SYNTHETIC_CHAT_TIMEOUT__')
+            throw agentModelUnavailable();
+          return simulatedAgentModel.chat(message, context, kind);
         },
         status() {
           return simulatedAgentModel.status();
@@ -923,7 +982,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          19,
+          27, // Existing 23 plus four governance migrations.
         );
       },
     );
@@ -969,6 +1028,7 @@ export async function authorizationIntegration(t) {
       api,
       session,
       getAgentModelCalls: () => agentModelCalls,
+      getAgentHistory: () => observedAgentHistory,
       restartApi: async () => {
         await app.close();
         app = await createApplication(config);
@@ -976,6 +1036,17 @@ export async function authorizationIntegration(t) {
         base = await app.getUrl();
         return base;
       },
+    });
+    await governanceIntegration(t, {
+      base,
+      tokens,
+      users,
+      orgA,
+      sql,
+      app,
+      session,
+      migrationUrl: url.href,
+      runtime,
     });
     await eventSuppliesIntegration(t, {
       base,

@@ -44,3 +44,6 @@ test-results/
 *.swp
 *.swo
 project.private.config.json
+
+# Local LangGraph development checkpoints
+.langgraph_api/

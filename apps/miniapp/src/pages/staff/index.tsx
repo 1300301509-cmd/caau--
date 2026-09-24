@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { withAgentEntry } from '../../features/agent/AgentEntry';
 import { Button, Input, Text, Textarea, View } from '@tarojs/components';
 import Taro, { useDidShow, useRouter } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
@@ -37,7 +38,7 @@ function timeLabel(value: string) {
   return `${new Date(date.getTime() + 8 * 3600000).toISOString().slice(0, 16).replace('T', ' ')}（北京时间）`;
 }
 
-export default function StaffPage() {
+function StaffPage() {
   const eventId = useRouter().params.event ?? '';
   const [rows, setRows] = useState<Staff[]>([]);
   const [situation, setSituation] = useState<Situation>();
@@ -726,3 +727,4 @@ export default function StaffPage() {
     </View>
   );
 }
+export default withAgentEntry(StaffPage);

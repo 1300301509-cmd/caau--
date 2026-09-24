@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { withAgentEntry } from '../../features/agent/AgentEntry';
 import { Button, Input, Text, View } from '@tarojs/components';
 import Taro, { useDidShow } from '@tarojs/taro';
 import { workflowError, type components } from '@caau/api-client';
@@ -11,7 +12,7 @@ import {
 
 type Choice = components['schemas']['LocalIdentityChoiceDto'];
 
-export default function Profile() {
+function Profile() {
   const [name, setName] = useState(session.identity?.displayName ?? '');
   const [choices, setChoices] = useState<Choice[]>([]);
   const [busy, setBusy] = useState(false);
@@ -184,3 +185,4 @@ export default function Profile() {
     </View>
   );
 }
+export default withAgentEntry(Profile);

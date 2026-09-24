@@ -1,3 +1,4 @@
+import { withAgentEntry } from '../../features/agent/AgentEntry';
 import {
   WorkflowHeading,
   WorkflowEmptyIcon,
@@ -22,7 +23,7 @@ import {
 type Journey = components['schemas']['HostingJourneyDto'];
 const stages = ['APPLICATION', 'MATERIALS', 'CONTRACT', 'PERMITTED'];
 const names = ['申请审核', '材料审核', '合同签订', '批准办赛'];
-export default function HostingProgress() {
+function HostingProgress() {
   const [rows, setRows] = useState<Journey[]>([]);
   const [filter, setFilter] = useState('ALL');
   const [error, setError] = useState('');
@@ -307,3 +308,4 @@ export default function HostingProgress() {
     </View>
   );
 }
+export default withAgentEntry(HostingProgress);

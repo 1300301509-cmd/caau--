@@ -305,7 +305,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setSelectedLocalIdentity(detected?.key ?? '');
               setMode('local');
               return;
-            } catch {
+            } catch (error) {
+              if (!active) return;
+              // A network/server/conflict failure does not invalidate a session.
+              // Preserve it rather than silently switching to the default user.
+              if (
+                !(error instanceof ApiError) ||
+                ![401, 403].includes(error.status)
+              )
+                throw error;
               sessionStorage.removeItem(localSessionKey);
               sessionStorage.removeItem(localIdentityKey);
             }
@@ -361,8 +369,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   setMode('local');
                   return;
                 }
-              } catch {
-                // A stale synthetic session is replaced below.
+              } catch (error) {
+                if (!active) return;
+                if (
+                  !(error instanceof ApiError) ||
+                  ![401, 403].includes(error.status)
+                )
+                  throw error;
+                // Only an invalid synthetic session is replaced below.
               }
               sessionStorage.removeItem(localSessionKey);
               sessionStorage.removeItem(localIdentityKey);

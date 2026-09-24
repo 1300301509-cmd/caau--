@@ -132,6 +132,7 @@ export function CompetitionPage() {
     const query = new URLSearchParams({ module: key });
     if (id) query.set('event', id);
     history.pushState(null, '', `/competition?${query}`);
+    window.dispatchEvent(new Event('caau:page-context'));
   }
   return (
     <div className="competition-page">

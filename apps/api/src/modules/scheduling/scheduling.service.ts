@@ -123,39 +123,39 @@ export class SchedulingService {
     };
   }
 
-  get(token: string, eventId: string) {
-    return this.auth.run(
-      token,
-      'schedule.read',
+  // Shared read-only use case for API and authorized agent tools. Call inside
+  // the caller's authorization transaction so snapshot and permissions agree.
+  async readInTransaction(tx: Tx, actor: Actor, eventId: string) {
+    await this.readAccess(tx, actor, eventId);
+    const row = await tx.eventSchedule.findUnique({ where: { eventId } });
+    if (row) return this.view(tx, row);
+    return {
+      exists: false,
       eventId,
-      {},
-      async (tx, actor) => {
-        await this.readAccess(tx, actor, eventId);
-        const row = await tx.eventSchedule.findUnique({ where: { eventId } });
-        if (row) return this.view(tx, row);
-        return {
-          exists: false,
-          eventId,
-          format: 'ROUND_ROBIN' as const,
-          status: 'DRAFT' as const,
-          config: {
-            teamIds: [],
-            venues: [],
-            startDate: '',
-            endDate: '',
-            dailyStart: '',
-            dailyEnd: '',
-            durationMinutes: 40,
-            bufferMinutes: 10,
-            minRestMinutes: 60,
-          },
-          matches: [],
-          issues: [],
-          revision: 0,
-          publishedAt: '',
-          updatedAt: '',
-        };
+      format: 'ROUND_ROBIN' as const,
+      status: 'DRAFT' as const,
+      config: {
+        teamIds: [],
+        venues: [],
+        startDate: '',
+        endDate: '',
+        dailyStart: '',
+        dailyEnd: '',
+        durationMinutes: 40,
+        bufferMinutes: 10,
+        minRestMinutes: 60,
       },
+      matches: [],
+      issues: [],
+      revision: 0,
+      publishedAt: '',
+      updatedAt: '',
+    };
+  }
+
+  get(token: string, eventId: string) {
+    return this.auth.run(token, 'schedule.read', eventId, {}, (tx, actor) =>
+      this.readInTransaction(tx, actor, eventId),
     );
   }
 

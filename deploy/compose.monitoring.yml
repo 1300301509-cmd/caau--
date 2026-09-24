@@ -1,0 +1,113 @@
+name: caau-monitoring
+services:
+  prometheus:
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    command:
+      [
+        --config.file=/etc/prometheus/prometheus.yml,
+        --storage.tsdb.retention.time=90d,
+        --storage.tsdb.retention.size=20GB,
+      ]
+    volumes:
+      [
+        ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro,
+        prometheus:/prometheus,
+      ]
+    secrets: [monitoring_token]
+    extra_hosts: ['host.docker.internal:host-gateway']
+    restart: unless-stopped
+  loki:
+    image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+    command: [-config.file=/etc/loki/config.yml]
+    volumes: [./monitoring/loki.yml:/etc/loki/config.yml:ro, loki:/loki]
+    restart: unless-stopped
+  tempo:
+    image: grafana/tempo:3.0.3@sha256:0296560ac66f8a3600d7fb3014a52c189d4d9c3549ad6ff441bf2409855d68d5
+    command: [-config.file=/etc/tempo/config.yml]
+    volumes: [./monitoring/tempo.yml:/etc/tempo/config.yml:ro, tempo:/var/tempo]
+    restart: unless-stopped
+  alloy:
+    image: grafana/alloy:v1.19.2@sha256:b8ec653c44235fbe910879145dac3597d66b0aaecf60bcbbe82580767771a839
+    command:
+      [
+        run,
+        --server.http.listen-addr=0.0.0.0:12345,
+        --storage.path=/var/lib/alloy,
+        /etc/alloy/config.alloy,
+      ]
+    ports: ['127.0.0.1:14318:4318']
+    volumes:
+      [
+        ./monitoring/config.alloy:/etc/alloy/config.alloy:ro,
+        ../.local/monitoring/logs:/var/log/caau:ro,
+        alloy:/var/lib/alloy,
+      ]
+    restart: unless-stopped
+  blackbox:
+    image: prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
+    volumes: [./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro]
+    extra_hosts: ['host.docker.internal:host-gateway']
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
+    env_file: ../.local/monitoring/runtime.env
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_AUTH_BASIC_ENABLED: 'false'
+      GF_AUTH_PROXY_ENABLED: 'true'
+      GF_AUTH_PROXY_HEADER_NAME: X-WEBAUTH-USER
+      GF_AUTH_PROXY_AUTO_SIGN_UP: 'true'
+      GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN: 'false'
+      GF_AUTH_PROXY_WHITELIST: 172.31.90.0/24
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_SERVER_ROOT_URL: '${CAAU_GRAFANA_ROOT_URL:-http://127.0.0.1:5175/ops/grafana/}'
+      GF_SERVER_SERVE_FROM_SUB_PATH: 'true'
+    volumes:
+      [
+        grafana:/var/lib/grafana,
+        ./monitoring/provisioning:/etc/grafana/provisioning:ro,
+        ./monitoring/dashboards:/etc/grafana/dashboards:ro,
+      ]
+    restart: unless-stopped
+  gateway:
+    image: nginx:1.28.2@sha256:42e026ae5315aa0deec22fb00c364fc5ec8d9af1c4833ad5317e2a433e4de0df
+    ports: ['127.0.0.1:3300:80']
+    volumes: [./monitoring/nginx.conf:/etc/nginx/conf.d/default.conf:ro]
+    extra_hosts: ['host.docker.internal:host-gateway']
+    depends_on: [grafana]
+    restart: unless-stopped
+  notifier:
+    image: node:24.20.0-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
+    user: '${CAAU_MONITOR_UID:-1000}:${CAAU_MONITOR_GID:-1000}'
+    command: [node, /app/notifier.mjs]
+    env_file: ../.local/monitoring/runtime.env
+    environment:
+      CAAU_NOTIFY_STATE: /state/notifications.json
+      CAAU_API_BASE: http://host.docker.internal:3000
+      CAAU_MONITORING_TOKEN_FILE: /run/secrets/monitoring_token
+      CAAU_BACKUP_STATUS_PATH: /backup-status.json
+    volumes:
+      [
+        ../scripts/observability-notifier.mjs:/app/notifier.mjs:ro,
+        ../.local/monitoring/notifier:/state,
+        ../.local/monitoring/backup-status.json:/backup-status.json:ro,
+      ]
+    secrets: [monitoring_token]
+    extra_hosts: ['host.docker.internal:host-gateway']
+    restart: unless-stopped
+secrets:
+  monitoring_token:
+    file: ../.local/monitoring/monitoring.token
+volumes:
+  prometheus:
+  loki:
+  tempo:
+  alloy:
+  grafana:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.31.90.0/24

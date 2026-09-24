@@ -3,6 +3,7 @@ import { ConfigProvider } from 'antd';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { AuthProvider } from '../features/auth/AuthContext';
+import { AgentHost } from '../features/agent/AgentHost';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -25,7 +26,13 @@ createRoot(root).render(
       }}
     >
       <AuthProvider>
-        <App />
+        {location.pathname === '/system/health' ? (
+          <App />
+        ) : (
+          <AgentHost>
+            <App />
+          </AgentHost>
+        )}
       </AuthProvider>
     </ConfigProvider>
   </StrictMode>,

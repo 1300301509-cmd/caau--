@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: CAAU
+    folder: CAAU
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /etc/grafana/dashboards

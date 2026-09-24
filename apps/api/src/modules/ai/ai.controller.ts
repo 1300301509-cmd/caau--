@@ -17,9 +17,14 @@ import {
 import type { AuthRequest } from '../authorization/authorization.service.js';
 import { Permission } from '../authorization/authorization.guard.js';
 import { AiService } from './ai.service.js';
+import { CandidateService } from './candidate.service.js';
 import {
   AgentCancelConfirmationDto,
   AgentMessageInputDto,
+  AgentPlanningRequestViewDto,
+  AgentScheduleCandidateViewDto,
+  GenerateAgentScheduleCandidateDto,
+  ConfirmAgentPlanningRequestDto,
   AgentModelStatusDto,
   AgentReplyDto,
   AgentScheduleAdjustmentResultDto,
@@ -33,7 +38,10 @@ import {
 @ApiCookieAuth('webSession')
 @Controller('agent')
 export class AiController {
-  constructor(private readonly service: AiService) {}
+  constructor(
+    private readonly service: AiService,
+    private readonly candidates: CandidateService,
+  ) {}
 
   @Get('model-status')
   @Permission('agent.model.status')
@@ -81,6 +89,71 @@ export class AiController {
     return this.service.cancelScheduleAdjustment(request.token ?? '', ticketId);
   }
 
+  @Post('planning-requests/:planningId/confirm')
+  @HttpCode(200)
+  @Permission('agent.planning.confirm')
+  @ApiOperation({
+    operationId: 'confirmAgentPlanningRequest',
+    description:
+      'Confirm a requirements revision only; does not generate schedules or issue execution tickets.',
+  })
+  @ApiOkResponse({ type: AgentPlanningRequestViewDto })
+  confirmPlanning(
+    @Req() request: AuthRequest,
+    @Param('planningId') planningId: string,
+    @Body() body: ConfirmAgentPlanningRequestDto,
+  ) {
+    return this.service.confirmPlanningRequest(
+      request.token ?? '',
+      planningId,
+      body,
+    );
+  }
+
+  @Post('planning-requests/:planningId/candidates')
+  @HttpCode(200)
+  @Permission('agent.candidate.preview')
+  @ApiOperation({
+    operationId: 'previewAgentScheduleCandidate',
+    description:
+      'Calculate and persist a non-executable whole-schedule candidate only; never saves a formal schedule.',
+  })
+  @ApiOkResponse({ type: AgentScheduleCandidateViewDto })
+  previewCandidate(
+    @Req() request: AuthRequest,
+    @Param('planningId') planningId: string,
+    @Body() body: GenerateAgentScheduleCandidateDto,
+  ) {
+    return this.candidates.generate(request.token ?? '', planningId, body);
+  }
+
+  @Get('planning-requests/:planningId/candidates/latest')
+  @Permission('agent.candidate.read')
+  @ApiOperation({ operationId: 'getLatestAgentScheduleCandidate' })
+  @ApiOkResponse({
+    type: AgentScheduleCandidateViewDto,
+    description:
+      'Most recent candidate; 404 when absent. Re-authorized and freshness-checked.',
+  })
+  latestCandidate(
+    @Req() request: AuthRequest,
+    @Param('planningId') planningId: string,
+  ) {
+    return this.candidates.latest(request.token ?? '', planningId);
+  }
+
+  @Get('planning-requests/:planningId/candidates/:candidateId')
+  @Permission('agent.candidate.read')
+  @ApiOperation({ operationId: 'getAgentScheduleCandidate' })
+  @ApiOkResponse({ type: AgentScheduleCandidateViewDto })
+  candidate(
+    @Req() request: AuthRequest,
+    @Param('planningId') planningId: string,
+    @Param('candidateId') candidateId: string,
+  ) {
+    return this.candidates.get(request.token ?? '', planningId, candidateId);
+  }
+
   @Post('sessions')
   @HttpCode(200)
   @Permission('agent.session')
@@ -109,7 +182,11 @@ export class AiController {
   @Post('sessions/:sessionId/messages')
   @HttpCode(200)
   @Permission('agent.message')
-  @ApiOperation({ operationId: 'sendAgentMessage' })
+  @ApiOperation({
+    operationId: 'sendAgentMessage',
+    description:
+      'Route authorized chat, read-only queries, requirement collection and single-match scheduling; requirement confirmation cannot write a schedule.',
+  })
   @ApiOkResponse({ type: AgentReplyDto })
   message(
     @Req() request: AuthRequest,

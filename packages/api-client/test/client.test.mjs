@@ -23,6 +23,32 @@ test('generated readiness route and success response are consumed by the portabl
   assert.deepEqual(await client.getReadiness(), ready);
 });
 
+test('conversation request has enough time for routing and model reply on fetch and Taro', async () => {
+  const client = createApiClient('http://localhost', async (options) => {
+    assert.equal(options.method, 'POST');
+    assert.equal(options.timeout, 75000);
+    return {
+      status: 200,
+      data: {
+        sessionId: '00000000-0000-4000-8000-000000000001',
+        status: 'CHAT',
+        message: '你好',
+        candidates: [],
+        task: null,
+      },
+    };
+  });
+  assert.equal(
+    (
+      await client.request('sendAgentMessage', {
+        path: { sessionId: '00000000-0000-4000-8000-000000000001' },
+        body: { message: '你好' },
+      })
+    ).status,
+    'CHAT',
+  );
+});
+
 test('known 503 has a typed stable code; unknown errors never echo server bodies', async () => {
   const client = createApiClient('http://localhost', async () => ({
     status: 503,

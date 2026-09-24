@@ -8,6 +8,7 @@ import pg from 'pg';
 import { chromium, expect } from '@playwright/test';
 import { createApplication } from '../apps/api/dist/application.js';
 import { readConfig } from '../apps/api/dist/config.js';
+import { createAgentModel } from '../apps/api/dist/modules/ai/model-adapter.js';
 import {
   assertLocalDatabaseUrls,
   requireDocker,
@@ -61,6 +62,8 @@ async function main() {
     await sql.query(`REVOKE CONNECT ON DATABASE "${name}" FROM PUBLIC`);
     await sql.query(`GRANT CONNECT ON DATABASE "${name}" TO caau_test_app`);
     await sql.query('GRANT USAGE ON SCHEMA public TO caau_test_app');
+    const realModel = createAgentModel(process.env);
+    const probeOrigin = Date.now();
     const config = {
       ...readConfig({
         ...process.env,
@@ -68,8 +71,9 @@ async function main() {
         PORT: String(apiPort),
       }),
       databaseUrl: appUrl.href,
+      agentModel: realModel,
     };
-    app = await createApplication(config); // No model mock: module reads the real process-level Qwen configuration.
+    app = await createApplication(config); // Uses the real adapter's redacted per-phase diagnostics.
     await app.listen(apiPort, '127.0.0.1');
     web = createServer(async (request, response) => {
       try {
@@ -195,16 +199,75 @@ async function main() {
       )[1];
     assert.ok(source, 'Saturday second match must exist');
     const baseline = JSON.stringify(generated.matches);
+    stage = 'CAAU-062 real Qwen read-only query and follow-up';
+    const querySession = await api(token, 'POST', 'agent/sessions', {});
+    const queryPath = `agent/sessions/${querySession.id}/messages`;
+    const scheduleList = await api(token, 'POST', queryPath, {
+      message: '查2027-06-05的比赛安排',
+      eventId: event.id,
+    });
+    stage = 'CAAU-062 list assertions';
+    assert.equal(scheduleList.status, 'QUERY');
+    assert.match(scheduleList.message, /北京日期：2027-06-05/);
+    assert.match(
+      scheduleList.message,
+      new RegExp(`草稿 V${generated.revision}`),
+    );
+    assert.equal(scheduleList.task, null);
+    stage = 'CAAU-062 match proposal';
+    const matchDetail = await api(token, 'POST', queryPath, {
+      message: '2027-06-05的第二场比赛详情',
+      eventId: event.id,
+    });
+    stage = 'CAAU-062 match assertions';
+    assert.equal(matchDetail.status, 'QUERY');
+    assert.ok(matchDetail.message.includes(source.id));
+    stage = 'CAAU-062 follow-up proposal';
+    const followUp = await api(token, 'POST', queryPath, {
+      message: '刚才那场的场地呢？',
+      eventId: event.id,
+    });
+    stage = 'CAAU-062 follow-up assertions';
+    assert.equal(followUp.status, 'QUERY');
+    assert.ok(followUp.message.includes(source.id));
+    const queryHistory = await api(
+      token,
+      'GET',
+      `agent/sessions/${querySession.id}`,
+    );
+    assert.equal(queryHistory.task, null);
+    assert.ok(
+      queryHistory.turns.some((turn) => turn.content === followUp.message),
+    );
+    assert.equal(
+      (await api(token, 'GET', `events/${event.id}/schedule`)).revision,
+      generated.revision,
+    );
+    console.log('CAAU-062 Qwen read-only list, match and follow-up: verified');
     browser = await chromium.launch();
     const page = await browser.newPage({
       viewport: { width: 1440, height: 1000 },
     });
-    await page.goto(
-      `http://127.0.0.1:${webPort}/competition?module=schedule&event=${event.id}`,
-    );
-    await expect(page.locator('.schedule-week')).toBeVisible({
-      timeout: 15000,
+    page.on('request', (request) => {
+      if (request.url().endsWith('/messages'))
+        console.log(
+          `Agent message request sent +${Date.now() - probeOrigin}ms`,
+        );
     });
+    page.on('requestfailed', (request) => {
+      if (request.url().endsWith('/messages'))
+        console.log(
+          `Agent message request failed in browser +${Date.now() - probeOrigin}ms`,
+        );
+    });
+    const messageStatuses = [];
+    page.on('response', (response) => {
+      if (response.url().endsWith('/messages'))
+        messageStatuses.push(response.status());
+    });
+    await page.goto(`http://127.0.0.1:${webPort}/workspace`);
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
     await expect(page.locator('.schedule-agent-model-status')).toContainText(
       'QWEN',
     );
@@ -222,27 +285,97 @@ async function main() {
     );
     console.log('Web QWEN status and real connection test succeeded');
     async function send(text) {
-      await page.getByLabel('调整要求').fill(text);
-      const [response] = await Promise.all([
-        page.waitForResponse(
-          (item) =>
-            item.url().endsWith('/messages') &&
-            item.request().method() === 'POST',
-          { timeout: 45000 },
-        ),
-        page.getByRole('button', { name: '生成调整预览' }).click(),
-      ]);
-      console.log('Qwen message HTTP status:', response.status());
-      assert.equal(
-        response.status(),
-        200,
-        `Qwen message HTTP ${response.status()}`,
-      );
-      await expect(page.getByLabel('调整要求')).toHaveValue('', {
-        timeout: 15000,
+      const scenario = stage;
+      stage = `${scenario}: input`;
+      await expect(page.getByLabel('对话消息')).toBeEnabled({ timeout: 20000 });
+      await page.getByLabel('对话消息').fill(text);
+      stage = `${scenario}: send button readiness`;
+      await expect(page.getByRole('button', { name: '发送消息' })).toBeEnabled({
+        timeout: 20000,
+      });
+      stage = `${scenario}: dispatch click`;
+      const session = (await api(token, 'GET', 'agent/sessions'))[0];
+      const before = session.turns.length;
+      const responseCount = messageStatuses.length;
+      await page
+        .getByRole('button', { name: '发送消息' })
+        .click({ noWaitAfter: true, timeout: 15000 });
+      stage = `${scenario}: persisted reply`;
+      let completed = false;
+      for (let attempt = 0; attempt < 180; attempt++) {
+        const latest = await api(token, 'GET', `agent/sessions/${session.id}`);
+        if (
+          latest.turns.length >= before + 2 &&
+          latest.turns.at(-2)?.content === text &&
+          latest.turns.at(-1)?.role === 'ASSISTANT'
+        ) {
+          completed = true;
+          break;
+        }
+        if (
+          messageStatuses.length > responseCount &&
+          messageStatuses.at(-1) !== 200
+        ) {
+          assert.equal(
+            latest.turns.length,
+            before,
+            'Failed model call must not save a partial turn',
+          );
+          await expect(page.getByLabel('对话消息')).toHaveValue(text, {
+            timeout: 5000,
+          });
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      assert.ok(completed, 'Model reply must persist before acceptance');
+      stage = `${scenario}: HTTP and UI completion`;
+      for (
+        let attempt = 0;
+        attempt < 40 && messageStatuses.length <= responseCount;
+        attempt++
+      )
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      assert.equal(messageStatuses.length, responseCount + 1);
+      assert.equal(messageStatuses.at(-1), 200);
+      console.log('Qwen message HTTP status:', messageStatuses.at(-1));
+      await expect(page.getByLabel('对话消息')).toHaveValue('', {
+        timeout: 30000,
       });
     }
-    stage = 'Qwen turn 1';
+    stage = 'Qwen no-event input readiness';
+    await expect(page.getByLabel('对话消息')).toBeEnabled({ timeout: 20000 });
+    stage = 'Qwen no-event greeting request';
+    await send('你好');
+    stage = 'Qwen no-event seven-team discussion';
+    await send('七支球队适合什么赛制？');
+    const chatSession = (await api(token, 'GET', 'agent/sessions'))[0];
+    assert.equal(chatSession.currentEventId, null);
+    assert.equal(chatSession.task, null);
+    assert.ok(
+      chatSession.turns.some(
+        (turn) =>
+          turn.role === 'ASSISTANT' &&
+          /七支|7支|轮空|单循环/.test(turn.content),
+      ),
+    );
+    assert.equal(
+      (
+        await sql.query(
+          'SELECT count(*)::int n FROM "AgentTask" WHERE "sessionId"=$1',
+          [chatSession.id],
+        )
+      ).rows[0].n,
+      0,
+    );
+    await page.goto(
+      `http://127.0.0.1:${webPort}/competition?module=schedule&event=${event.id}`,
+    );
+    await expect(page.locator('.schedule-week')).toBeVisible({
+      timeout: 15000,
+    });
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+    stage = 'Qwen turn 1 from conversation';
     await send('把周六第二场移到周日，场地保持不变');
     const afterFirst = (await api(token, 'GET', 'agent/sessions')).find(
       (item) => item.currentEventId === event.id,
@@ -253,7 +386,28 @@ async function main() {
     assert.equal(afterFirst.task.parameters.sourceOrdinal, 2);
     assert.equal(afterFirst.task.parameters.targetWeekday, 7);
     console.log('Turn 1: waiting for clock');
-    stage = 'Qwen turn 2';
+    stage = 'Qwen question inside task';
+    const beforeInterruption = (
+      await sql.query(
+        'SELECT revision,"checkpointThreadId" FROM "AgentTask" WHERE id=$1',
+        [afterFirst.task.id],
+      )
+    ).rows[0];
+    await send('赛制规则是什么？');
+    assert.deepEqual(
+      (
+        await sql.query(
+          'SELECT revision,"checkpointThreadId" FROM "AgentTask" WHERE id=$1',
+          [afterFirst.task.id],
+        )
+      ).rows[0],
+      beforeInterruption,
+    );
+    assert.equal(
+      (await api(token, 'GET', `agent/sessions/${chatSession.id}`)).task.id,
+      afterFirst.task.id,
+    );
+    stage = 'Qwen turn 2 after question';
     await send('上午十点');
     await expect(page.locator('.schedule-agent-preview')).toBeVisible({
       timeout: 30000,
@@ -267,6 +421,15 @@ async function main() {
     );
     stage = 'Qwen turn 3';
     await send('再晚半小时');
+    const thirdTask = (
+      await api(token, 'GET', `agent/sessions/${chatSession.id}`)
+    ).task;
+    console.log(
+      'Third turn task step:',
+      thirdTask?.step,
+      'preview present:',
+      !!thirdTask?.preview,
+    );
     await expect(page.locator('.schedule-agent-preview')).toBeVisible({
       timeout: 30000,
     });
@@ -338,13 +501,14 @@ async function main() {
     assert.equal(receipt.revision, saved.revision);
     stage = 'Web refresh and retry';
     await page.reload();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       receipt.commandId,
       { timeout: 15000 },
     );
-    await expect(
-      page.locator('.schedule-agent > .ant-alert').last(),
-    ).toContainText(`该命令当时执行 · 草稿 V${receipt.revision}`);
+    await expect(page.locator('.agent-execution > summary')).toContainText(
+      `草稿 V${receipt.revision} 已保存`,
+    );
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       '持久执行回执（恢复）',
     );
@@ -416,9 +580,16 @@ async function main() {
   }
 }
 
-main().catch(() => {
+main().catch((error) => {
   console.error(
     `Qwen Web acceptance failed at ${stage}; exception/provider details suppressed. No success claimed.`,
   );
+  const firstLine = error instanceof Error ? error.message.split('\n')[0] : '';
+  if (
+    /^(?:locator\.|page\.|expect\(|Target closed|AssertionError)/.test(
+      firstLine,
+    )
+  )
+    console.error('Safe harness failure:', firstLine.slice(0, 120));
   process.exitCode = 1;
 });

@@ -61,9 +61,24 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await page.goto(
       `http://127.0.0.1:4173/competition?module=schedule&event=${eventId}`,
     );
+    // The relogin below uses the local signer's fixed super account. Use that
+    // same account initially; two different super accounts must not share chats.
+    const browserLogin = await fetch(
+      `${await app.getUrl()}/api/v1/local-test-identities/sessions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identity: 'super-admin' }),
+      },
+    );
+    expect(browserLogin.status).toBe(200);
+    const browserSession = await browserLogin.json();
+    await page
+      .getByLabel('全局切换测试账号权限')
+      .waitFor({ state: 'attached' });
     await page.evaluate(
       (token) => sessionStorage.setItem('caau.local-test-session', token),
-      tokens.super,
+      browserSession.token,
     );
     await page.reload();
     await expect(page.locator('.schedule-week')).toBeVisible({
@@ -105,15 +120,188 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await expect(
       page.locator('.schedule-week-table .schedule-match-card'),
     ).toHaveCount(6);
+    // The local Web identity may differ from the synthetic API token used by
+    // other tests. Bind this fixture to the browser's actual authenticated user.
+    // Never log the token.
+    const activeToken = await page.evaluate(() =>
+      sessionStorage.getItem('caau.local-test-session'),
+    );
+    expect(activeToken).toBeTruthy();
+    const freshResponse = await fetch(
+      `${await app.getUrl()}/api/v1/agent/sessions`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      },
+    );
+    expect(freshResponse.ok).toBeTruthy();
+    const freshSession = await freshResponse.json();
+    const identityResponse = await fetch(
+      `${await app.getUrl()}/api/v1/authorization/me`,
+      {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      },
+    );
+    expect(identityResponse.ok).toBeTruthy();
+    const identity = await identityResponse.json();
+    await page.evaluate(
+      ({ actorId, sessionId }) => {
+        sessionStorage.setItem(`caau.agent.active.${actorId}`, sessionId);
+      },
+      { actorId: identity.id, sessionId: freshSession.id },
+    );
+    await page.goto('http://127.0.0.1:4173/workspace');
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await expect(page.locator('.schedule-agent-context')).toContainText(
+      '浏览页面：无赛事上下文',
+    );
+    await expect(page.locator('.schedule-agent-context')).toContainText(
+      '任务对象：尚未选择赛事',
+    );
+    await page.getByRole('button', { name: '收起设置' }).click();
+    await mkdir('.local/evidence/caau-065', { recursive: true });
+    await page.locator('.agent-drawer').screenshot({
+      path: '.local/evidence/caau-065/chat-desktop.png',
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('.agent-drawer').screenshot({
+      path: '.local/evidence/caau-065/chat-mobile-web.png',
+    });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole('button', { name: '介绍一下你自己' }).click();
+    await expect(page.getByLabel('对话消息')).toHaveValue('介绍一下你自己');
+    await page.getByLabel('对话消息').fill('未发送的输入应在最小化后保留');
+    await page.getByRole('button', { name: '最小化' }).click();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+    await expect(page.getByLabel('对话消息')).toHaveValue(
+      '未发送的输入应在最小化后保留',
+    );
+    const tasksBeforeChat = (
+      await sql.query('SELECT count(*)::int n FROM "AgentTask"')
+    ).rows[0].n;
+    await page.getByLabel('对话消息').fill('你好');
+    await page.getByRole('button', { name: '发送消息' }).click();
+    await expect(page.locator('.schedule-agent-history')).toContainText('你好');
+    await page.getByLabel('对话消息').fill('七支球队适合什么赛制？');
+    await page.getByRole('button', { name: '发送消息' }).click();
+    await expect(page.locator('.schedule-agent-history')).toContainText('21场');
+    expect(
+      await page
+        .locator('.schedule-agent-history .agent-message')
+        .evaluateAll((items) =>
+          items.map((item) =>
+            item.classList.contains('agent-message-user')
+              ? 'USER'
+              : 'ASSISTANT',
+          ),
+        ),
+    ).toEqual(['USER', 'ASSISTANT', 'USER', 'ASSISTANT']);
+    expect(
+      agentResponses.slice(0, 2).map((item) => JSON.parse(item.body).sessionId),
+      `new conversation should restore ${freshSession.id}`,
+    ).toEqual([freshSession.id, freshSession.id]);
+    expect(
+      (await sql.query('SELECT count(*)::int n FROM "AgentTask"')).rows[0].n,
+    ).toBe(tasksBeforeChat);
+    const turnsBeforeOverflow = (
+      await sql.query(
+        'SELECT count(*)::int n FROM "AgentTurn" WHERE "sessionId"=$1',
+        [freshSession.id],
+      )
+    ).rows[0].n;
+    await page
+      .getByLabel('对话消息')
+      .fill('__CAAU_SYNTHETIC_CHAT_LENGTH_4001__');
+    await page.getByRole('button', { name: '发送消息' }).click();
+    await expect(page.locator('.schedule-agent .ant-alert')).toContainText(
+      '回答超过单次 4000 字上限',
+    );
+    await expect(page.getByLabel('对话消息')).toHaveValue(
+      '__CAAU_SYNTHETIC_CHAT_LENGTH_4001__',
+    );
+    expect(
+      (
+        await sql.query(
+          'SELECT count(*)::int n FROM "AgentTurn" WHERE "sessionId"=$1',
+          [freshSession.id],
+        )
+      ).rows[0].n,
+    ).toBe(turnsBeforeOverflow);
+    await page.goto(
+      `http://127.0.0.1:4173/competition?module=schedule&event=${eventId}`,
+    );
+    await expect(page.locator('.schedule-week')).toBeVisible();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await expect(page.locator('.schedule-agent-context')).toContainText(
+      '任务对象：',
+    );
     await expect(page.locator('.schedule-agent-model-status')).toContainText(
       'SIMULATED',
+    );
+    const versionsBeforeQuery = (
+      await sql.query(
+        'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+        [eventId],
+      )
+    ).rows[0].n;
+    await page.getByLabel('对话消息').fill('查这个赛事的赛程');
+    await page.getByRole('button', { name: '发送消息' }).click();
+    await expect(page.locator('.schedule-agent-query-answer')).toContainText(
+      /赛程：草稿 V\d+/,
+    );
+    await expect(page.locator('.schedule-agent-query-answer')).toContainText(
+      '场地：',
+    );
+    await expect(page.locator('.schedule-agent-preview')).toHaveCount(0);
+    expect(
+      (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [eventId],
+        )
+      ).rows[0].n,
+    ).toBe(versionsBeforeQuery);
+    const versionsBeforeUnsupported = (
+      await sql.query(
+        'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+        [eventId],
+      )
+    ).rows[0].n;
+    await page.getByLabel('对话消息').fill('请批量重排整套赛程并发布赛程');
+    await page.getByRole('button', { name: '发送消息' }).click();
+    await expect(page.locator('.schedule-agent-history')).toContainText(
+      '不能代为执行',
+    );
+    await expect(page.locator('.schedule-agent-preview')).toHaveCount(0);
+    expect(
+      (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [eventId],
+        )
+      ).rows[0].n,
+    ).toBe(versionsBeforeUnsupported);
+    await page.reload();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await expect(page.locator('.schedule-agent-history')).toContainText(
+      '请批量重排整套赛程并发布赛程',
     );
     await page.getByRole('button', { name: '测试模型连接' }).click();
     await expect(page.locator('.schedule-agent-model-status')).toContainText(
       '模拟模式不连接外部模型',
     );
-    await page.getByLabel('调整要求').fill('把周二第二场比赛改到周三十点');
-    await page.getByRole('button', { name: '生成调整预览' }).click();
+    await expect(page.locator('.schedule-agent-context')).toContainText(
+      '合成赛程赛事',
+    );
+    await page.getByLabel('对话消息').fill('把周二第二场比赛改到周三十点');
+    await page.getByRole('button', { name: '发送消息' }).click();
     try {
       await expect(page.locator('.schedule-agent-preview')).toBeVisible({
         timeout: 15000,
@@ -146,18 +334,29 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     );
     await page.getByRole('button', { name: /取\s*消/ }).click();
     await expect(page.locator('.schedule-agent-preview')).toHaveCount(0);
-    await page.getByLabel('调整要求').fill('把周二第二场比赛改到周三十点');
-    await page.getByRole('button', { name: '生成调整预览' }).click();
+    await page.getByRole('button', { name: '新对话' }).click();
+    await expect(page.locator('.schedule-agent-preview')).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: '确认保存草稿' }),
+    ).toHaveCount(0);
+    await page.reload();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+    await expect(page.locator('.schedule-agent-preview')).toHaveCount(0);
+    await page.getByLabel('对话消息').fill('把周二第二场比赛改到周三十点');
+    await page.getByRole('button', { name: '发送消息' }).click();
     await expect(page.locator('.schedule-agent-preview')).toBeVisible({
       timeout: 15000,
     });
     await page.getByRole('button', { name: '确认保存草稿' }).click();
-    await expect(page.getByText(/该命令当时执行 · 草稿 V/)).toBeVisible({
+    await expect(page.locator('.agent-execution > summary')).toBeVisible({
       timeout: 15000,
     });
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       '首次执行回执',
     );
+    await page.locator('.agent-drawer').screenshot({
+      path: '.local/evidence/caau-065/receipt-summary.png',
+    });
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       '命令：',
     );
@@ -183,12 +382,13 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       ),
     ).toBe(true);
     await page.reload();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       originalReceipt.commandId,
     );
-    await expect(
-      page.locator('.schedule-agent > .ant-alert').last(),
-    ).toContainText(`草稿 V${originalReceipt.result.revision}`);
+    await expect(page.locator('.agent-execution > summary')).toContainText(
+      `草稿 V${originalReceipt.result.revision} 已保存`,
+    );
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       '持久执行回执（恢复）',
     );
@@ -196,23 +396,26 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       sessionStorage.removeItem('caau.local-test-session'),
     );
     await page.reload();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       originalReceipt.commandId,
       { timeout: 15000 },
     );
+    await page.getByRole('button', { name: '最小化' }).click();
     if ((await settings.getAttribute('open')) === null) {
       await settings.locator('> summary').click();
     }
     await generate.click();
     await expect(page.getByText('当前有')).toHaveCount(0);
-    await expect(
-      page.locator('.schedule-agent > .ant-alert').last(),
-    ).toContainText('该命令当时执行');
+    await expect(page.locator('.agent-execution > summary')).toContainText(
+      '已保存',
+    );
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       '赛程当前状态',
     );
-    await page.getByLabel('调整要求').fill('把周二第二场比赛改到周三十点');
-    await page.getByRole('button', { name: '生成调整预览' }).click();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+    await page.getByLabel('对话消息').fill('把周二第二场比赛改到周三十点');
+    await page.getByRole('button', { name: '发送消息' }).click();
     await expect(page.locator('.schedule-agent-preview')).toBeVisible();
     const versionsBeforeLostResponse = (
       await sql.query(
@@ -261,12 +464,13 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     );
     await page.unroute('**/agent/confirmation-tickets/*/confirm');
     await page.reload();
+    await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
     await expect(page.locator('.schedule-agent-result-details')).toContainText(
       committedTicket.commandId,
     );
-    await expect(
-      page.locator('.schedule-agent > .ant-alert').last(),
-    ).toContainText(`草稿 V${committedTicket.revision}`);
+    await expect(page.locator('.agent-execution > summary')).toContainText(
+      `草稿 V${committedTicket.revision} 已保存`,
+    );
     const ticketId = committedTicket.ticketId;
     const retry = await fetch(
       `http://127.0.0.1:${process.env.CAAU_BROWSER_API_PORT ?? 3000}/api/v1/agent/confirmation-tickets/${ticketId}/confirm`,
@@ -301,6 +505,93 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
         )
       ).rows[0].n,
     ).toBe(1);
+    const anotherAccount = await browser.newPage();
+    try {
+      await anotherAccount.goto('http://127.0.0.1:4173/workspace');
+      await anotherAccount.evaluate(
+        (token) => sessionStorage.setItem('caau.local-test-session', token),
+        tokens.manager,
+      );
+      await anotherAccount.reload();
+      await anotherAccount
+        .getByRole('button', { name: '打开 CAAU 智能助手' })
+        .click();
+      await expect(anotherAccount.getByLabel('对话消息')).toBeEnabled();
+      await expect(
+        anotherAccount.locator('.schedule-agent-history'),
+      ).not.toContainText(committedTicket.commandId);
+      await anotherAccount.getByRole('button', { name: '新对话' }).click();
+      const baselinePlans = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [eventId],
+        )
+      ).rows[0].n;
+      await anotherAccount
+        .getByLabel('对话消息')
+        .fill(
+          '请收集排程需求，合成赛程赛事，赛事日期范围 2027-06-01 到 2027-06-07',
+        );
+      await anotherAccount.getByRole('button', { name: '发送消息' }).click();
+      await expect(anotherAccount.locator('.agent-planning')).toContainText(
+        '赛事日期 2027-06-01 至 2027-06-07',
+      );
+      await anotherAccount
+        .getByRole('button', { name: '仅确认需求（不生成赛程）' })
+        .click();
+      await expect(anotherAccount.locator('.agent-planning')).toContainText(
+        '已确认需求',
+      );
+      const planningSection = anotherAccount.locator(
+        '.agent-workspace-section:has(.agent-planning)',
+      );
+      if ((await planningSection.getAttribute('open')) === null)
+        await planningSection.locator('> summary').click();
+      const whole = anotherAccount.getByRole('region', {
+        name: '整套候选赛程预览',
+      });
+      await expect(whole).toContainText('仅预览');
+      await whole.getByLabel('起始日期 YYYY-MM-DD').fill('2027-06-01');
+      await whole.getByLabel('结束日期 YYYY-MM-DD').fill('2027-06-07');
+      await whole.getByRole('checkbox').check();
+      await whole
+        .getByRole('button', { name: '仅生成候选预览，不保存赛程' })
+        .click();
+      await expect(whole).toContainText('候选预览，尚未保存');
+      await expect(whole).toContainText('共 6 场');
+      await expect(whole.locator('tbody tr')).toHaveCount(6);
+      await anotherAccount.reload();
+      await anotherAccount
+        .getByRole('button', { name: '打开 CAAU 智能助手' })
+        .click();
+      const restoredPlanning = anotherAccount.locator(
+        '.agent-workspace-section:has(.agent-planning)',
+      );
+      if ((await restoredPlanning.getAttribute('open')) === null)
+        await restoredPlanning.locator('> summary').click();
+      await expect(
+        anotherAccount.getByRole('region', { name: '整套候选赛程预览' }),
+      ).toContainText('共 6 场');
+      await anotherAccount.getByLabel('对话消息').fill('合成赛程球队4只能周三');
+      await anotherAccount.getByRole('button', { name: '发送消息' }).click();
+      await expect(anotherAccount.locator('.agent-planning')).toContainText(
+        '待人工确认',
+      ); // Changed requirements revoke the previous confirmation.
+      await expect(anotherAccount.locator('.agent-planning')).not.toContainText(
+        '已确认需求',
+      );
+      expect(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [eventId],
+          )
+        ).rows[0].n,
+      ).toBe(baselinePlans);
+    } finally {
+      await anotherAccount.close();
+    }
+    await page.getByRole('button', { name: '最小化' }).click();
     await page
       .locator('.schedule-week-table .schedule-match-card')
       .first()
@@ -351,6 +642,77 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       path: '.local/caau-042/schedule-mobile.png',
       fullPage: true,
     });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('http://127.0.0.1:4173/governance');
+    await expect(
+      page.getByRole('heading', { name: '平台治理与监控', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('账号总数', { exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: '操作审计', exact: true }).click();
+    await expect(
+      page.locator('.governance-page .ant-table-row').first(),
+    ).toBeVisible();
+    await page
+      .locator('.governance-page .ant-table-row')
+      .first()
+      .getByRole('button', { name: /详\s*情/ })
+      .click();
+    await expect(page.getByText('记录ID', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await mkdir('.local/evidence/governance', { recursive: true });
+    await page.screenshot({
+      path: '.local/evidence/governance/audit-desktop.png',
+      fullPage: true,
+    });
+    await page.getByRole('tab', { name: '平台总览', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            globalThis.document.documentElement.scrollWidth <=
+            globalThis.innerWidth,
+        ),
+      )
+      .toBe(true);
+    await page.screenshot({
+      path: '.local/evidence/governance/overview-mobile.png',
+      fullPage: true,
+    });
+    // A transient identity lookup must not mint a different administrator session.
+    const preservedSession = await page.evaluate(() =>
+      sessionStorage.getItem('caau.local-test-session'),
+    );
+    let unexpectedSessionIssues = 0;
+    page.on('request', (request) => {
+      if (
+        request.url().endsWith('/local-test-identities/sessions') &&
+        request.method() === 'POST'
+      )
+        unexpectedSessionIssues += 1;
+    });
+    await page.route('**/api/v1/workspace/identity', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Synthetic concurrent conflict' }),
+      }),
+    );
+    await page.reload();
+    await expect(
+      page.getByText('暂时无法连接总部服务', { exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() =>
+        sessionStorage.getItem('caau.local-test-session'),
+      ),
+    ).toBe(preservedSession);
+    expect(unexpectedSessionIssues).toBe(0);
+    await page.unroute('**/api/v1/workspace/identity');
+    await page.getByRole('button', { name: '重新连接', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: '平台治理与监控', exact: true }),
+    ).toBeVisible();
   } catch (error) {
     await mkdir('.local/caau-042', { recursive: true });
     await page?.screenshot({

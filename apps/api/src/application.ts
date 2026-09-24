@@ -1,3 +1,4 @@
+import { requestMiddleware } from './modules/governance/metrics.js';
 import 'reflect-metadata';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { NestFactory } from '@nestjs/core';
@@ -19,16 +20,7 @@ export async function createApplication(
   );
   if (config.trustProxy > 0) app.set('trust proxy', config.trustProxy);
   app.useBodyParser('json', { limit: '512kb' });
-  app.use(
-    (
-      _request: unknown,
-      response: { setHeader(name: string, value: string): void },
-      next: () => void,
-    ) => {
-      response.setHeader('Cache-Control', 'no-store');
-      next();
-    },
-  );
+  app.use(requestMiddleware);
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: config.origins,

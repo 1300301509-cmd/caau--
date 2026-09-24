@@ -1,5 +1,7 @@
 import { TaskList } from '../../features/materials/TaskList';
+import { withAgentEntry } from '../../features/agent/AgentEntry';
 
-export default function Materials() {
+function Materials() {
   return <TaskList />;
 }
+export default withAgentEntry(Materials);

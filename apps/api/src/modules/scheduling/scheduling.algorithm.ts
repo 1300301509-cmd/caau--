@@ -28,7 +28,16 @@ export function validateConfig(input: ScheduleConfigDto): ScheduleConfigDto {
     throw new BadRequestException('Invalid schedule configuration');
   const teamIds = [...new Set(input.teamIds)];
   const venues = [...new Set(input.venues.map((value) => value.trim()))];
+  const validDay = (value: string) => {
+    const time = Date.parse(`${value}T00:00:00Z`);
+    return (
+      Number.isFinite(time) &&
+      new Date(time).toISOString().slice(0, 10) === value
+    );
+  };
   if (
+    !validDay(input.startDate) ||
+    !validDay(input.endDate) ||
     teamIds.length < 2 ||
     teamIds.length > 32 ||
     teamIds.length !== input.teamIds.length ||
@@ -63,7 +72,7 @@ function dates(config: ScheduleConfigDto) {
   return result;
 }
 
-function slots(config: ScheduleConfigDto): Slot[] {
+export function scheduleSlots(config: ScheduleConfigDto): Slot[] {
   const result: Slot[] = [];
   const step = minutes(config.durationMinutes + config.bufferMinutes);
   for (const date of dates(config)) {
@@ -105,7 +114,7 @@ function emptyMatch(
   };
 }
 
-function roundRobin(teams: Team[], ids: () => string) {
+export function roundRobin(teams: Team[], ids: () => string) {
   const values: (Team | null)[] = [...teams];
   if (values.length % 2) values.push(null);
   const matches: ScheduleMatchDto[] = [];
@@ -166,7 +175,7 @@ function elimination(teams: Team[], ids: () => string) {
 }
 
 function schedule(matches: ScheduleMatchDto[], config: ScheduleConfigDto) {
-  const available = slots(config);
+  const available = scheduleSlots(config);
   const used = new Set<string>();
   const teamEnd = new Map<string, number>();
   const matchEnd = new Map<string, number>();
@@ -227,6 +236,10 @@ export function validateSchedule(
       continue;
     }
     const start = Date.parse(match.startAt);
+    if (!Number.isFinite(start)) {
+      add('OUTSIDE_AVAILABILITY', `第${match.order}场的时间无效。`, [match.id]);
+      continue;
+    }
     const localDate = new Date(start + 8 * 60 * 60 * 1000)
       .toISOString()
       .slice(0, 10);

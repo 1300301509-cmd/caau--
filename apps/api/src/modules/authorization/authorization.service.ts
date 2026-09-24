@@ -1,3 +1,9 @@
+import { count, traceStep } from '../governance/metrics.js';
+import {
+  requestId as currentRequestId,
+  requestScope,
+  failureResult,
+} from '../governance/request-context.js';
 import {
   BadRequestException,
   ConflictException,
@@ -12,7 +18,6 @@ import {
   createHash,
   createHmac,
   randomBytes,
-  randomUUID,
   timingSafeEqual,
 } from 'node:crypto';
 import {
@@ -117,6 +122,10 @@ function auditContext(input: unknown): Prisma.InputJsonObject {
     Object.entries(input).filter(
       ([key, value]) =>
         ([
+          'commandId',
+          'matchId',
+          'taskId',
+          'sessionId',
           'userId',
           'organizationId',
           'eventId',
@@ -289,7 +298,9 @@ export class AuthorizationService {
               action: 'session.local.issue',
               resourceId: identity.userId,
               outcome: 'ALLOWED',
-              requestId: randomUUID(),
+              result: 'SUCCESS',
+              traceId: requestScope.getStore()?.traceId,
+              requestId: currentRequestId(),
             },
           });
         },
@@ -442,6 +453,11 @@ export class AuthorizationService {
       }
       request.token = token;
       request.credential = credential;
+      const scope = requestScope.getStore();
+      if (scope) {
+        scope.actorId = session.userId;
+        scope.token = token;
+      }
     } catch (error) {
       if (this.database) {
         try {
@@ -449,10 +465,15 @@ export class AuthorizationService {
             data: {
               action: 'session.authenticate',
               outcome: 'DENIED',
-              requestId: randomUUID(),
+              result: failureResult(
+                error instanceof HttpException ? error.getStatus() : undefined,
+              ),
+              traceId: requestScope.getStore()?.traceId,
+              requestId: currentRequestId(),
             },
           });
         } catch {
+          count('caau_audit_failures_total');
           throw new ServiceUnavailableException('Authorization unavailable');
         }
       }
@@ -518,7 +539,9 @@ export class AuthorizationService {
             data: {
               action: 'session.password.login',
               outcome: 'DENIED',
-              requestId: randomUUID(),
+              result: 'DENIED',
+              traceId: requestScope.getStore()?.traceId,
+              requestId: currentRequestId(),
             },
           });
         },
@@ -583,7 +606,9 @@ export class AuthorizationService {
         data: {
           action: 'session.password.login',
           outcome: 'DENIED',
-          requestId: randomUUID(),
+          result: 'DENIED',
+          traceId: requestScope.getStore()?.traceId,
+          requestId: currentRequestId(),
           context: { reason: 'THROTTLED' },
         },
       });
@@ -648,7 +673,9 @@ export class AuthorizationService {
             action: 'session.password.login',
             resourceId: current.id,
             outcome: 'ALLOWED',
-            requestId: randomUUID(),
+            result: 'SUCCESS',
+            traceId: requestScope.getStore()?.traceId,
+            requestId: currentRequestId(),
           },
         });
         return created;
@@ -731,7 +758,9 @@ export class AuthorizationService {
         data: {
           action,
           outcome: 'DENIED',
-          requestId: randomUUID(),
+          result: 'DENIED',
+          traceId: requestScope.getStore()?.traceId,
+          requestId: currentRequestId(),
           context: { reason: 'THROTTLED' },
         },
       });
@@ -779,7 +808,13 @@ export class AuthorizationService {
             },
           });
           await tx.auditRecord.create({
-            data: { action, outcome: 'DENIED', requestId: randomUUID() },
+            data: {
+              action,
+              outcome: 'DENIED',
+              result: 'DENIED',
+              traceId: requestScope.getStore()?.traceId,
+              requestId: currentRequestId(),
+            },
           });
         },
         { isolationLevel: 'Serializable' },
@@ -911,7 +946,9 @@ export class AuthorizationService {
               action: 'session.wechat.login',
               resourceId: identity.userId,
               outcome: 'ALLOWED',
-              requestId: randomUUID(),
+              result: 'SUCCESS',
+              traceId: requestScope.getStore()?.traceId,
+              requestId: currentRequestId(),
             },
           });
         },
@@ -1006,7 +1043,9 @@ export class AuthorizationService {
               action: 'identity.wechat.bind',
               resourceId: intent.userId,
               outcome: 'ALLOWED',
-              requestId: randomUUID(),
+              result: 'SUCCESS',
+              traceId: requestScope.getStore()?.traceId,
+              requestId: currentRequestId(),
             },
           });
         },
@@ -1089,7 +1128,9 @@ export class AuthorizationService {
             action: 'session.password.change',
             resourceId: current.id,
             outcome: 'ALLOWED',
-            requestId: randomUUID(),
+            result: 'SUCCESS',
+            traceId: requestScope.getStore()?.traceId,
+            requestId: currentRequestId(),
           },
         });
         return created;
@@ -1300,7 +1341,7 @@ export class AuthorizationService {
     options: { retries?: number; timeout?: number; retryUnique?: boolean } = {},
   ): Promise<T> {
     const db = this.db();
-    const requestId = randomUUID();
+    const requestId = currentRequestId();
     const context = auditContext(input);
     let actorId: string | undefined;
     try {
@@ -1309,7 +1350,13 @@ export class AuthorizationService {
           const actor = await this.actor(tx, token);
           actorId = actor.id;
           const id = resource === undefined ? undefined : uuid(resource);
-          const result = await work(tx, actor, id);
+          const result = await traceStep(action, () => work(tx, actor, id));
+          const details =
+            typeof result === 'object' && result
+              ? (result as Record<string, unknown>)
+              : {};
+          const resultEvent = details.eventId;
+          const resultCommand = details.commandId;
           await tx.auditRecord.create({
             data: {
               actorId,
@@ -1320,8 +1367,37 @@ export class AuthorizationService {
                   ? String(result.id)
                   : undefined),
               outcome: 'ALLOWED',
+              result: details.replayed === true ? 'REPLAYED' : 'SUCCESS',
+              commandId:
+                typeof resultCommand === 'string' &&
+                uuidPattern.test(resultCommand)
+                  ? resultCommand
+                  : typeof context === 'object' &&
+                      context &&
+                      'commandId' in context
+                    ? String(context.commandId)
+                    : undefined,
+              traceId: requestScope.getStore()?.traceId,
+              eventId:
+                typeof resultEvent === 'string' && uuidPattern.test(resultEvent)
+                  ? resultEvent
+                  : action.startsWith('schedule.')
+                    ? id
+                    : typeof context === 'object' &&
+                        context &&
+                        'eventId' in context
+                      ? String(context.eventId ?? '') || undefined
+                      : undefined,
               requestId,
-              context,
+              context: {
+                ...(context as Prisma.InputJsonObject),
+                ...(typeof details.revision === 'number'
+                  ? { actualRevision: details.revision }
+                  : {}),
+                ...(typeof details.replayed === 'boolean'
+                  ? { replayed: details.replayed }
+                  : {}),
+              },
             },
           });
           return result;
@@ -1360,11 +1436,16 @@ export class AuthorizationService {
             resourceId:
               resource && uuidPattern.test(resource) ? resource : undefined,
             outcome: 'DENIED',
+            result: failureResult(
+              error instanceof HttpException ? error.getStatus() : undefined,
+            ),
+            traceId: requestScope.getStore()?.traceId,
             requestId,
             context,
           },
         });
       } catch {
+        count('caau_audit_failures_total');
         throw new ServiceUnavailableException('Authorization unavailable');
       }
       if (error instanceof HttpException) throw error;
@@ -1597,6 +1678,26 @@ export class AuthorizationService {
             user.memberships.map((member) => member.id),
           );
           return { id: user.id };
+        }
+        if (!b.active) {
+          const target = await tx.organizationMember.findUnique({
+            where: { id: id! },
+          });
+          if (target?.role === 'HEADQUARTERS_SUPER_ADMIN') {
+            if (!isHeadquartersSuperAdmin(actor)) deny();
+            const remaining = await tx.organizationMember.count({
+              where: {
+                role: 'HEADQUARTERS_SUPER_ADMIN',
+                active: true,
+                id: { not: id! },
+                user: { active: true },
+              },
+            });
+            if (!remaining)
+              throw new ConflictException(
+                'The last active super administrator cannot be disabled',
+              );
+          }
         }
         const member = await tx.organizationMember.update({
           where: { id: id! },
