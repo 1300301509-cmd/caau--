@@ -10,6 +10,7 @@ import { Button, Drawer } from 'antd';
 import { useAuth } from '../auth/AuthContext';
 import { ScheduleCard } from './ScheduleCard';
 import { AgentIcon } from './AgentIcon';
+import { AgentUiIcon } from './AgentUiIcon';
 import './agent.css';
 
 type AgentWindow = { open: (eventId?: string) => void };
@@ -28,6 +29,7 @@ function pageEvent() {
 export function AgentHost({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const [shown, setShown] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [hint, setHint] = useState(pageEvent);
   const trigger = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -78,10 +80,32 @@ export function AgentHost({ children }: { children: ReactNode }) {
         }
         open={shown}
         onClose={close}
-        width={620}
+        width={expanded ? 'min(920px, 100vw)' : 'min(460px, 100vw)'}
+        mask={false}
+        closable={false}
+        rootClassName={`agent-window${expanded ? ' agent-window-expanded' : ''}`}
         destroyOnHidden={false}
         className="agent-drawer"
-        extra={<Button onClick={close}>最小化</Button>}
+        extra={
+          <div className="agent-window-actions">
+            <Button
+              type="text"
+              aria-label={expanded ? '还原窗口' : '放大窗口'}
+              title={expanded ? '还原窗口' : '放大窗口'}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              <AgentUiIcon name={expanded ? 'collapse' : 'expand'} />
+            </Button>
+            <Button
+              type="text"
+              aria-label="关闭智能助手"
+              title="关闭"
+              onClick={close}
+            >
+              <AgentUiIcon name="close" />
+            </Button>
+          </div>
+        }
       >
         <ScheduleCard key={identity} pageEventId={hint} visible={shown} />
       </Drawer>

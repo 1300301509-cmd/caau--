@@ -5,6 +5,7 @@ import { client } from '../materials/client';
 import { useAuth } from '../auth/AuthContext';
 import { CandidateCard } from './CandidateCard';
 import { AgentIcon } from './AgentIcon';
+import { AgentUiIcon } from './AgentUiIcon';
 
 type S = components['schemas'];
 type Session = S['AgentSessionViewDto'];
@@ -176,6 +177,10 @@ export function ScheduleCard({
   useEffect(() => {
     const pane = thread.current;
     if (!visible || !pane) return;
+    if (!session?.turns.length) {
+      pane.scrollTop = 0;
+      return;
+    }
     if (
       ['PREVIEW', 'PLAN', 'NEED_EVENT', 'NEED_MATCH', 'NEED_TEAM'].includes(
         reply?.status ?? '',
@@ -647,19 +652,65 @@ export function ScheduleCard({
       <div className="agent-chat-thread" ref={thread} aria-label="对话内容">
         {!turns.length && !loading && (
           <div className="agent-welcome">
-            <span className="agent-welcome-mark" aria-hidden="true">
-              <AgentIcon />
-            </span>
-            <h4>你好，有什么想聊的？</h4>
-            <p>可以直接提问、整理想法，也可以聊聊当前的赛事工作。</p>
+            <div className="agent-welcome-intro">
+              <h4>你好，有什么可以帮你？</h4>
+              <p>聊聊想法，也让赛事工作更轻松。</p>
+            </div>
+            <div className="agent-shortcuts" aria-label="快捷提问">
+              {[
+                {
+                  title: '赛程查询',
+                  note: '查比赛安排，了解场次详情',
+                  icon: 'calendar' as const,
+                  prompt: '帮我查看当前赛事的赛程',
+                },
+                {
+                  title: '排程规划',
+                  note: '整理球队时间与对阵要求',
+                  icon: 'plan' as const,
+                  prompt: '我想规划赛程，请帮我梳理需要提供哪些信息',
+                },
+              ].map((item) => (
+                <button
+                  key={item.title}
+                  type="button"
+                  className={`agent-shortcut agent-shortcut-${item.icon}`}
+                  onClick={() => {
+                    setInput(item.prompt);
+                    document.getElementById('schedule-agent-input')?.focus();
+                  }}
+                >
+                  <AgentUiIcon name={item.icon} />
+                  <span>
+                    <strong>{item.title}</strong>
+                    <small>{item.note}</small>
+                  </span>
+                  <AgentUiIcon name="arrow" />
+                </button>
+              ))}
+            </div>
             <div className="agent-welcome-suggestions" aria-label="示例问题">
-              {['介绍一下你自己', '帮我整理一个思路', '我想了解赛程'].map(
-                (suggestion) => (
-                  <Button key={suggestion} onClick={() => setInput(suggestion)}>
-                    {suggestion}
-                  </Button>
-                ),
-              )}
+              <p>你可能想问</p>
+              <div className="agent-question-list">
+                {[
+                  '你能帮我做些什么？',
+                  '单循环和淘汰赛有什么区别？',
+                  '我想调整一场比赛的时间',
+                  '帮我整理一份赛事筹备清单',
+                ].map((suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion}
+                    onClick={() => {
+                      setInput(suggestion);
+                      document.getElementById('schedule-agent-input')?.focus();
+                    }}
+                  >
+                    <span>{suggestion}</span>
+                    <AgentUiIcon name="arrow" />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -677,7 +728,7 @@ export function ScheduleCard({
               <div
                 className={`agent-message-body${turn.id === latestAnswer?.id && reply?.message === latestAnswer?.content && ['QUERY', 'PLAN', 'NEED_TEAM'].includes(reply?.status ?? '') ? ' schedule-agent-query-answer' : ''}`}
               >
-                <strong>{turn.role === 'USER' ? '我' : 'CAAU 智能助手'}</strong>
+                {turn.role === 'ASSISTANT' && <strong>CAAU 智能助手</strong>}
                 <p>{turn.content}</p>
               </div>
             </div>
@@ -919,35 +970,48 @@ export function ScheduleCard({
       {error && <Alert type="warning" showIcon title={error} />}
       {notice && <Alert type="success" showIcon title={notice} />}
       <div className="schedule-agent-compose">
-        <label htmlFor="schedule-agent-input" className="agent-visually-hidden">
-          对话消息
-        </label>
-        <Input.TextArea
-          id="schedule-agent-input"
-          value={input}
-          autoSize={{ minRows: 2, maxRows: 5 }}
-          maxLength={2000}
-          disabled={loading || !session}
-          placeholder="向 CAAU 智能助手提问…"
-          onChange={(event) => setInput(event.target.value)}
-          onPressEnter={(event) => {
-            if (!event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              void send();
-            }
-          }}
-        />
-        <div className="agent-composer-actions">
-          <span>Enter 发送 · Shift + Enter 换行</span>
-          <Button
-            type="primary"
-            loading={loading}
-            disabled={!session || !input.trim()}
-            onClick={() => void send()}
-          >
-            发送消息
-          </Button>
+        <div className="agent-composer-context">
+          {eventId
+            ? (events.find((event) => event.id === eventId)?.name ?? '赛事对话')
+            : '自由对话'}
         </div>
+        <div className="agent-input-box">
+          <label
+            htmlFor="schedule-agent-input"
+            className="agent-visually-hidden"
+          >
+            对话消息
+          </label>
+          <Input.TextArea
+            id="schedule-agent-input"
+            value={input}
+            autoSize={{ minRows: 2, maxRows: 5 }}
+            maxLength={2000}
+            disabled={loading || !session}
+            placeholder="请随时提出问题，我会帮你一起解决"
+            onChange={(event) => setInput(event.target.value)}
+            onPressEnter={(event) => {
+              if (!event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void send();
+              }
+            }}
+          />
+          <div className="agent-composer-actions">
+            <span>Enter 发送 · Shift + Enter 换行</span>
+            <Button
+              type="primary"
+              loading={loading}
+              disabled={!session || !input.trim()}
+              onClick={() => void send()}
+              aria-label="发送消息"
+              title="发送消息"
+            >
+              <AgentUiIcon name="send" />
+            </Button>
+          </div>
+        </div>
+        <p className="agent-footer-note">回答由 AI 生成，请核对重要信息</p>
       </div>
     </section>
   );

@@ -176,7 +176,7 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await page.getByRole('button', { name: '介绍一下你自己' }).click();
     await expect(page.getByLabel('对话消息')).toHaveValue('介绍一下你自己');
     await page.getByLabel('对话消息').fill('未发送的输入应在最小化后保留');
-    await page.getByRole('button', { name: '最小化' }).click();
+    await page.getByRole('button', { name: '关闭智能助手' }).click();
     await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
     await expect(page.getByLabel('对话消息')).toHaveValue(
       '未发送的输入应在最小化后保留',
@@ -401,7 +401,7 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       originalReceipt.commandId,
       { timeout: 15000 },
     );
-    await page.getByRole('button', { name: '最小化' }).click();
+    await page.getByRole('button', { name: '关闭智能助手' }).click();
     if ((await settings.getAttribute('open')) === null) {
       await settings.locator('> summary').click();
     }
@@ -591,7 +591,7 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     } finally {
       await anotherAccount.close();
     }
-    await page.getByRole('button', { name: '最小化' }).click();
+    await page.getByRole('button', { name: '关闭智能助手' }).click();
     await page
       .locator('.schedule-week-table .schedule-match-card')
       .first()
