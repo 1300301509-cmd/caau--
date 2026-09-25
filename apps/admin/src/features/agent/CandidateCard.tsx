@@ -42,9 +42,21 @@ export function CandidateCard({
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let live = true;
+    const period = planning.conditions.find(
+      (item) => item.kind === 'DATE_RANGE',
+    );
+    const from = period?.from;
+    const to = period?.to;
+    const sameDates =
+      schedule?.exists &&
+      schedule.config.startDate === from &&
+      schedule.config.endDate === to;
     setCandidate(null);
-    setConfig(schedule?.exists ? schedule.config : {});
-    setSource(schedule?.exists ? 'EVENT_SCHEDULE' : 'EXPLICIT');
+    setConfig({
+      ...(schedule?.exists ? schedule.config : {}),
+      ...(from && to ? { startDate: from, endDate: to } : {}),
+    });
+    setSource(sameDates ? 'EVENT_SCHEDULE' : 'EXPLICIT');
     setFixed([]);
     setAcknowledged(false);
     setTeams([]);
@@ -73,7 +85,7 @@ export function CandidateCard({
           path: { eventId: planning.eventId },
         })
         .then((items) => {
-          if (live)
+          if (live) {
             setTeams(
               items
                 .filter((item) => item.active)
@@ -83,6 +95,17 @@ export function CandidateCard({
                   active: item.active,
                 })),
             );
+            if (
+              period?.scheduleGoal &&
+              planning.conditions.some((item) => item.kind === 'FORMAT')
+            )
+              setConfig((current) => ({
+                ...current,
+                teamIds: items
+                  .filter((item) => item.active)
+                  .map((item) => item.id),
+              }));
+          }
         })
         .catch((cause) => {
           if (live) {
@@ -170,6 +193,11 @@ export function CandidateCard({
       <p>
         单循环：每两队交手一次；不支持淘汰赛候选。必须显式核对全部输入，配置没有业务默认值。
       </p>
+      {planning.conditions.some((item) => item.scheduleGoal) && (
+        <p>
+          已从确认需求带入日期范围和全部当前参赛球队。请核对每日时段、场地、比赛时长、缓冲及休息时间；缺少的参数须填写后才能计算。
+        </p>
+      )}
       <p>
         已确认需求 V{planning.confirmedRevision} · 当前赛程{' '}
         {schedule?.exists

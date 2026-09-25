@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { CandidateCard } from './CandidateCard';
 import { AgentIcon } from './AgentIcon';
 import { AgentUiIcon } from './AgentUiIcon';
+import { MemorySettings } from './MemorySettings';
 
 type S = components['schemas'];
 type Session = S['AgentSessionViewDto'];
@@ -68,10 +69,12 @@ function PlanningCard({
         {planning.conditions.map((condition) => (
           <li key={condition.id}>
             {condition.kind === 'DATE_RANGE'
-              ? `赛事日期 ${condition.from} 至 ${condition.to}`
-              : condition.kind === 'TEAM_WINDOW'
-                ? `${condition.teamLabel}：${condition.availability === 'ONLY' ? '只在' : condition.availability === 'BLOCK' ? '不在' : '可在'} ${condition.dates?.join('、')} ${condition.startTime}—${condition.endTime} 安排`
-                : `${condition.teamLabel} 与 ${condition.opponentLabel}：${condition.matchup === 'PREFER' ? '倾向交手' : '尽量避免交手'}（不新增比赛）`}
+              ? `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `（共 ${condition.durationDays} 天）` : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
+              : condition.kind === 'FORMAT'
+                ? '单循环：每两支参赛球队各交手一次'
+                : condition.kind === 'TEAM_WINDOW'
+                  ? `${condition.teamLabel}：${condition.availability === 'ONLY' ? '只在' : condition.availability === 'BLOCK' ? '不在' : '可在'} ${condition.dates?.join('、')} ${condition.startTime}—${condition.endTime} 安排`
+                  : `${condition.teamLabel} 与 ${condition.opponentLabel}：${condition.matchup === 'PREFER' ? '倾向交手' : '尽量避免交手'}（不新增比赛）`}
             <small>
               {' '}
               · {condition.priority === 'MUST' ? '必须满足' : '尽量满足'} ·{' '}
@@ -457,6 +460,25 @@ export function ScheduleCard({
       if (next.status === 'STALE') setError('预览已过期，请重新生成。');
     });
   }
+
+  async function saveSuggestedMemory() {
+    const suggested = reply?.suggestedMemory;
+    if (!suggested) return;
+    await run(async (valid) => {
+      try {
+        await client.request('createAgentMemory', {
+          token,
+          body: { content: suggested },
+        });
+        if (valid()) {
+          setReply((old) => (old ? { ...old, suggestedMemory: null } : old));
+          setNotice('已保存个人交流偏好，新对话也会使用；可在设置中删除。');
+        }
+      } catch {
+        if (valid()) setError('记忆保存失败，请在设置中检查后重试。');
+      }
+    });
+  }
   async function confirmPlanning() {
     if (!session || !planning || planning.status !== 'COLLECTING' || blocked)
       return;
@@ -583,6 +605,7 @@ export function ScheduleCard({
       )}
       {optionsOpen && (
         <div className="schedule-agent-context" id="agent-options">
+          <MemorySettings key={auth.identity?.id ?? ''} token={token} />
           <span>
             浏览页面：
             {pageEventId
@@ -765,6 +788,11 @@ export function ScheduleCard({
           >
             {reply?.message}
           </p>
+        )}
+        {reply?.suggestedMemory && (
+          <Button disabled={loading} onClick={() => void saveSuggestedMemory()}>
+            保存这条记忆
+          </Button>
         )}
         {!!reply?.candidates.length && (
           <div

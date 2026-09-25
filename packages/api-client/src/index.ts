@@ -130,7 +130,7 @@ export function createApiClient(baseUrl: string, transport: Transport) {
       method: operation.method,
       timeout:
         name === 'sendAgentMessage'
-          ? 75000 // 18s route + up to 45s chat (or 18s intent), plus API/database overhead.
+          ? 95000 // An optional 18s memory summary, 18s route and 45s chat, plus API overhead.
           : operation.requestMediaType === 'application/octet-stream'
             ? 15000
             : 5000,

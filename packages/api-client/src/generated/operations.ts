@@ -200,6 +200,90 @@ export const operations = {
     },
     authenticated: true,
   },
+  listAgentMemories: {
+    path: '/api/v1/agent/memories',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            content: { type: 'string' },
+            createdAt: { type: 'string' },
+            id: { type: 'string' },
+            revision: { type: 'number' },
+            updatedAt: { type: 'string' },
+          },
+          required: ['id', 'content', 'revision', 'createdAt', 'updatedAt'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  createAgentMemory: {
+    path: '/api/v1/agent/memories',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          content: { type: 'string' },
+          createdAt: { type: 'string' },
+          id: { type: 'string' },
+          revision: { type: 'number' },
+          updatedAt: { type: 'string' },
+        },
+        required: ['id', 'content', 'revision', 'createdAt', 'updatedAt'],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        content: {
+          description:
+            'Explicit personal preference; never a business rule or execution instruction.',
+          maxLength: 300,
+          type: 'string',
+        },
+      },
+      required: ['content'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  deleteAgentMemory: {
+    path: '/api/v1/agent/memories/{memoryId}/delete',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          id: { type: 'string' },
+          status: { enum: ['DELETED'], type: 'string' },
+        },
+        required: ['id', 'status'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      {
+        in: 'path',
+        name: 'memoryId',
+        required: true,
+        schema: { type: 'string' },
+      },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
   getAgentModelStatus: {
     path: '/api/v1/agent/model-status',
     method: 'GET',
@@ -836,19 +920,26 @@ export const operations = {
                   enum: ['PENDING', 'CONFIRMED'],
                   type: 'string',
                 },
+                dateSource: {
+                  enum: ['USER', 'EVENT_PROFILE', 'EVENT_SCHEDULE'],
+                  type: 'string',
+                },
                 dates: { items: { type: 'string' }, type: 'array' },
+                durationDays: { type: 'number' },
                 endTime: { type: 'string' },
                 eventId: { type: 'string' },
+                format: { enum: ['ROUND_ROBIN'], type: 'string' },
                 from: { type: 'string' },
                 id: { type: 'string' },
                 kind: {
-                  enum: ['DATE_RANGE', 'TEAM_WINDOW', 'MATCHUP'],
+                  enum: ['DATE_RANGE', 'TEAM_WINDOW', 'MATCHUP', 'FORMAT'],
                   type: 'string',
                 },
                 matchup: { enum: ['PREFER', 'AVOID'], type: 'string' },
                 opponentId: { type: 'string' },
                 opponentLabel: { type: 'string' },
                 priority: { enum: ['MUST', 'PREFER'], type: 'string' },
+                scheduleGoal: { type: 'boolean' },
                 sourceTurnIds: { items: { type: 'string' }, type: 'array' },
                 startTime: { type: 'string' },
                 teamId: { type: 'string' },
@@ -1153,6 +1244,7 @@ export const operations = {
             ],
             type: 'string',
           },
+          suggestedMemory: { maxLength: 300, nullable: true, type: 'string' },
           task: {
             allOf: [{ $ref: '#/components/schemas/AgentTaskViewDto' }],
             nullable: true,

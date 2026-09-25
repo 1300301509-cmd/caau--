@@ -427,6 +427,51 @@
         "required": ["executedAt", "result"],
         "type": "object"
       },
+      "AgentMemoryDeletedDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": ["DELETED"],
+            "type": "string"
+          }
+        },
+        "required": ["id", "status"],
+        "type": "object"
+      },
+      "AgentMemoryInputDto": {
+        "properties": {
+          "content": {
+            "description": "Explicit personal preference; never a business rule or execution instruction.",
+            "maxLength": 300,
+            "type": "string"
+          }
+        },
+        "required": ["content"],
+        "type": "object"
+      },
+      "AgentMemoryViewDto": {
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "content", "revision", "createdAt", "updatedAt"],
+        "type": "object"
+      },
       "AgentMessageInputDto": {
         "properties": {
           "eventId": {
@@ -512,16 +557,27 @@
             "enum": ["PENDING", "CONFIRMED"],
             "type": "string"
           },
+          "dateSource": {
+            "enum": ["USER", "EVENT_PROFILE", "EVENT_SCHEDULE"],
+            "type": "string"
+          },
           "dates": {
             "items": {
               "type": "string"
             },
             "type": "array"
           },
+          "durationDays": {
+            "type": "number"
+          },
           "endTime": {
             "type": "string"
           },
           "eventId": {
+            "type": "string"
+          },
+          "format": {
+            "enum": ["ROUND_ROBIN"],
             "type": "string"
           },
           "from": {
@@ -531,7 +587,7 @@
             "type": "string"
           },
           "kind": {
-            "enum": ["DATE_RANGE", "TEAM_WINDOW", "MATCHUP"],
+            "enum": ["DATE_RANGE", "TEAM_WINDOW", "MATCHUP", "FORMAT"],
             "type": "string"
           },
           "matchup": {
@@ -547,6 +603,9 @@
           "priority": {
             "enum": ["MUST", "PREFER"],
             "type": "string"
+          },
+          "scheduleGoal": {
+            "type": "boolean"
           },
           "sourceTurnIds": {
             "items": {
@@ -707,6 +766,11 @@
               "PLAN",
               "NEED_TEAM"
             ],
+            "type": "string"
+          },
+          "suggestedMemory": {
+            "maxLength": 300,
+            "nullable": true,
             "type": "string"
           },
           "task": {
@@ -5397,6 +5461,110 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AgentScheduleAdjustmentResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/memories": {
+      "get": {
+        "operationId": "listAgentMemories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentMemoryViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      },
+      "post": {
+        "operationId": "createAgentMemory",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentMemoryInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMemoryViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/memories/{memoryId}/delete": {
+      "post": {
+        "operationId": "deleteAgentMemory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memoryId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMemoryDeletedDto"
                 }
               }
             },

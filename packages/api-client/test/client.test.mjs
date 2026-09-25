@@ -26,7 +26,7 @@ test('generated readiness route and success response are consumed by the portabl
 test('conversation request has enough time for routing and model reply on fetch and Taro', async () => {
   const client = createApiClient('http://localhost', async (options) => {
     assert.equal(options.method, 'POST');
-    assert.equal(options.timeout, 75000);
+    assert.equal(options.timeout, 95000);
     return {
       status: 200,
       data: {

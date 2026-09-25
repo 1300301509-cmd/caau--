@@ -131,6 +131,7 @@ export async function authorizationIntegration(t) {
                   '202609270002_governance_retention',
                   '202609270003_governance_delivery',
                   '202609270004_governance_acknowledgement',
+                  '202609270005_agent_memory',
                 ],
               ],
             )
@@ -253,6 +254,7 @@ export async function authorizationIntegration(t) {
     const simulatedAgentModel = new RuleAgentModelAdapter();
     let agentModelCalls = 0;
     let observedAgentHistory = [];
+    let observedAgentSummary = '';
     const config = {
       ...readConfig({ CAAU_IDENTITY_MODE: 'local' }),
       databaseUrl: appUrl.href,
@@ -269,6 +271,8 @@ export async function authorizationIntegration(t) {
           agentModelCalls += 1;
           if (message === '__CAAU_SYNTHETIC_HISTORY__')
             observedAgentHistory = structuredClone(context.history);
+          if (message === '__CAAU_SYNTHETIC_HISTORY__')
+            observedAgentSummary = context.summary ?? '';
           if (message === '__CAAU_SYNTHETIC_MODEL_TIMEOUT__')
             throw agentModelUnavailable();
           if (message === '__CAAU_SYNTHETIC_QUERY_TIMEOUT__') return 'QUERY';
@@ -311,6 +315,10 @@ export async function authorizationIntegration(t) {
           if (message === '__CAAU_SYNTHETIC_CHAT_TIMEOUT__')
             throw agentModelUnavailable();
           return simulatedAgentModel.chat(message, context, kind);
+        },
+        summarize(previous, turns) {
+          agentModelCalls += 1;
+          return simulatedAgentModel.summarize(previous, turns);
         },
         status() {
           return simulatedAgentModel.status();
@@ -982,7 +990,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          27, // Existing 23 plus four governance migrations.
+          28, // Existing 23, four governance migrations and agent memory.
         );
       },
     );
@@ -1088,6 +1096,133 @@ export async function authorizationIntegration(t) {
       orgB,
       session,
     });
+    await t.test(
+      'agent conversation summary and owner-controlled long-term memory',
+      async () => {
+        const sdk = createApiClient(base, createFetchTransport());
+        const first = await sdk.request('createAgentSession', {
+          token: tokens.a,
+          body: {},
+        });
+        const otherBefore = await sdk.request('listAgentMemories', {
+          token: tokens.b,
+        });
+        const proposalSession = await sdk.request('createAgentSession', {
+          token: tokens.a,
+          body: {},
+        });
+        const proposed = await sdk.request('sendAgentMessage', {
+          token: tokens.a,
+          path: { sessionId: proposalSession.id },
+          body: { message: '请记住：回答请先给简短结论' },
+        });
+        assert.equal(proposed.suggestedMemory, '回答请先给简短结论');
+        assert.deepEqual(
+          await sdk.request('listAgentMemories', { token: tokens.a }),
+          [],
+        );
+        const saved = await sdk.request('createAgentMemory', {
+          token: tokens.a,
+          body: { content: proposed.suggestedMemory },
+        });
+        const planningPreference = await sdk.request('createAgentMemory', {
+          token: tokens.a,
+          body: { content: '我希望排赛建议每天不超过两场' },
+        });
+        await assert.rejects(
+          sdk.request('createAgentMemory', {
+            token: tokens.a,
+            body: { content: 'D队只能周三比赛' },
+          }),
+          (error) => error.status === 400,
+        );
+        assert.deepEqual(
+          (await sdk.request('listAgentMemories', { token: tokens.a }))
+            .map((item) => item.id)
+            .sort(),
+          [saved.id, planningPreference.id].sort(),
+        );
+        assert.deepEqual(
+          await sdk.request('listAgentMemories', { token: tokens.b }),
+          otherBefore,
+        );
+        await assert.rejects(
+          sdk.request('deleteAgentMemory', {
+            token: tokens.b,
+            path: { memoryId: saved.id },
+          }),
+          (error) => error.status === 403,
+        );
+        const second = await sdk.request('createAgentSession', {
+          token: tokens.a,
+          body: {},
+        });
+        const recall = await sdk.request('sendAgentMessage', {
+          token: tokens.a,
+          path: { sessionId: second.id },
+          body: { message: '你记得我的偏好吗' },
+        });
+        assert.match(recall.message, /回答请先给简短结论/);
+        for (let sequence = 1; sequence <= 50; sequence++)
+          await sql.query(
+            'INSERT INTO "AgentTurn" (id,"sessionId",role,content,sequence,structured) VALUES ($1,$2,$3,$4,$5,$6::jsonb)',
+            [
+              randomUUID(),
+              first.id,
+              sequence % 2 ? 'USER' : 'ASSISTANT',
+              sequence === 1
+                ? '我提到过特别的早期上下文'
+                : `旧对话 ${sequence}`,
+              sequence,
+              '{}',
+            ],
+          );
+        await sql.query(
+          'UPDATE "AgentSession" SET "nextTurnSequence"=51 WHERE id=$1',
+          [first.id],
+        );
+        await sdk.request('sendAgentMessage', {
+          token: tokens.a,
+          path: { sessionId: first.id },
+          body: { message: '__CAAU_SYNTHETIC_HISTORY__' },
+        });
+        assert.match(observedAgentSummary, /特别的早期上下文/);
+        assert.equal(observedAgentHistory.length, 20);
+        const compacted = await sql.query(
+          'SELECT "summarizedThroughSequence","contextSummary" FROM "AgentSession" WHERE id=$1',
+          [first.id],
+        );
+        assert.equal(compacted.rows[0].summarizedThroughSequence, 30);
+        assert.match(compacted.rows[0].contextSummary, /特别的早期上下文/);
+        await sdk.request('deleteAgentMemory', {
+          token: tokens.a,
+          path: { memoryId: saved.id },
+        });
+        await sdk.request('deleteAgentMemory', {
+          token: tokens.a,
+          path: { memoryId: planningPreference.id },
+        });
+        const removed = await sql.query(
+          'SELECT status,content FROM "AgentMemory" WHERE id=$1',
+          [saved.id],
+        );
+        assert.deepEqual(removed.rows[0], { status: 'DELETED', content: '' });
+        assert.deepEqual(
+          await sdk.request('listAgentMemories', { token: tokens.a }),
+          [],
+        );
+        const third = await sdk.request('createAgentSession', {
+          token: tokens.a,
+          body: {},
+        });
+        const forgotten = await sdk.request('sendAgentMessage', {
+          token: tokens.a,
+          path: { sessionId: third.id },
+          body: { message: '你记得我的偏好吗' },
+        });
+        assert.doesNotMatch(forgotten.message, /回答请先给简短结论/);
+      },
+    );
     await session('preservedOrganizer', baseline.userId);
     await session('preservedReviewer', baseline.reviewerUser);
     await t.test(

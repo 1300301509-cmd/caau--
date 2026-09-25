@@ -68,6 +68,7 @@ enum EventSupplyPhotoState {
 model InternalUser {
   teamMemberships TeamMembership[]
   agentSessions AgentSession[]
+  agentMemories AgentMemory[]
   agentTasks AgentTask[]
   agentPlanningRequests AgentPlanningRequest[]
   agentScheduleCandidates AgentScheduleCandidate[]
@@ -382,6 +383,8 @@ model AgentSession {
   ownerId String @db.Uuid
   owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   summary String @default("") @db.VarChar(2000)
+  contextSummary String @default("") @db.VarChar(2000)
+  summarizedThroughSequence Int @default(0)
   nextTurnSequence Int @default(1)
   currentEventId String? @db.Uuid
   currentEvent Event? @relation(fields: [currentEventId], references: [id], onDelete: Restrict)
@@ -392,8 +395,25 @@ model AgentSession {
   tasks AgentTask[]
   planningRequests AgentPlanningRequest[]
   scheduleCandidates AgentScheduleCandidate[]
+  memories AgentMemory[]
 
   @@index([ownerId, updatedAt])
+}
+
+model AgentMemory {
+  id String @id @db.Uuid
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  sourceSessionId String? @db.Uuid
+  sourceSession AgentSession? @relation(fields: [sourceSessionId], references: [id], onDelete: Restrict)
+  content String @db.VarChar(300)
+  status String @default("ACTIVE") @db.VarChar(16)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  @@index([ownerId, status, updatedAt])
 }
 
 model AgentTurn {

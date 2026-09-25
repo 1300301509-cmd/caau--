@@ -192,6 +192,7 @@ export class UsageService {
     const phases: Record<string, string> = {
       route: 'route',
       chat: 'chat',
+      summarize: 'summary',
       parse: 'intent',
       planQuery: 'query_plan',
       planPlanning: 'planning',

@@ -615,3 +615,43 @@
     padding: 16px;
   }
 }
+.agent-memory-settings {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e9eaf0;
+  border-radius: 14px;
+  background: #fff;
+}
+.agent-memory-settings p {
+  margin: 0;
+  color: #697180;
+  font-size: 13px;
+}
+.agent-memory-compose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.agent-memory-compose .ant-input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.agent-memory-settings ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-memory-settings li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid #f0f1f5;
+  overflow-wrap: anywhere;
+}
+.agent-memory-settings li span {
+  min-width: 0;
+}

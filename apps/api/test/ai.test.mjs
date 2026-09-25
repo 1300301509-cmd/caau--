@@ -23,6 +23,10 @@ import {
   planningPending,
   planningProposalSchema,
   parseUserDates,
+  requestedDurationDays,
+  endAfterDays,
+  isWholeScheduleRequest,
+  explicitRoundRobin,
 } from '../dist/modules/ai/planning.js';
 
 test('page event and match context cannot turn CHAT or PLAN into task continuation', () => {
@@ -94,7 +98,11 @@ test('conversation router separates chat, task continuation and unsupported oper
   assert.equal(await model.route('七支球队适合什么赛制？', empty), 'CHAT');
   assert.equal(await model.route('怎么安排比较好？', empty), 'CHAT');
   assert.equal(await model.route('把周六第二场移到周日', empty), 'START');
-  assert.equal(await model.route('请批量重排整套赛程', empty), 'UNSUPPORTED');
+  assert.equal(await model.route('请批量重排整套赛程', empty), 'PLAN');
+  assert.equal(
+    await model.route('请批量重排整套赛程并发布赛程', empty),
+    'UNSUPPORTED',
+  );
   assert.equal(await model.route('帮我登记俱乐部', empty), 'UNSUPPORTED');
   assert.equal(await model.route('上午十点', empty), 'CLARIFY');
   const waiting = {
@@ -130,7 +138,7 @@ test('conversation router separates chat, task continuation and unsupported oper
     await model.chat('七支球队适合什么赛制？', empty, 'CHAT'),
     /21场/,
   );
-  assert.match(routePrompt(waiting), /普通问题/);
+  assert.match(routePrompt(waiting), /编排整套赛程/);
 });
 
 test('planning routing, extraction and date expansion remain separate from execution', async () => {
@@ -159,10 +167,7 @@ test('planning routing, extraction and date expansion remain separate from execu
   assert.equal(await model.route('改成周三和周五', planning), 'PLAN');
   assert.equal(await model.route('取消D队时间限制', planning), 'PLAN');
   assert.equal(await model.route('好的', planning), 'CHAT');
-  assert.equal(
-    await model.route('请批量重排整套赛程', planning),
-    'UNSUPPORTED',
-  );
+  assert.equal(await model.route('请批量重排整套赛程', planning), 'PLAN');
   assert.equal(await model.route('确认当前需求单', planning), 'CLARIFY');
   assert.deepEqual((await model.planPlanning('D队只能周三')).changes[0], {
     operation: 'ADD',
@@ -206,6 +211,45 @@ test('planning routing, extraction and date expansion remain separate from execu
     '2027-06-01',
     '2027-06-07',
   ]);
+  const request = '帮我编排一下赛程，10天解决，要求所有队伍都必须比过一场';
+  assert.equal(isWholeScheduleRequest(request), true);
+  assert.equal(await model.route(request, empty), 'PLAN');
+  assert.equal(requestedDurationDays(request), 10);
+  assert.equal(explicitRoundRobin(request), false);
+  assert.equal(explicitRoundRobin('每队与其他队都交手一次'), true);
+  assert.equal(endAfterDays('2027-06-01', 10), '2027-06-10');
+  assert.equal(endAfterDays('2027-12-27', 10), '2028-01-05');
+  assert.equal(endAfterDays('2027-02-29', 10), null);
+  assert.equal(requestedDurationDays('从2027年6月1日开始'), null);
+  assert.deepEqual((await model.planPlanning(request)).changes, [
+    { operation: 'ADD', kind: 'DATE_RANGE', durationDays: 10 },
+  ]);
+  assert.equal(
+    planningPending(
+      [
+        {
+          kind: 'DATE_RANGE',
+          from: '2027-06-01',
+          to: '2027-06-10',
+          scheduleGoal: true,
+        },
+      ],
+      [],
+    ).length,
+    1,
+  );
+  const missingStart = planningPending(
+    [{ kind: 'DATE_RANGE', scheduleGoal: true, durationDays: 10 }],
+    [],
+  );
+  assert.match(missingStart[0], /起始日期/);
+  assert.equal(
+    await model.route('从2027年6月1日开始', {
+      ...planning,
+      planning: { ...planning.planning, pending: missingStart },
+    }),
+    'PLAN',
+  );
   const only = {
     id: 'a',
     kind: 'TEAM_WINDOW',

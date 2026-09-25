@@ -17,6 +17,7 @@ import {
 import type { AuthRequest } from '../authorization/authorization.service.js';
 import { Permission } from '../authorization/authorization.guard.js';
 import { AiService } from './ai.service.js';
+import { AgentMemoryService } from './memory.service.js';
 import { CandidateService } from './candidate.service.js';
 import {
   AgentCancelConfirmationDto,
@@ -31,6 +32,9 @@ import {
   ConfirmAgentScheduleAdjustmentDto,
   AgentSessionInputDto,
   AgentSessionViewDto,
+  AgentMemoryInputDto,
+  AgentMemoryViewDto,
+  AgentMemoryDeletedDto,
 } from './ai.dto.js';
 
 @ApiTags('agent')
@@ -41,7 +45,37 @@ export class AiController {
   constructor(
     private readonly service: AiService,
     private readonly candidates: CandidateService,
+    private readonly memories: AgentMemoryService,
   ) {}
+
+  @Get('memories')
+  @Permission('agent.session')
+  @ApiOperation({ operationId: 'listAgentMemories' })
+  @ApiOkResponse({ type: [AgentMemoryViewDto] })
+  listMemories(@Req() request: AuthRequest) {
+    return this.memories.list(request.token ?? '');
+  }
+
+  @Post('memories')
+  @HttpCode(200)
+  @Permission('agent.session')
+  @ApiOperation({ operationId: 'createAgentMemory' })
+  @ApiOkResponse({ type: AgentMemoryViewDto })
+  createMemory(@Req() request: AuthRequest, @Body() body: AgentMemoryInputDto) {
+    return this.memories.create(request.token ?? '', body);
+  }
+
+  @Post('memories/:memoryId/delete')
+  @HttpCode(200)
+  @Permission('agent.session')
+  @ApiOperation({ operationId: 'deleteAgentMemory' })
+  @ApiOkResponse({ type: AgentMemoryDeletedDto })
+  deleteMemory(
+    @Req() request: AuthRequest,
+    @Param('memoryId') memoryId: string,
+  ) {
+    return this.memories.remove(request.token ?? '', memoryId);
+  }
 
   @Get('model-status')
   @Permission('agent.model.status')

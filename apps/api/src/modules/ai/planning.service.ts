@@ -9,12 +9,17 @@ import {
 } from '../authorization/policy.js';
 import {
   conditionSummary,
+  endAfterDays,
+  explicitRoundRobin,
   expandDays,
+  isWholeScheduleRequest,
   newCondition,
   parseUserDates,
   periodDates,
   planningIssues,
   planningPending,
+  requestedDurationDays,
+  validDay,
   type PlanningChange,
   type PlanningCondition,
   type PlanningProposal,
@@ -108,6 +113,30 @@ export class PlanningService {
       : [];
     if (participants.length !== teamIds.length) deny();
     const issues = planningIssues(conditions);
+    const period = conditions.find((item) => item.kind === 'DATE_RANGE');
+    if (period?.scheduleGoal) {
+      const currentProfile = await tx.eventProfileVersion.findFirst({
+        where: { eventId: row.eventId },
+        orderBy: { version: 'desc' },
+        select: { profile: true },
+      });
+      const profile = currentProfile?.profile as
+        | { startDate?: unknown; endDate?: unknown }
+        | undefined;
+      if (
+        (period.dateSource === 'EVENT_PROFILE' &&
+          profile?.startDate !== period.from) ||
+        (typeof profile?.startDate === 'string' &&
+          !!period.from &&
+          period.from < profile.startDate) ||
+        (typeof profile?.endDate === 'string' &&
+          !!period.to &&
+          period.to > profile.endDate)
+      )
+        issues.push(
+          '赛事资料中的起止日期已变化或不足以覆盖该需求，请核对赛事日期。',
+        );
+    }
     const inactive = participants.filter((participant) => !participant.active);
     if (inactive.length)
       issues.push(
@@ -135,7 +164,7 @@ export class PlanningService {
       eventName: event.name,
       revision: row.revision,
       status:
-        inactive.length && row.status === 'CONFIRMED'
+        (inactive.length || issues.length) && row.status === 'CONFIRMED'
           ? 'STALE'
           : (row.status as 'COLLECTING' | 'CONFIRMED'),
       confirmedRevision: row.confirmedRevision,
@@ -304,6 +333,118 @@ export class PlanningService {
       message: string,
       candidates: Candidate[] = [],
     ): PlanningResponse => ({ status, message, candidates, planning: null });
+    const wholeRequest =
+      isWholeScheduleRequest(context.message) ||
+      (requestedDurationDays(context.message) !== null &&
+        proposal.changes.some(
+          (change) =>
+            change.kind === 'DATE_RANGE' && change.durationDays !== undefined,
+        ));
+    const formatFollowup =
+      !!row &&
+      conditions.some(
+        (item) => item.kind === 'DATE_RANGE' && item.scheduleGoal,
+      ) &&
+      explicitRoundRobin(context.message);
+    if (wholeRequest) {
+      if (
+        proposal.changes.some(
+          (change) =>
+            change.kind === 'TEAM_WINDOW' || change.kind === 'MATCHUP',
+        )
+      )
+        return answer(
+          'CLARIFY',
+          '这条消息同时包含整套赛程和球队时段或对阵偏好，请先明确赛制与日期，再逐条补充其它约束。',
+        );
+      const days = requestedDurationDays(context.message);
+      if (days !== null && (days < 1 || days > 31))
+        return {
+          status: 'CLARIFY',
+          message: '单次候选排程目前最多支持 31 天，请明确不超过 31 天的范围。',
+          candidates: [],
+          planning: row ? await this.view(tx, actor, row) : null,
+        };
+      const explicitDates = parseUserDates(context.message);
+      const latestProfile = await tx.eventProfileVersion.findFirst({
+        where: { eventId: chosenId },
+        orderBy: { version: 'desc' },
+        select: { profile: true },
+      });
+      const profile = latestProfile?.profile as
+        | { startDate?: unknown; endDate?: unknown }
+        | undefined;
+      const baseline = await tx.eventSchedule.findUnique({
+        where: { eventId: chosenId },
+        select: { config: true },
+      });
+      const currentConfig = baseline?.config as
+        | { startDate?: unknown; endDate?: unknown }
+        | undefined;
+      const start =
+        explicitDates[0] ??
+        (typeof profile?.startDate === 'string' && validDay(profile.startDate)
+          ? profile.startDate
+          : typeof currentConfig?.startDate === 'string' &&
+              validDay(currentConfig.startDate)
+            ? currentConfig.startDate
+            : undefined);
+      const dateSource = explicitDates.length
+        ? ('USER' as const)
+        : typeof profile?.startDate === 'string' && start === profile.startDate
+          ? ('EVENT_PROFILE' as const)
+          : start
+            ? ('EVENT_SCHEDULE' as const)
+            : undefined;
+      const end =
+        days && start
+          ? endAfterDays(start, days)
+          : (explicitDates[1] ??
+            (dateSource === 'EVENT_PROFILE' &&
+            typeof profile?.endDate === 'string'
+              ? profile.endDate
+              : dateSource === 'EVENT_SCHEDULE' &&
+                  typeof currentConfig?.endDate === 'string'
+                ? currentConfig.endDate
+                : undefined));
+      if (start && end && !periodDates(start, end))
+        return answer(
+          'CLARIFY',
+          '计算出的日期不在可用的 31 天范围内，请明确赛事起止日期。',
+        );
+      conditions = conditions.filter(
+        (item) => item.kind !== 'DATE_RANGE' && item.kind !== 'FORMAT',
+      );
+      conditions.unshift(
+        newCondition({
+          kind: 'DATE_RANGE',
+          eventId: chosenId,
+          priority: 'MUST',
+          ...(start ? { from: start } : {}),
+          ...(end ? { to: end } : {}),
+          ...(days ? { durationDays: days } : {}),
+          scheduleGoal: true,
+          ...(dateSource ? { dateSource } : {}),
+          sourceTurnIds: [sourceTurnId],
+        }),
+      );
+    }
+    if (
+      (wholeRequest || formatFollowup) &&
+      explicitRoundRobin(context.message)
+    ) {
+      conditions = conditions.filter((item) => item.kind !== 'FORMAT');
+      conditions.push(
+        newCondition({
+          kind: 'FORMAT',
+          eventId: chosenId,
+          priority: 'MUST',
+          format: 'ROUND_ROBIN',
+          sourceTurnIds: [sourceTurnId],
+        }),
+      );
+    }
+    const dedicatedScheduleTurn = wholeRequest || formatFollowup;
     const resolveTeam = (
       name: string | undefined,
       proposedId: string | undefined,
@@ -410,13 +551,16 @@ export class PlanningService {
       );
     if (
       context.message.includes('晋级') ||
-      /(?:增加比赛|改变赛制|覆盖赛程|生成赛程|发布赛程)/.test(context.message)
+      (!wholeRequest &&
+        /(?:增加比赛|改变赛制|覆盖赛程|生成赛程|发布赛程)/.test(
+          context.message,
+        ))
     )
       return answer(
         'CLARIFY',
         '本阶段仅收集排程要求，不能改变晋级规则、增加比赛、生成或覆盖赛程；请明确可记录的要求。',
       );
-    for (const change of proposal.changes) {
+    for (const change of dedicatedScheduleTurn ? [] : proposal.changes) {
       let sourceText = context.message;
       if (proposal.changes.length > 1) {
         const candidates = clauses.filter((part) => {
@@ -448,7 +592,16 @@ export class PlanningService {
           conditions = conditions.filter((item) => item.kind !== 'DATE_RANGE');
           continue;
         }
-        if (dates.length !== 2 || !periodDates(dates[0]!, dates[1]!))
+        const previousPeriod = periodOf(conditions);
+        const derivedEnd =
+          dates.length === 1 &&
+          previousPeriod?.scheduleGoal &&
+          previousPeriod.durationDays
+            ? endAfterDays(dates[0]!, previousPeriod.durationDays)
+            : undefined;
+        const from = dates[0];
+        const to = dates[1] ?? derivedEnd;
+        if (!from || !to || !periodDates(from, to))
           return answer(
             'CLARIFY',
             '请明确包含年份的起止日期，且开始不晚于结束；单次需求单日期范围不超过 31 天。',
@@ -459,8 +612,33 @@ export class PlanningService {
             kind: 'DATE_RANGE',
             eventId: chosenId,
             priority: 'MUST',
-            from: dates[0],
-            to: dates[1],
+            from,
+            to,
+            ...(previousPeriod?.scheduleGoal ? { scheduleGoal: true } : {}),
+            ...(derivedEnd && previousPeriod?.durationDays
+              ? { durationDays: previousPeriod.durationDays }
+              : {}),
+            dateSource: 'USER',
+            sourceTurnIds: previousPeriod?.scheduleGoal
+              ? uniqueIds([...previousPeriod.sourceTurnIds, sourceTurnId])
+              : [sourceTurnId],
+          }),
+        );
+        continue;
+      }
+      if (change.kind === 'FORMAT') {
+        if (!explicitRoundRobin(sourceText) || change.format !== 'ROUND_ROBIN')
+          return answer(
+            'CLARIFY',
+            '请明确是否采用单循环：每两支参赛球队各交手一次。',
+          );
+        conditions = conditions.filter((item) => item.kind !== 'FORMAT');
+        conditions.push(
+          newCondition({
+            kind: 'FORMAT',
+            eventId: chosenId,
+            priority: 'MUST',
+            format: 'ROUND_ROBIN',
             sourceTurnIds: [sourceTurnId],
           }),
         );
@@ -838,6 +1016,7 @@ export class PlanningService {
     if (
       !row &&
       !proposal.changes.length &&
+      !wholeRequest &&
       !/(?:收集|记录|建立|创建|开始).*(?:排程需求|排程要求|约束)/.test(
         context.message,
       )

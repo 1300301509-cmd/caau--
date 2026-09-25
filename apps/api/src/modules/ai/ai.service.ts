@@ -34,6 +34,7 @@ import {
 } from '../authorization/policy.js';
 import { SchedulingService } from '../scheduling/scheduling.service.js';
 import { PlanningService } from './planning.service.js';
+import { personalMemoryContent } from './memory-policy.js';
 import type { CandidateService } from './candidate.service.js';
 import { planningProposalSchema, type PlanningProposal } from './planning.js';
 import type { ScheduleMatchDto } from '../scheduling/scheduling.dto.js';
@@ -123,6 +124,21 @@ const modelContextExcerpt = (content: string) => {
   return characters.length <= 600
     ? content
     : `${characters.slice(0, 400).join('')}…（仅模型上下文节选）${characters.slice(-180).join('')}`;
+};
+const summaryExcerpt = (content: string) => {
+  const characters = Array.from(content);
+  return characters.length <= 240
+    ? content
+    : `${characters.slice(0, 150).join('')}…（摘要输入节选）${characters.slice(-70).join('')}`;
+};
+const personalMemoryProposal = (message: string) => {
+  const value = /^(?:请|帮我)?记住[：:，\s]*(.{2,300})[。！!]?$/s
+    .exec(message.trim())?.[1]
+    ?.trim();
+  if (!value) return null;
+  // Business requirements belong to the versioned planning request, not a
+  // cross-session personal preference. Ambiguous requests stay in chat.
+  return personalMemoryContent(value) ? value : null;
 };
 const completeAnswer = (answer: string) => {
   if (Array.from(answer).length > maxTurnCharacters)
@@ -963,14 +979,27 @@ export class AiService implements OnModuleDestroy {
           deny();
         if (body.eventId) await scheduleRead(tx, actor, body.eventId);
         const turns = await tx.agentTurn.findMany({
-          where: { sessionId },
+          where: {
+            sessionId,
+            sequence: { gt: session.summarizedThroughSequence },
+          },
           orderBy: { sequence: 'desc' },
-          take: 10,
+          take: 30,
           select: { role: true, content: true },
+        });
+        const memories = await tx.agentMemory.findMany({
+          where: { ownerId: actor.id, status: 'ACTIVE' },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 30,
+          select: { content: true },
         });
         return {
           task,
           context: {
+            ...(session.contextSummary
+              ? { summary: session.contextSummary }
+              : {}),
+            personalMemories: memories.map((memory) => memory.content),
             history: turns.reverse().map((turn) => ({
               role: turn.role as 'USER' | 'ASSISTANT',
               content: modelContextExcerpt(turn.content),
@@ -1005,6 +1034,74 @@ export class AiService implements OnModuleDestroy {
               : {}),
           } satisfies ConversationContext,
         };
+      },
+    );
+  }
+
+  // Compact only conversation context. Task/planning state and current business
+  // facts remain in their own authoritative tables. A failed model call leaves
+  // the original turns intact and never blocks the user's next message.
+  private async refreshConversationSummary(token: string, sessionId: string) {
+    const source = await this.auth.run(
+      token,
+      'agent.memory.context.read',
+      sessionId,
+      {},
+      async (tx, actor) => {
+        const { session } = await this.validateSessionAccess(
+          tx,
+          actor,
+          sessionId,
+        );
+        const turns = await tx.agentTurn.findMany({
+          where: {
+            sessionId,
+            sequence: { gt: session.summarizedThroughSequence },
+          },
+          orderBy: { sequence: 'asc' },
+          take: 100,
+          select: { sequence: true, role: true, content: true },
+        });
+        if (turns.length <= 30) return null;
+        const segment = turns.slice(0, -20);
+        return {
+          previous: session.contextSummary,
+          previousThrough: session.summarizedThroughSequence,
+          through: segment.at(-1)!.sequence,
+          turns: segment.map((turn) => ({
+            role: turn.role as 'USER' | 'ASSISTANT',
+            content: summaryExcerpt(turn.content),
+          })),
+        };
+      },
+    );
+    if (!source) return;
+    let summary: string;
+    try {
+      summary = await this.model.summarize(source.previous, source.turns);
+    } catch {
+      return;
+    }
+    if (!summary.trim() || [...summary].length > 2000) return;
+    await this.auth.run(
+      token,
+      'agent.memory.context.update',
+      sessionId,
+      {},
+      async (tx, actor) => {
+        await this.validateSessionAccess(tx, actor, sessionId);
+        await tx.agentSession.updateMany({
+          where: {
+            id: sessionId,
+            ownerId: actor.id,
+            summarizedThroughSequence: source.previousThrough,
+          },
+          data: {
+            contextSummary: summary,
+            summarizedThroughSequence: source.through,
+          },
+        });
+        return {};
       },
     );
   }
@@ -2023,6 +2120,9 @@ export class AiService implements OnModuleDestroy {
 
   async message(token: string, sessionId: string, input: unknown) {
     const body = this.parseMessage(input);
+    const scope = requestScope.getStore();
+    if (scope) scope.sessionId = sessionId;
+    await this.refreshConversationSummary(token, sessionId);
     // Read and authorize every historical task BEFORE sending any history or
     // preview to either the router or chat model. A revoked session fails closed.
     const { task: activeTask, context } = await this.checkedDialogueContext(
@@ -2030,9 +2130,18 @@ export class AiService implements OnModuleDestroy {
       sessionId,
       body,
     );
-    const scope = requestScope.getStore();
+    const suggestedMemory = personalMemoryProposal(body.message);
+    if (suggestedMemory) {
+      const response = await this.saveDialogue(
+        token,
+        sessionId,
+        body,
+        'CHAT',
+        `我可以把“${suggestedMemory}”作为你的个人偏好，用于后续对话。请点击“保存这条记忆”确认；这不会成为赛事规则或排赛条件。`,
+      );
+      return { ...response, suggestedMemory };
+    }
     if (scope) {
-      scope.sessionId = sessionId;
       scope.taskId = activeTask?.id;
     }
     const dialog = await this.runtime.run(

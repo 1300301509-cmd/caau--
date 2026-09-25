@@ -70,6 +70,61 @@ test.beforeEach(async ({ page }) => {
       body: JSON.stringify(session),
     }),
   );
+  const memories: Array<{
+    id: string;
+    content: string;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+  }> = [];
+  await page.route('**/api/v1/agent/memories**', async (route) => {
+    const request = route.request();
+    if (request.url().endsWith('/delete')) {
+      const id = request.url().split('/').at(-2)!;
+      const index = memories.findIndex((item) => item.id === id);
+      if (index >= 0) memories.splice(index, 1);
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ id, status: 'DELETED' }),
+      });
+    } else if (request.method() === 'POST') {
+      const now = '2026-09-25T00:00:00Z';
+      const created = {
+        id: '00000000-0000-4000-8000-000000000010',
+        content: request.postDataJSON().content,
+        revision: 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      memories.push(created);
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify(created),
+      });
+    } else {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify(memories),
+      });
+    }
+  });
+});
+
+test('assistant settings save and remove a confirmed personal memory', async ({
+  page,
+}) => {
+  await page.goto('/hosting-applications');
+  await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByLabel('新增长期记忆').fill('回答请先给简短结论');
+  await page.getByRole('button', { name: '保存记忆' }).click();
+  await expect(
+    page.getByRole('button', { name: '删除记忆：回答请先给简短结论' }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: '删除记忆：回答请先给简短结论' })
+    .click();
+  await expect(page.getByText('还没有保存长期记忆。')).toBeVisible();
 });
 
 test('floating assistant expands, preserves drafts and keeps shortcuts manual', async ({

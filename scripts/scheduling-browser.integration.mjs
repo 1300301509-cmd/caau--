@@ -173,8 +173,10 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       path: '.local/evidence/caau-065/chat-mobile-web.png',
     });
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.getByRole('button', { name: '介绍一下你自己' }).click();
-    await expect(page.getByLabel('对话消息')).toHaveValue('介绍一下你自己');
+    await page.getByRole('button', { name: /赛程查询/ }).click();
+    await expect(page.getByLabel('对话消息')).toHaveValue(
+      '帮我查看当前赛事的赛程',
+    );
     await page.getByLabel('对话消息').fill('未发送的输入应在最小化后保留');
     await page.getByRole('button', { name: '关闭智能助手' }).click();
     await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();

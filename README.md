@@ -1,5 +1,9 @@
 # CAAU 正式工程
 
+CAAU-084 为统一助手补充三级记忆：长对话滚动摘要、现有结构化任务状态、本人明确保存的跨对话个人偏好。偏好可在 Web/小程序对话设置查看和删除；赛程事实及执行仍以当前授权业务数据和确认流程为准。见[架构决策](docs/adr/0028-agent-three-level-memory.md)与[运行手册](docs/runbooks/agent-platform.md)。
+
+CAAU-083 已让统一助手承接“10 天内编排整套赛程”一类请求：有歧义先追问，明确单循环后人工确认需求，并在 Web/小程序生成独立候选预览；开始日期从授权赛事资料或现有赛程配置读取，缺少的场地与时段继续追问/填写。候选不会改动正式赛程。见[需求边界](docs/product/agent-schedule-planning.md)与[候选边界](docs/product/agent-schedule-candidates.md)。
+
 CAAU-064 在已确认的排程需求基础上提供独立、可恢复的**整套候选赛程预览**：目前仅显式配置的单循环；程序分配并独立校验硬条件、逐条报告偏好，区分合规/确定冲突/搜索未找到。候选不覆盖正式赛程，不增正式版本或执行票据，也不提供保存/发布入口。见[候选边界](docs/product/agent-schedule-candidates.md)及[运行手册](docs/runbooks/agent-platform.md)。
 
 CAAU-063 在统一助手中独立收集排程需求（赛事日期、参赛球队时段、对阵偏好），可逐轮修订、查看来源/冲突并由本人确认**需求版本**；不生成或保存赛程，单场改期仍另走原预览/确认链路。见[需求边界](docs/product/agent-schedule-planning.md)与[运行手册](docs/runbooks/agent-platform.md)。

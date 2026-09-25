@@ -97,6 +97,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/agent/memories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listAgentMemories'];
+    put?: never;
+    post: operations['createAgentMemory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/memories/{memoryId}/delete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['deleteAgentMemory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/agent/model-status': {
     parameters: {
       query?: never;
@@ -2424,6 +2456,22 @@ export interface components {
       executedAt: string;
       result: components['schemas']['AgentScheduleAdjustmentResultDto'];
     };
+    AgentMemoryDeletedDto: {
+      id: string;
+      /** @enum {string} */
+      status: 'DELETED';
+    };
+    AgentMemoryInputDto: {
+      /** @description Explicit personal preference; never a business rule or execution instruction. */
+      content: string;
+    };
+    AgentMemoryViewDto: {
+      content: string;
+      createdAt: string;
+      id: string;
+      revision: number;
+      updatedAt: string;
+    };
     AgentMessageInputDto: {
       eventId?: string;
       matchId?: string;
@@ -2453,19 +2501,25 @@ export interface components {
       availability?: 'AVAILABLE' | 'ONLY' | 'BLOCK';
       /** @enum {string} */
       confirmation: 'PENDING' | 'CONFIRMED';
+      /** @enum {string} */
+      dateSource?: 'USER' | 'EVENT_PROFILE' | 'EVENT_SCHEDULE';
       dates?: string[];
+      durationDays?: number;
       endTime?: string;
       eventId: string;
+      /** @enum {string} */
+      format?: 'ROUND_ROBIN';
       from?: string;
       id: string;
       /** @enum {string} */
-      kind: 'DATE_RANGE' | 'TEAM_WINDOW' | 'MATCHUP';
+      kind: 'DATE_RANGE' | 'TEAM_WINDOW' | 'MATCHUP' | 'FORMAT';
       /** @enum {string} */
       matchup?: 'PREFER' | 'AVOID';
       opponentId?: string;
       opponentLabel?: string;
       /** @enum {string} */
       priority: 'MUST' | 'PREFER';
+      scheduleGoal?: boolean;
       sourceTurnIds: string[];
       startTime?: string;
       teamId?: string;
@@ -2515,6 +2569,7 @@ export interface components {
         | 'QUERY'
         | 'PLAN'
         | 'NEED_TEAM';
+      suggestedMemory?: string | null;
       task?: components['schemas']['AgentTaskViewDto'] | null;
     };
     AgentScheduleAdjustmentResultDto: {
@@ -4072,6 +4127,69 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['AgentScheduleAdjustmentResultDto'];
+        };
+      };
+    };
+  };
+  listAgentMemories: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentMemoryViewDto'][];
+        };
+      };
+    };
+  };
+  createAgentMemory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AgentMemoryInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentMemoryViewDto'];
+        };
+      };
+    };
+  };
+  deleteAgentMemory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        memoryId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentMemoryDeletedDto'];
         };
       };
     };

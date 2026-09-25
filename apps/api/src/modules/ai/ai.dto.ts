@@ -32,6 +32,28 @@ export class AgentSessionInputDto {
   @ApiPropertyOptional() currentEventId?: string;
 }
 
+export class AgentMemoryInputDto {
+  @ApiProperty({
+    maxLength: 300,
+    description:
+      'Explicit personal preference; never a business rule or execution instruction.',
+  })
+  content!: string;
+}
+
+export class AgentMemoryViewDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() content!: string;
+  @ApiProperty() revision!: number;
+  @ApiProperty() createdAt!: string;
+  @ApiProperty() updatedAt!: string;
+}
+
+export class AgentMemoryDeletedDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ enum: ['DELETED'] }) status!: 'DELETED';
+}
+
 export class AgentMessageInputDto {
   @ApiProperty() message!: string;
   @ApiPropertyOptional() eventId?: string;
@@ -172,10 +194,8 @@ export class AgentTurnViewDto {
 
 export class AgentPlanningConditionDto {
   @ApiProperty() id!: string;
-  @ApiProperty({ enum: ['DATE_RANGE', 'TEAM_WINDOW', 'MATCHUP'] }) kind!:
-    | 'DATE_RANGE'
-    | 'TEAM_WINDOW'
-    | 'MATCHUP';
+  @ApiProperty({ enum: ['DATE_RANGE', 'TEAM_WINDOW', 'MATCHUP', 'FORMAT'] })
+  kind!: 'DATE_RANGE' | 'TEAM_WINDOW' | 'MATCHUP' | 'FORMAT';
   @ApiProperty() eventId!: string;
   @ApiProperty({ enum: ['MUST', 'PREFER'] }) priority!: 'MUST' | 'PREFER';
   @ApiProperty({ enum: ['PENDING', 'CONFIRMED'] }) confirmation!:
@@ -184,6 +204,11 @@ export class AgentPlanningConditionDto {
   @ApiProperty({ type: [String] }) sourceTurnIds!: string[];
   @ApiPropertyOptional() from?: string;
   @ApiPropertyOptional() to?: string;
+  @ApiPropertyOptional() durationDays?: number;
+  @ApiPropertyOptional() scheduleGoal?: boolean;
+  @ApiPropertyOptional({ enum: ['USER', 'EVENT_PROFILE', 'EVENT_SCHEDULE'] })
+  dateSource?: 'USER' | 'EVENT_PROFILE' | 'EVENT_SCHEDULE';
+  @ApiPropertyOptional({ enum: ['ROUND_ROBIN'] }) format?: 'ROUND_ROBIN';
   @ApiPropertyOptional() teamId?: string;
   @ApiPropertyOptional() teamLabel?: string;
   @ApiPropertyOptional() opponentId?: string;
@@ -304,6 +329,8 @@ export class AgentSessionViewDto {
 
 export class AgentReplyDto {
   @ApiProperty() sessionId!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 300 })
+  suggestedMemory?: string | null;
   @ApiProperty({
     enum: [
       'NEED_EVENT',

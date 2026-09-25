@@ -34,13 +34,25 @@ export function CandidateCard({
   const [error, setError] = useState('');
   useEffect(() => {
     let live = true;
+    const period = planning.conditions.find(
+      (item) => item.kind === 'DATE_RANGE',
+    );
+    const from = period?.from;
+    const to = period?.to;
+    const sameDates =
+      schedule?.exists &&
+      schedule.config.startDate === from &&
+      schedule.config.endDate === to;
     setCandidate(null);
     setError('');
     setTeams([]);
     setFixed([]);
     setAck(false);
-    setConfig(schedule?.exists ? schedule.config : {});
-    setSource(schedule?.exists ? 'EVENT_SCHEDULE' : 'EXPLICIT');
+    setConfig({
+      ...(schedule?.exists ? schedule.config : {}),
+      ...(from && to ? { startDate: from, endDate: to } : {}),
+    });
+    setSource(sameDates ? 'EVENT_SCHEDULE' : 'EXPLICIT');
     if (planning.status === 'CONFIRMED') {
       void client
         .request('getLatestAgentScheduleCandidate', {
@@ -65,12 +77,23 @@ export function CandidateCard({
           path: { eventId: planning.eventId },
         })
         .then((items) => {
-          if (live)
+          if (live) {
             setTeams(
               items
                 .filter((item) => item.active)
                 .map((item) => ({ id: item.id, name: item.profile.name })),
             );
+            if (
+              period?.scheduleGoal &&
+              planning.conditions.some((item) => item.kind === 'FORMAT')
+            )
+              setConfig((current) => ({
+                ...current,
+                teamIds: items
+                  .filter((item) => item.active)
+                  .map((item) => item.id),
+              }));
+          }
         })
         .catch((cause) => {
           if (live) {
@@ -174,6 +197,11 @@ export function CandidateCard({
           : '本次逐项核对/修改（未改字段可能预填自现有配置）'}
         。不支持淘汰赛候选或自动填充业务缺省。
       </Text>
+      {planning.conditions.some((item) => item.scheduleGoal) && (
+        <Text className="competition-note">
+          已带入确认的日期与全部当前参赛球队。请核对每日时段、场地、比赛时长、缓冲及休息时间；缺项需补齐后计算。
+        </Text>
+      )}
       {schedule?.exists && (
         <Action
           disabled={busy}

@@ -1843,11 +1843,16 @@ export async function schedulingIntegration(t, context) {
       });
       assert.deepEqual(
         getAgentHistory().map((turn) => turn.role),
-        rows.slice(-10).map((row) => row.role),
+        rows.slice(-30).map((row) => row.role),
       );
       assert.deepEqual(
         getAgentHistory().map((turn) => turn.content),
-        rows.slice(-10).map((row) => row.content),
+        rows.slice(-30).map((row) => {
+          const characters = Array.from(row.content);
+          return characters.length <= 600
+            ? row.content
+            : `${characters.slice(0, 400).join('')}…（仅模型上下文节选）${characters.slice(-180).join('')}`;
+        }),
       );
       assert.deepEqual(
         incoming.slice().sort(),
@@ -2119,7 +2124,8 @@ export async function schedulingIntegration(t, context) {
         );
       assert.equal((await send('你好')).planningRequest, null);
       assert.equal(
-        (await send('请批量重排整套赛程', { eventId: event.id })).status,
+        (await send('请批量重排整套赛程并发布赛程', { eventId: event.id }))
+          .status,
         'UNSUPPORTED',
       );
       assert.equal(
@@ -2546,6 +2552,117 @@ export async function schedulingIntegration(t, context) {
       assert.equal(
         (await call('manager', 'GET', route)).planningRequest.revision,
         plan.revision,
+      );
+    },
+  );
+
+  await t.test(
+    'agent ten-day request clarifies pair coverage, then previews every pair without saving',
+    async () => {
+      const session = await call('manager', 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const route = `agent/sessions/${session.id}/messages`;
+      const baseline = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      const beforeVersions = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      const first = await call('manager', 'POST', route, {
+        message: '帮我编排一下赛程，10天解决，要求所有队伍都必须比过一场',
+        eventId: event.id,
+      });
+      assert.equal(first.status, 'PLAN');
+      assert.equal(first.planningRequest.conditions[0].from, '2027-06-01');
+      assert.equal(first.planningRequest.conditions[0].to, '2027-06-10');
+      assert.equal(
+        first.planningRequest.conditions[0].dateSource,
+        'EVENT_SCHEDULE',
+      );
+      assert.ok(
+        first.planningRequest.pending.some((item) => item.includes('每两支')),
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${first.planningRequest.id}/confirm`,
+        { expectedRevision: first.planningRequest.revision },
+        409,
+      );
+      const clarified = await call('manager', 'POST', route, {
+        message: '每队与其他队都交手一次',
+        eventId: event.id,
+        planningId: first.planningRequest.id,
+        planningRevision: first.planningRequest.revision,
+      });
+      assert.equal(clarified.status, 'PLAN');
+      assert.deepEqual(clarified.planningRequest.pending, []);
+      assert.equal(
+        clarified.planningRequest.conditions.find(
+          (item) => item.kind === 'FORMAT',
+        ).format,
+        'ROUND_ROBIN',
+      );
+      const confirmed = await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${first.planningRequest.id}/confirm`,
+        { expectedRevision: clarified.planningRequest.revision },
+      );
+      assert.equal(confirmed.status, 'CONFIRMED');
+      const currentTeams = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/teams`,
+      );
+      const cfg = {
+        ...baseline.config,
+        teamIds: currentTeams
+          .filter((item) => item.active)
+          .map((item) => item.id),
+        startDate: '2027-06-01',
+        endDate: '2027-06-10',
+      };
+      const candidate = await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${first.planningRequest.id}/candidates`,
+        {
+          expectedRevision: confirmed.revision,
+          baselineRevision: baseline.revision,
+          format: 'ROUND_ROBIN',
+          configSource: 'EXPLICIT',
+          config: cfg,
+          fixedMatchIds: [],
+        },
+      );
+      assert.equal(candidate.status, 'FOUND');
+      assert.equal(
+        candidate.matches.length,
+        (cfg.teamIds.length * (cfg.teamIds.length - 1)) / 2,
+      );
+      assert.ok(
+        candidate.matches.every((match) => {
+          const day = new Date(Date.parse(match.startAt) + 8 * 3600000)
+            .toISOString()
+            .slice(0, 10);
+          return day >= cfg.startDate && day <= cfg.endDate;
+        }),
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        beforeVersions,
       );
     },
   );

@@ -4,6 +4,7 @@ import { AiController } from './ai.controller.js';
 import { AiService } from './ai.service.js';
 import { PlanningService } from './planning.service.js';
 import { CandidateService } from './candidate.service.js';
+import { AgentMemoryService } from './memory.service.js';
 import { createAgentModel, type AgentModelAdapter } from './model-adapter.js';
 import { SchedulingModule } from '../scheduling/scheduling.module.js';
 import { SchedulingService } from '../scheduling/scheduling.service.js';
@@ -22,6 +23,7 @@ export class AiModule {
       providers: [
         PlanningService,
         CandidateService,
+        AgentMemoryService,
         {
           provide: 'AGENT_MODEL',
           inject: [UsageService],
