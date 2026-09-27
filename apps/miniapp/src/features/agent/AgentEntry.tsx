@@ -1,7 +1,8 @@
 import { useEffect, useState, type ComponentType } from 'react';
-import { Button, View } from '@tarojs/components';
+import { Button, Image, Text, View } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { session, subscribeSession } from '../materials/session';
+import assistantIcon from '../../assets/caau-assistant.svg';
 import './agent.css';
 
 // A WeChat page owns its own native tree. Mount the same lightweight entry
@@ -33,9 +34,9 @@ export function withAgentEntry(Page: ComponentType) {
             }
           >
             <View aria-hidden="true" className="agent-entry-mark">
-              ◈
+              <Image src={assistantIcon} mode="aspectFit" />
             </View>
-            <View>智能助手</View>
+            <Text className="agent-visually-hidden">打开 CAAU 智能助手</Text>
           </Button>
         )}
       </View>

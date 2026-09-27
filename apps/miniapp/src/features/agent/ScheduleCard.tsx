@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Picker, Text, View } from '@tarojs/components';
+import {
+  Button,
+  Image,
+  Picker,
+  Text,
+  Textarea,
+  View,
+} from '@tarojs/components';
 import Taro, { useDidShow, useRouter } from '@tarojs/taro';
 import { AgentStreamInterruptedError, ApiError } from '@caau/api-client';
 import {
@@ -9,10 +16,12 @@ import {
   session as login,
   subscribeSession,
 } from '../materials/session';
-import { Action, Field } from '../competition/shared';
+import { Action } from '../competition/shared';
 import { bj, type S } from '../competition/model';
 import { CandidateCard } from './CandidateCard';
 import { MemorySettings } from './MemorySettings';
+import assistantIcon from '../../assets/caau-assistant.svg';
+import sendIcon from '../../assets/agent-send.svg';
 import './agent.css';
 
 type AgentSession = S['AgentSessionViewDto'];
@@ -20,6 +29,27 @@ type Reply = S['AgentReplyDto'];
 type Receipt = S['AgentScheduleAdjustmentResultDto'];
 type Candidate = S['AgentCandidateDto'];
 type Planning = S['AgentPlanningRequestViewDto'];
+
+const assistantSkills = [
+  {
+    title: '赛程查询',
+    description: '查看有权赛事的赛程和场次详情。',
+    note: '只读查询',
+    prompt: '帮我查看当前赛事的赛程',
+  },
+  {
+    title: '排程规划',
+    description: '整理时间、球队和对阵要求，生成独立候选预览。',
+    note: '需求确认后预览',
+    prompt: '我想规划赛程，请帮我梳理需要提供哪些信息',
+  },
+  {
+    title: '单场改期',
+    description: '定位比赛并预览调整；保存草稿须由本人确认。',
+    note: '预览后人工确认',
+    prompt: '我想调整一场比赛的时间',
+  },
+] as const;
 
 function PlanningCard({
   planning,
@@ -172,6 +202,7 @@ export function AgentPage() {
   const [notice, setNotice] = useState('');
   const [blocked, setBlocked] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const lock = useRef(false);
   const activeStream = useRef<AbortController | null>(null);
@@ -229,6 +260,8 @@ export function AgentPage() {
     setNotice('');
     setBlocked(false);
     setSessions([]);
+    setSkillsOpen(false);
+    setOptionsOpen(false);
     serial.current++;
     lock.current = false;
     setBusy(false);
@@ -345,6 +378,7 @@ export function AgentPage() {
     );
   }
   useDidShow(() => {
+    void Taro.setNavigationBarTitle({ title: 'CAAU 智能助手' });
     void operate(restore);
     if (login.token) {
       const token = login.token,
@@ -639,367 +673,495 @@ export function AgentPage() {
   return (
     <View className="competition-mobile agent-panel">
       <View className="card competition-agent">
-        <View className="agent-mobile-header">
-          <Text className="subtitle">CAAU 智能助手</Text>
-          <Action
+        <View className="agent-mobile-tabs" aria-label="智能助手页面">
+          <Button
+            className={skillsOpen ? '' : 'selected'}
+            ariaLabel="对话"
+            onClick={() => setSkillsOpen(false)}
+          >
+            对话
+          </Button>
+          <Button
+            className={skillsOpen ? 'selected' : ''}
+            ariaLabel="技能库"
             onClick={() => {
-              if (login.token)
-                volatile = {
-                  token: login.token,
-                  epoch: login.epoch,
-                  current,
-                  reply,
-                  receipt,
-                  input,
-                  lastMessage,
-                  selectedEvent,
-                };
-              void Taro.navigateBack();
+              setOptionsOpen(false);
+              setSkillsOpen(true);
             }}
           >
-            返回
-          </Action>
+            技能库
+          </Button>
         </View>
-        <View className="agent-mobile-toolbar">
-          <Action
-            disabled={busy || !current}
-            onClick={() => void newConversation()}
-          >
-            新对话
-          </Action>
-          <Action onClick={() => setOptionsOpen((value) => !value)}>
-            {optionsOpen ? '收起设置' : '对话设置'}
-          </Action>
-        </View>
-        {pageEventId && eventId && pageEventId !== eventId && (
-          <Text className="agent-mobile-warning">
-            当前对话关联赛事与浏览页面不同。切换赛事请打开设置。
-          </Text>
-        )}
-        {optionsOpen && (
-          <View className="agent-mobile-options">
-            <MemorySettings key={login.epoch} />
-            <Text className="agent-context-label">
-              浏览页面：
-              {pageEventId
-                ? (events.find((item) => item.id === pageEventId)?.name ??
-                  '赛事加载中')
-                : '无赛事上下文'}
+        {skillsOpen ? (
+          <View className="agent-skill-library" aria-label="技能库">
+            <Text className="agent-skill-heading">当前已接入的能力</Text>
+            <Text className="agent-skill-intro">
+              选择后只会填入提问，你仍需发送消息。查询和调整以当前账号权限及后端校验为准。
             </Text>
-            <Text className="agent-context-label">
-              任务对象：
-              {eventId
-                ? (events.find((item) => item.id === eventId)?.name ??
-                  '赛事加载中')
-                : '尚未选择赛事'}
-            </Text>
-            {pageEventId && eventId && pageEventId !== eventId && (
-              <Text className="competition-note">
-                当前任务与浏览赛事不同；不会自动切换。
-              </Text>
-            )}
-            <Picker
-              disabled={busy}
-              mode="selector"
-              range={sessions.map((item) => ({
-                id: item.id,
-                label: `${events.find((entry) => entry.id === (item.planningRequest?.eventId ?? item.task?.eventId ?? item.currentEventId))?.name ?? '自由对话'} · ${item.planningRequest ? `需求 V${item.planningRequest.revision}` : (item.task?.goal?.slice(0, 22) ?? item.turns.find((turn) => turn.role === 'USER')?.content.slice(0, 22) ?? '新对话')}`,
-              }))}
-              rangeKey="label"
-              onChange={(e) => {
-                const id = sessions[Number(e.detail.value)]?.id;
-                if (id) void selectHistory(id);
-              }}
-            >
-              <View className="competition-line" role="button">
-                历史对话（{sessions.length} 个；当前{' '}
-                {current?.task?.goal?.slice(0, 12) ??
-                  current?.turns
-                    .find((turn) => turn.role === 'USER')
-                    ?.content.slice(0, 12) ??
-                  '新对话'}
-                ）
-              </View>
-            </Picker>
-            <Picker
-              disabled={busy}
-              mode="selector"
-              range={events}
-              rangeKey="name"
-              onChange={(e) => {
-                const id = events[Number(e.detail.value)]?.id;
-                if (id) void switchEvent(id);
-              }}
-            >
-              <View className="competition-line" role="button">
-                切换对话赛事（需明确选择）
-              </View>
-            </Picker>
-            <Action disabled={busy} onClick={() => void refresh()}>
-              刷新任务与回执
-            </Action>
-          </View>
-        )}
-        <View className="agent-message-list" aria-label="对话记录">
-          {!current?.turns.length && !busy && (
-            <View className="agent-mobile-welcome">
-              <Text className="agent-welcome-title">你好，有什么想聊的？</Text>
-              <Text>直接提问、整理想法，或聊聊当前赛事工作。</Text>
-            </View>
-          )}
-          {(current?.turns ?? []).map((turn) => (
-            <View
-              key={turn.id}
-              className={`agent-message ${turn.role === 'USER' ? 'agent-message-user' : 'agent-message-assistant'}`}
-            >
-              <View className="agent-message-bubble">
-                <Text className="agent-message-name">
-                  {turn.role === 'USER' ? '我' : 'CAAU 智能助手'}
-                </Text>
-                <Text>{turn.content}</Text>
-              </View>
-            </View>
-          ))}
-          {streamingUser && (
-            <>
-              <View className="agent-message agent-message-user">
-                <View className="agent-message-bubble">
-                  <Text>{streamingUser}</Text>
-                </View>
-              </View>
-              <View className="agent-message agent-message-assistant">
-                <View className="agent-message-bubble">
-                  <Text className="agent-message-name">CAAU 智能助手</Text>
-                  <Text>{streamingText || '正在理解你的问题…'}</Text>
-                </View>
-              </View>
-            </>
-          )}
-        </View>
-        {error && (
-          <View className="competition-error" role="alert">
-            {error}
-          </View>
-        )}
-        {notice && (
-          <View className="competition-line" role="status">
-            <Text>{notice}</Text>
-          </View>
-        )}
-        {busy && !streamingUser && (
-          <View className="competition-note" role="status">
-            正在处理，请稍候…
-          </View>
-        )}
-        {execution && (
-          <View className="competition-agent-receipt">
-            <Action onClick={() => setReceiptOpen((value) => !value)}>
-              草稿 V{execution.revision} 已保存 ·{' '}
-              {receiptOpen ? '收起回执' : '查看回执'}
-            </Action>
-            {receiptOpen && (
-              <View className="agent-receipt-details">
-                <Text className="competition-line">
-                  命令：{execution.commandId}
-                </Text>
-                {current?.lastExecution?.result.commandId ===
-                  execution.commandId && (
-                  <Text className="competition-line">
-                    执行于：
-                    {bj(current.lastExecution.executedAt).replace('T', ' ')}
-                  </Text>
-                )}
-                <Text className="competition-line">
-                  执行时状态：{execution.status} · {execution.issues.length}{' '}
-                  项冲突
-                </Text>
-                <Text className="competition-line">
-                  赛程当前状态：
-                  {schedule && schedule.revision >= execution.revision
-                    ? `${schedule.status} · V${schedule.revision}`
-                    : '待刷新'}
-                  （以当前赛程为准）
-                </Text>
-                {!receipt && (
-                  <Text className="competition-note">持久执行回执（恢复）</Text>
-                )}
-              </View>
-            )}
-          </View>
-        )}
-        {current && (
-          <View className="agent-mobile-workflow">
-            {task?.step === 'WAITING_PARAMETERS' && (
-              <Text className="competition-line">
-                待补充：
-                {task.pendingFields
-                  .map((field) => pendingLabel[field] ?? '请补充调整条件')
-                  .join('、')}
-              </Text>
-            )}
-            {task?.step === 'LOCATE_EVENT' && !reply?.candidates.length && (
-              <Text className="competition-line">
-                请描述赛事或从有权赛事中明确选择；候选项刷新后须重新发送描述。
-              </Text>
-            )}
-            {task?.step === 'LOCATE_MATCH' && !reply?.candidates.length && (
-              <Text className="competition-line">
-                请重新发送上次描述以恢复候选场次。
-              </Text>
-            )}
-            {!!reply?.candidates.length && (
-              <View>
-                <Text className="competition-line">
-                  {reply.message} ·{' '}
-                  {reply.status === 'NEED_EVENT'
-                    ? '请选择赛事'
-                    : reply.status === 'NEED_TEAM'
-                      ? '请选择赛事参赛球队'
-                      : '请选择比赛'}
-                </Text>
-                {reply.candidates.map((choice) => (
-                  <Action
-                    key={choice.id}
-                    disabled={busy}
-                    onClick={() => void send(choice)}
-                  >
-                    {choice.label}
-                    {choice.detail ? ` · ${choice.detail}` : ''}
-                  </Action>
-                ))}
-              </View>
-            )}
-            {reply?.message &&
-              !reply.candidates.length &&
-              !preview &&
-              reply.message !==
-                [...(current?.turns ?? [])]
-                  .reverse()
-                  .find((turn) => turn.role === 'ASSISTANT')?.content && (
-                <Text
-                  className={`competition-line${['QUERY', 'PLAN', 'NEED_TEAM'].includes(reply.status) ? ' agent-query-answer' : ''}`}
-                >
-                  {reply.message}
-                </Text>
-              )}
-            {reply?.suggestedMemory && (
-              <Action
-                disabled={busy}
-                onClick={() => void saveSuggestedMemory()}
-              >
-                保存这条记忆
-              </Action>
-            )}
-            {planning && (
-              <PlanningCard
-                planning={planning}
-                busy={busy}
-                blocked={blocked}
-                onConfirm={() => void confirmPlanning()}
-              />
-            )}
-            {planning?.status === 'CONFIRMED' && !blocked && (
-              <CandidateCard
-                planning={planning}
-                schedule={schedule}
-                token={login.token}
-                onSaved={onSaved}
-                onAccessError={(cause) => {
-                  if (cause instanceof ApiError && cause.status === 401)
-                    clearSession();
-                  else {
-                    reset();
-                    setError('当前账号已无权读取候选赛程。');
-                  }
+            {assistantSkills.map((skill) => (
+              <Button
+                key={skill.title}
+                className="agent-skill-card"
+                ariaLabel={`填入${skill.title}提问`}
+                onClick={() => {
+                  setInput(skill.prompt);
+                  setSkillsOpen(false);
                 }}
-              />
-            )}
-            {['STALE', 'CANCELLED'].includes(task?.step ?? '') && (
-              <Text className="competition-line">
-                当前预览已失效；请刷新赛程并重新描述调整。
+              >
+                <View className="agent-skill-card-top">
+                  <Text className="agent-skill-title">{skill.title}</Text>
+                  <Text className="agent-skill-note">{skill.note}</Text>
+                </View>
+                <Text className="agent-skill-description">
+                  {skill.description}
+                </Text>
+              </Button>
+            ))}
+            <Text className="agent-skill-future">
+              新能力接入并完成权限校验后，会继续加入这里。
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View className="agent-mobile-toolbar">
+              <Picker
+                disabled={busy || !sessions.length}
+                mode="selector"
+                range={sessions.map((item) => ({
+                  id: item.id,
+                  label: `${events.find((entry) => entry.id === (item.planningRequest?.eventId ?? item.task?.eventId ?? item.currentEventId))?.name ?? '自由对话'} · ${item.planningRequest ? `需求 V${item.planningRequest.revision}` : (item.task?.goal?.slice(0, 22) ?? item.turns.find((turn) => turn.role === 'USER')?.content.slice(0, 22) ?? '新对话')}`,
+                }))}
+                rangeKey="label"
+                value={Math.max(
+                  0,
+                  sessions.findIndex((item) => item.id === current?.id),
+                )}
+                onChange={(e) => {
+                  const id = sessions[Number(e.detail.value)]?.id;
+                  if (id) void selectHistory(id);
+                }}
+              >
+                <View className="agent-mobile-history" role="button">
+                  <Text>历史对话 · {sessions.length}</Text>
+                  <Text className="agent-mobile-chevron" aria-hidden="true">
+                    ⌄
+                  </Text>
+                </View>
+              </Picker>
+              <Button
+                className="agent-mobile-toolbar-action"
+                disabled={busy || !current}
+                onClick={() => void newConversation()}
+              >
+                新对话
+              </Button>
+              <Button
+                className="agent-mobile-toolbar-action"
+                ariaLabel={optionsOpen ? '收起对话设置' : '打开对话设置'}
+                onClick={() => setOptionsOpen((value) => !value)}
+              >
+                {optionsOpen ? '收起设置' : '对话设置'}
+              </Button>
+            </View>
+            {pageEventId && eventId && pageEventId !== eventId && (
+              <Text className="agent-mobile-warning">
+                当前对话关联赛事与浏览页面不同。切换赛事请打开设置。
               </Text>
             )}
-            {preview && (
-              <View className="competition-agent-preview">
-                <Text className="subtitle">
-                  修改前后 · 基线 V{preview.baselineRevision}
+            {optionsOpen && (
+              <View className="agent-mobile-options">
+                <MemorySettings key={login.epoch} />
+                <Text className="agent-context-label">
+                  浏览页面：
+                  {pageEventId
+                    ? (events.find((item) => item.id === pageEventId)?.name ??
+                      '赛事加载中')
+                    : '无赛事上下文'}
                 </Text>
-                <Text className="competition-line">
-                  {preview.before.homeLabel} vs {preview.before.awayLabel}
+                <Text className="agent-context-label">
+                  任务对象：
+                  {eventId
+                    ? (events.find((item) => item.id === eventId)?.name ??
+                      '赛事加载中')
+                    : '尚未选择赛事'}
                 </Text>
-                <Text className="competition-line">
-                  修改前：
-                  {preview.before.startAt
-                    ? bj(preview.before.startAt).replace('T', ' ')
-                    : '待安排'}{' '}
-                  · {preview.before.venue}
-                </Text>
-                <Text className="competition-line">
-                  修改后：{bj(preview.after.startAt).replace('T', ' ')} ·{' '}
-                  {preview.after.venue}
-                </Text>
-                <Text className="competition-line">
-                  确定性冲突：{preview.issues.length} 项
-                </Text>
-                {preview.issues.map((issue, index) => (
-                  <Text className="competition-line" key={index}>
-                    {issue.message}
+                {pageEventId && eventId && pageEventId !== eventId && (
+                  <Text className="competition-note">
+                    当前任务与浏览赛事不同；不会自动切换。
                   </Text>
-                ))}
-                <Text className="competition-note">
-                  尚未保存 · 有效至 {bj(preview.expiresAt).replace('T', ' ')}
-                  ；过期或版本变化须重新预览。
-                </Text>
-                {ticket?.state === 'PENDING' && (
-                  <View>
-                    <Text className="competition-line">
-                      执行人：{ticket.actorDisplayName} · 预期 V
-                      {ticket.expectedRevision}
-                    </Text>
-                    <Text className="competition-line">
-                      赛事：{ticket.eventName} · 工具：schedule.draft.adjust@
-                      {ticket.toolVersion}
-                    </Text>
-                    {expired || staleRevision || blocked ? (
-                      <Text className="competition-error">
-                        {expired ? '确认已过期' : '赛程版本或确认状态已变化'}
-                        ，请刷新并重新预览。
+                )}
+                <Picker
+                  disabled={busy}
+                  mode="selector"
+                  range={events}
+                  rangeKey="name"
+                  onChange={(e) => {
+                    const id = events[Number(e.detail.value)]?.id;
+                    if (id) void switchEvent(id);
+                  }}
+                >
+                  <View className="competition-line" role="button">
+                    切换对话赛事（需明确选择）
+                  </View>
+                </Picker>
+                <Action disabled={busy} onClick={() => void refresh()}>
+                  刷新任务与回执
+                </Action>
+              </View>
+            )}
+            <View className="agent-message-list" aria-label="对话记录">
+              {!current?.turns.length && !busy && (
+                <View className="agent-mobile-welcome">
+                  <Text className="agent-welcome-title">
+                    你好，有什么可以帮你？
+                  </Text>
+                  <Text className="agent-welcome-description">
+                    聊聊想法，也让赛事工作更轻松。
+                  </Text>
+                  <View
+                    className="agent-mobile-shortcuts"
+                    aria-label="快捷提问"
+                  >
+                    <Button
+                      className="agent-mobile-shortcut"
+                      onClick={() => setInput(assistantSkills[0].prompt)}
+                    >
+                      <Text className="agent-shortcut-mark" aria-hidden="true">
+                        赛
                       </Text>
-                    ) : (
-                      <Action
-                        primary
-                        disabled={busy}
-                        onClick={() => void confirmDraft()}
+                      <View>
+                        <Text className="agent-shortcut-title">赛程查询</Text>
+                        <Text className="agent-shortcut-note">
+                          查比赛安排，了解场次详情
+                        </Text>
+                      </View>
+                    </Button>
+                    <Button
+                      className="agent-mobile-shortcut agent-mobile-shortcut-plan"
+                      onClick={() => setInput(assistantSkills[1].prompt)}
+                    >
+                      <Text className="agent-shortcut-mark" aria-hidden="true">
+                        排
+                      </Text>
+                      <View>
+                        <Text className="agent-shortcut-title">排程规划</Text>
+                        <Text className="agent-shortcut-note">
+                          整理球队时间与对阵要求
+                        </Text>
+                      </View>
+                    </Button>
+                  </View>
+                  <Text className="agent-suggestion-heading">你可能想问</Text>
+                  <View className="agent-mobile-suggestions">
+                    {[
+                      '你能帮我做些什么？',
+                      '单循环和淘汰赛有什么区别？',
+                      '我想调整一场比赛的时间',
+                      '帮我整理一份赛事筹备清单',
+                    ].map((suggestion) => (
+                      <Button
+                        key={suggestion}
+                        className="agent-mobile-suggestion"
+                        onClick={() => setInput(suggestion)}
                       >
-                        确认保存草稿
-                      </Action>
+                        <Text>{suggestion}</Text>
+                        <Text
+                          className="agent-suggestion-arrow"
+                          aria-hidden="true"
+                        >
+                          ›
+                        </Text>
+                      </Button>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {(current?.turns ?? []).map((turn) => (
+                <View
+                  key={turn.id}
+                  className={`agent-message ${turn.role === 'USER' ? 'agent-message-user' : 'agent-message-assistant'}`}
+                >
+                  {turn.role === 'ASSISTANT' && (
+                    <View className="agent-message-avatar" aria-hidden="true">
+                      <Image src={assistantIcon} mode="aspectFit" />
+                    </View>
+                  )}
+                  <View className="agent-message-bubble">
+                    {turn.role === 'ASSISTANT' && (
+                      <Text className="agent-message-name">CAAU 智能助手</Text>
                     )}
-                    <Action disabled={busy} onClick={() => void cancelTicket()}>
-                      取消本次确认
-                    </Action>
+                    <Text>{turn.content}</Text>
+                  </View>
+                </View>
+              ))}
+              {streamingUser && (
+                <>
+                  <View className="agent-message agent-message-user">
+                    <View className="agent-message-bubble">
+                      <Text>{streamingUser}</Text>
+                    </View>
+                  </View>
+                  <View className="agent-message agent-message-assistant">
+                    <View className="agent-message-avatar" aria-hidden="true">
+                      <Image src={assistantIcon} mode="aspectFit" />
+                    </View>
+                    <View className="agent-message-bubble">
+                      <Text className="agent-message-name">CAAU 智能助手</Text>
+                      <Text>{streamingText || '正在理解你的问题…'}</Text>
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+            {error && (
+              <View className="competition-error" role="alert">
+                {error}
+              </View>
+            )}
+            {notice && (
+              <View className="competition-line" role="status">
+                <Text>{notice}</Text>
+              </View>
+            )}
+            {busy && !streamingUser && (
+              <View className="competition-note" role="status">
+                正在处理，请稍候…
+              </View>
+            )}
+            {execution && (
+              <View className="competition-agent-receipt">
+                <Action onClick={() => setReceiptOpen((value) => !value)}>
+                  草稿 V{execution.revision} 已保存 ·{' '}
+                  {receiptOpen ? '收起回执' : '查看回执'}
+                </Action>
+                {receiptOpen && (
+                  <View className="agent-receipt-details">
+                    <Text className="competition-line">
+                      命令：{execution.commandId}
+                    </Text>
+                    {current?.lastExecution?.result.commandId ===
+                      execution.commandId && (
+                      <Text className="competition-line">
+                        执行于：
+                        {bj(current.lastExecution.executedAt).replace('T', ' ')}
+                      </Text>
+                    )}
+                    <Text className="competition-line">
+                      执行时状态：{execution.status} · {execution.issues.length}{' '}
+                      项冲突
+                    </Text>
+                    <Text className="competition-line">
+                      赛程当前状态：
+                      {schedule && schedule.revision >= execution.revision
+                        ? `${schedule.status} · V${schedule.revision}`
+                        : '待刷新'}
+                      （以当前赛程为准）
+                    </Text>
+                    {!receipt && (
+                      <Text className="competition-note">
+                        持久执行回执（恢复）
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>
             )}
-          </View>
-        )}
-        {current && (
-          <View className="agent-mobile-composer">
-            <Field
-              label="对话消息"
-              max={2000}
-              value={input}
-              disabled={busy}
-              onChange={setInput}
-            />
-            <Action
-              primary
-              disabled={busy || !input.trim()}
-              onClick={() => void send()}
-            >
-              发送消息
-            </Action>
-          </View>
+            {current && (
+              <View className="agent-mobile-workflow">
+                {task?.step === 'WAITING_PARAMETERS' && (
+                  <Text className="competition-line">
+                    待补充：
+                    {task.pendingFields
+                      .map((field) => pendingLabel[field] ?? '请补充调整条件')
+                      .join('、')}
+                  </Text>
+                )}
+                {task?.step === 'LOCATE_EVENT' && !reply?.candidates.length && (
+                  <Text className="competition-line">
+                    请描述赛事或从有权赛事中明确选择；候选项刷新后须重新发送描述。
+                  </Text>
+                )}
+                {task?.step === 'LOCATE_MATCH' && !reply?.candidates.length && (
+                  <Text className="competition-line">
+                    请重新发送上次描述以恢复候选场次。
+                  </Text>
+                )}
+                {!!reply?.candidates.length && (
+                  <View>
+                    <Text className="competition-line">
+                      {reply.message} ·{' '}
+                      {reply.status === 'NEED_EVENT'
+                        ? '请选择赛事'
+                        : reply.status === 'NEED_TEAM'
+                          ? '请选择赛事参赛球队'
+                          : '请选择比赛'}
+                    </Text>
+                    {reply.candidates.map((choice) => (
+                      <Action
+                        key={choice.id}
+                        disabled={busy}
+                        onClick={() => void send(choice)}
+                      >
+                        {choice.label}
+                        {choice.detail ? ` · ${choice.detail}` : ''}
+                      </Action>
+                    ))}
+                  </View>
+                )}
+                {reply?.message &&
+                  !reply.candidates.length &&
+                  !preview &&
+                  reply.message !==
+                    [...(current?.turns ?? [])]
+                      .reverse()
+                      .find((turn) => turn.role === 'ASSISTANT')?.content && (
+                    <Text
+                      className={`competition-line${['QUERY', 'PLAN', 'NEED_TEAM'].includes(reply.status) ? ' agent-query-answer' : ''}`}
+                    >
+                      {reply.message}
+                    </Text>
+                  )}
+                {reply?.suggestedMemory && (
+                  <Action
+                    disabled={busy}
+                    onClick={() => void saveSuggestedMemory()}
+                  >
+                    保存这条记忆
+                  </Action>
+                )}
+                {planning && (
+                  <PlanningCard
+                    planning={planning}
+                    busy={busy}
+                    blocked={blocked}
+                    onConfirm={() => void confirmPlanning()}
+                  />
+                )}
+                {planning?.status === 'CONFIRMED' && !blocked && (
+                  <CandidateCard
+                    planning={planning}
+                    schedule={schedule}
+                    token={login.token}
+                    onSaved={onSaved}
+                    onAccessError={(cause) => {
+                      if (cause instanceof ApiError && cause.status === 401)
+                        clearSession();
+                      else {
+                        reset();
+                        setError('当前账号已无权读取候选赛程。');
+                      }
+                    }}
+                  />
+                )}
+                {['STALE', 'CANCELLED'].includes(task?.step ?? '') && (
+                  <Text className="competition-line">
+                    当前预览已失效；请刷新赛程并重新描述调整。
+                  </Text>
+                )}
+                {preview && (
+                  <View className="competition-agent-preview">
+                    <Text className="subtitle">
+                      修改前后 · 基线 V{preview.baselineRevision}
+                    </Text>
+                    <Text className="competition-line">
+                      {preview.before.homeLabel} vs {preview.before.awayLabel}
+                    </Text>
+                    <Text className="competition-line">
+                      修改前：
+                      {preview.before.startAt
+                        ? bj(preview.before.startAt).replace('T', ' ')
+                        : '待安排'}{' '}
+                      · {preview.before.venue}
+                    </Text>
+                    <Text className="competition-line">
+                      修改后：{bj(preview.after.startAt).replace('T', ' ')} ·{' '}
+                      {preview.after.venue}
+                    </Text>
+                    <Text className="competition-line">
+                      确定性冲突：{preview.issues.length} 项
+                    </Text>
+                    {preview.issues.map((issue, index) => (
+                      <Text className="competition-line" key={index}>
+                        {issue.message}
+                      </Text>
+                    ))}
+                    <Text className="competition-note">
+                      尚未保存 · 有效至{' '}
+                      {bj(preview.expiresAt).replace('T', ' ')}
+                      ；过期或版本变化须重新预览。
+                    </Text>
+                    {ticket?.state === 'PENDING' && (
+                      <View>
+                        <Text className="competition-line">
+                          执行人：{ticket.actorDisplayName} · 预期 V
+                          {ticket.expectedRevision}
+                        </Text>
+                        <Text className="competition-line">
+                          赛事：{ticket.eventName} ·
+                          工具：schedule.draft.adjust@
+                          {ticket.toolVersion}
+                        </Text>
+                        {expired || staleRevision || blocked ? (
+                          <Text className="competition-error">
+                            {expired
+                              ? '确认已过期'
+                              : '赛程版本或确认状态已变化'}
+                            ，请刷新并重新预览。
+                          </Text>
+                        ) : (
+                          <Action
+                            primary
+                            disabled={busy}
+                            onClick={() => void confirmDraft()}
+                          >
+                            确认保存草稿
+                          </Action>
+                        )}
+                        <Action
+                          disabled={busy}
+                          onClick={() => void cancelTicket()}
+                        >
+                          取消本次确认
+                        </Action>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+            {current && (
+              <View className="agent-mobile-composer">
+                <Text className="agent-composer-context">
+                  {eventId
+                    ? (events.find((item) => item.id === eventId)?.name ??
+                      '赛事对话')
+                    : '自由对话'}
+                </Text>
+                <View className="agent-mobile-input-box">
+                  <Textarea
+                    ariaLabel="对话消息"
+                    value={input}
+                    maxlength={2000}
+                    disabled={busy}
+                    placeholder="请随时提出问题，我会帮你一起解决"
+                    onInput={(e) => setInput(e.detail.value)}
+                  />
+                  <Button
+                    className="agent-mobile-send"
+                    ariaLabel="发送消息"
+                    disabled={busy || !input.trim()}
+                    onClick={() => void send()}
+                  >
+                    <Image src={sendIcon} mode="aspectFit" aria-hidden="true" />
+                    <Text className="agent-visually-hidden">发送消息</Text>
+                  </Button>
+                </View>
+                <Text className="agent-mobile-footer-note">
+                  回答由 AI 生成，请核对重要信息
+                </Text>
+              </View>
+            )}
+          </>
         )}
       </View>
     </View>
