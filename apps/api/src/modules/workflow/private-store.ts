@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const FILE_EXTENSIONS = ['txt', 'pdf', 'png', 'jpg', 'jpeg'];
+const JPEG_EOI = Buffer.from([0xff, 0xd9]);
+const MAX_JPEG_TRAILER_BYTES = 32;
 export const digest = (bytes: Uint8Array | string) =>
   createHash('sha256').update(bytes).digest('hex');
 export function verifyFile(
@@ -38,12 +40,14 @@ export function verifyFile(
       bytes
         .subarray(-8)
         .equals(Buffer.from([73, 69, 78, 68, 174, 66, 96, 130]));
-  if (extension === 'jpg' || extension === 'jpeg')
+  if (extension === 'jpg' || extension === 'jpeg') {
+    const endOfImage = bytes.lastIndexOf(JPEG_EOI);
     valid =
       bytes[0] === 255 &&
       bytes[1] === 216 &&
-      bytes.at(-2) === 255 &&
-      bytes.at(-1) === 217;
+      endOfImage >= 2 &&
+      bytes.length - endOfImage - JPEG_EOI.length <= MAX_JPEG_TRAILER_BYTES;
+  }
   if (!valid)
     throw new BadRequestException('Unsupported or invalid file format');
 }

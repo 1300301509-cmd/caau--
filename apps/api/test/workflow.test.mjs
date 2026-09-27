@@ -22,3 +22,20 @@ test('private file verification rejects byte/hash mismatch, non-UTF8 and invalid
     verifyFile(incomplete, 'pdf', incomplete.length, digest(incomplete)),
   );
 });
+
+test('private JPEG verification accepts a short trailer after the image end marker', () => {
+  const image = Buffer.from([0xff, 0xd8, 1, 2, 0xff, 0xd9]);
+  const withTrailer = Buffer.concat([image, Buffer.alloc(24, 0xa5)]);
+  assert.doesNotThrow(() =>
+    verifyFile(withTrailer, 'jpg', withTrailer.length, digest(withTrailer)),
+  );
+  const oversizedTrailer = Buffer.concat([image, Buffer.alloc(33, 0xa5)]);
+  assert.throws(() =>
+    verifyFile(
+      oversizedTrailer,
+      'jpeg',
+      oversizedTrailer.length,
+      digest(oversizedTrailer),
+    ),
+  );
+});
