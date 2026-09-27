@@ -24,6 +24,11 @@ import {
   AgentMessageInputDto,
   AgentPlanningRequestViewDto,
   AgentScheduleCandidateViewDto,
+  PrepareAgentCandidateSaveDto,
+  ConfirmAgentCandidateSaveDto,
+  AgentCandidateSaveTicketDto,
+  AgentCandidateSaveReceiptDto,
+  AgentCandidateSaveCancelledDto,
   GenerateAgentScheduleCandidateDto,
   ConfirmAgentPlanningRequestDto,
   AgentModelStatusDto,
@@ -186,6 +191,76 @@ export class AiController {
     @Param('candidateId') candidateId: string,
   ) {
     return this.candidates.get(request.token ?? '', planningId, candidateId);
+  }
+
+  @Post('planning-requests/:planningId/candidates/:candidateId/save-ticket')
+  @HttpCode(200)
+  @Permission('schedule.draft.generate')
+  @ApiOperation({
+    operationId: 'prepareAgentCandidateDraftSave',
+    description:
+      'Create a bound, expiring ticket for one fresh candidate; no schedule write.',
+  })
+  @ApiOkResponse({ type: AgentCandidateSaveTicketDto })
+  prepareCandidateSave(
+    @Req() request: AuthRequest,
+    @Param('planningId') planningId: string,
+    @Param('candidateId') candidateId: string,
+    @Body() body: PrepareAgentCandidateSaveDto,
+  ) {
+    return this.candidates.prepareSave(
+      request.token ?? '',
+      planningId,
+      candidateId,
+      body,
+    );
+  }
+
+  @Get(
+    'planning-requests/:planningId/candidates/:candidateId/save-ticket/latest',
+  )
+  @Permission('schedule.draft.generate')
+  @ApiOperation({ operationId: 'getLatestAgentCandidateDraftSaveTicket' })
+  @ApiOkResponse({ type: AgentCandidateSaveTicketDto })
+  latestCandidateSaveTicket(
+    @Req() request: AuthRequest,
+    @Param('planningId') planningId: string,
+    @Param('candidateId') candidateId: string,
+  ) {
+    return this.candidates.latestSaveTicket(
+      request.token ?? '',
+      planningId,
+      candidateId,
+    );
+  }
+
+  @Post('candidate-save-tickets/:ticketId/confirm')
+  @HttpCode(200)
+  @Permission('schedule.draft.generate')
+  @ApiOperation({
+    operationId: 'confirmAgentCandidateDraftSave',
+    description:
+      'Re-authorize and atomically save one DRAFT schedule version and immutable receipt.',
+  })
+  @ApiOkResponse({ type: AgentCandidateSaveReceiptDto })
+  confirmCandidateSave(
+    @Req() request: AuthRequest,
+    @Param('ticketId') ticketId: string,
+    @Body() body: ConfirmAgentCandidateSaveDto,
+  ) {
+    return this.candidates.confirmSave(request.token ?? '', ticketId, body);
+  }
+
+  @Post('candidate-save-tickets/:ticketId/cancel')
+  @HttpCode(200)
+  @Permission('schedule.draft.generate')
+  @ApiOperation({ operationId: 'cancelAgentCandidateDraftSave' })
+  @ApiOkResponse({ type: AgentCandidateSaveCancelledDto })
+  cancelCandidateSave(
+    @Req() request: AuthRequest,
+    @Param('ticketId') ticketId: string,
+  ) {
+    return this.candidates.cancelSave(request.token ?? '', ticketId);
   }
 
   @Post('sessions')

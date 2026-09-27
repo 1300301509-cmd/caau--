@@ -4,14 +4,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma } from '@caau/database';
 import {
   AuthorizationService,
   bodyObject,
   uuid,
 } from '../authorization/authorization.service.js';
-import { deny, scheduleRead, type Actor } from '../authorization/policy.js';
+import {
+  deny,
+  eventOperationsScope,
+  scheduleDraftGenerate,
+  scheduleRead,
+  type Actor,
+} from '../authorization/policy.js';
+import { SchedulingService } from '../scheduling/scheduling.service.js';
 import { validateConfig } from '../scheduling/scheduling.algorithm.js';
 import type {
   ScheduleConfigDto,
@@ -22,6 +29,7 @@ import { PlanningService } from './planning.service.js';
 import { requireAgentTool } from './tool-registry.js';
 import {
   calculateCandidate,
+  auditCandidate,
   type PreferenceReport,
 } from './candidate.algorithm.js';
 
@@ -81,6 +89,30 @@ const canonical = (value: unknown) =>
       : item,
   );
 const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
+const candidateHash = (row: Row) =>
+  createHash('sha256')
+    .update(
+      canonical({
+        id: row.id,
+        planningId: row.planningId,
+        sessionId: row.sessionId,
+        ownerId: row.ownerId,
+        eventId: row.eventId,
+        planningRevision: row.planningRevision,
+        baselineRevision: row.baselineRevision,
+        format: row.format,
+        config: row.config,
+        teamSnapshot: row.teamSnapshot,
+        baselineSnapshot: row.baselineSnapshot,
+        fixedMatchIds: row.fixedMatchIds,
+        matches: row.matches,
+        issues: row.issues,
+        preferences: row.preferences,
+        outcome: row.outcome,
+      }),
+    )
+    .digest('hex');
+const saveTool = requireAgentTool('schedule.draft.generate', 'DRAFT_WRITE');
 export type CandidateView = {
   id: string;
   planningId: string;
@@ -107,6 +139,7 @@ export type CandidateView = {
   preferences: PreferenceReport[];
   explored: number;
   createdAt: string;
+  canSave: boolean;
 };
 
 @Injectable()
@@ -114,6 +147,7 @@ export class CandidateService {
   constructor(
     private readonly auth: AuthorizationService,
     private readonly planning: PlanningService,
+    private readonly scheduling: SchedulingService,
   ) {}
 
   private async context(tx: Tx, actor: Actor, planningId: string) {
@@ -174,6 +208,15 @@ export class CandidateService {
           !(row.fixedMatchIds as string[]).includes(match.id),
       );
     const current = row.matches as unknown as ScheduleMatchDto[];
+    const canSave =
+      !stale &&
+      row.outcome === 'FOUND' &&
+      Array.isArray(row.issues) &&
+      row.issues.length === 0 &&
+      !!(await tx.event.findFirst({
+        where: { AND: [{ id: row.eventId }, eventOperationsScope(actor)] },
+        select: { id: true },
+      }));
     const old =
       (row.baselineSnapshot as { matches?: ScheduleMatchDto[] } | null)
         ?.matches ?? [];
@@ -215,6 +258,7 @@ export class CandidateService {
       preferences: row.preferences as PreferenceReport[],
       explored: row.explored,
       createdAt: row.createdAt.toISOString(),
+      canSave,
     };
   }
   get(token: string, planningId: string, candidateId: string) {
@@ -247,6 +291,321 @@ export class CandidateService {
         if (!row) throw new NotFoundException('No candidate preview yet');
         return this.view(tx, actor, row);
       },
+    );
+  }
+
+  private async validatedSave(
+    tx: Tx,
+    actor: Actor,
+    row: Row,
+    expectedPlanningRevision: number,
+    expectedBaselineRevision: number,
+  ) {
+    if (row.ownerId !== actor.id) deny();
+    await scheduleDraftGenerate(tx, actor, row.eventId);
+    const current = await this.view(tx, actor, row);
+    if (
+      current.status !== 'FOUND' ||
+      !current.canSave ||
+      current.issues.length ||
+      row.planningRevision !== expectedPlanningRevision ||
+      row.baselineRevision !== expectedBaselineRevision
+    )
+      throw new ConflictException(
+        'Candidate or its confirmed baseline changed; preview again',
+      );
+    const context = await this.context(tx, actor, row.planningId);
+    const fixed = (
+      (context.baseline?.matches ?? []) as unknown as ScheduleMatchDto[]
+    ).filter((match) => (row.fixedMatchIds as string[]).includes(match.id));
+    const issues = auditCandidate(
+      current.config,
+      context.teams,
+      current.matches,
+      context.view.conditions as PlanningCondition[],
+      fixed,
+    );
+    if (issues.length)
+      throw new ConflictException(
+        'Candidate no longer satisfies confirmed schedule requirements',
+      );
+    return current;
+  }
+
+  private async ticketView(
+    tx: Tx,
+    actor: Actor,
+    ticket: Prisma.AgentCandidateSaveTicketGetPayload<{
+      include: { receipt: true };
+    }>,
+  ) {
+    if (ticket.ownerId !== actor.id) deny();
+    await scheduleDraftGenerate(tx, actor, ticket.eventId);
+    const candidate = await tx.agentScheduleCandidate.findUnique({
+      where: { id: ticket.candidateId },
+    });
+    if (
+      !candidate ||
+      candidate.ownerId !== actor.id ||
+      candidate.eventId !== ticket.eventId
+    )
+      deny();
+    const current = await this.view(tx, actor, candidate);
+    return {
+      id: ticket.id,
+      candidateId: ticket.candidateId,
+      planningId: ticket.planningId,
+      eventId: ticket.eventId,
+      planningRevision: ticket.planningRevision,
+      baselineRevision: ticket.baselineRevision,
+      candidateHash: ticket.candidateHash,
+      commandId: ticket.commandId,
+      state: ticket.state,
+      expiresAt: ticket.expiresAt.toISOString(),
+      matchCount: (candidate.matches as unknown as ScheduleMatchDto[]).length,
+      canConfirm:
+        ticket.state === 'PENDING' &&
+        ticket.expiresAt > new Date() &&
+        current.canSave &&
+        candidateHash(candidate) === ticket.candidateHash,
+      receipt: ticket.receipt ? ticket.receipt.result : null,
+    };
+  }
+
+  prepareSave(
+    token: string,
+    planningId: string,
+    candidateId: string,
+    input: unknown,
+  ) {
+    const body = bodyObject(input, [
+      'expectedPlanningRevision',
+      'expectedBaselineRevision',
+    ]);
+    const planningRevision = Number(body.expectedPlanningRevision);
+    const baselineRevision = Number(body.expectedBaselineRevision);
+    if (
+      !Number.isSafeInteger(planningRevision) ||
+      planningRevision < 1 ||
+      !Number.isSafeInteger(baselineRevision) ||
+      baselineRevision < 0
+    )
+      throw new BadRequestException('Planning and baseline revision required');
+    return this.auth.run(
+      token,
+      'schedule.draft.generate.prepare',
+      candidateId,
+      input,
+      async (tx, actor) => {
+        const row = await tx.agentScheduleCandidate.findUnique({
+          where: { id: uuid(candidateId) },
+        });
+        if (
+          !row ||
+          row.planningId !== uuid(planningId) ||
+          row.ownerId !== actor.id
+        )
+          deny();
+        await scheduleDraftGenerate(tx, actor, row.eventId);
+        const hash = candidateHash(row);
+        const latest = await tx.agentCandidateSaveTicket.findFirst({
+          where: { candidateId: row.id, ownerId: actor.id },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          include: { receipt: true },
+        });
+        if (
+          latest &&
+          latest.candidateHash === hash &&
+          latest.state === 'EXECUTED'
+        )
+          return this.ticketView(tx, actor, latest);
+        await this.validatedSave(
+          tx,
+          actor,
+          row,
+          planningRevision,
+          baselineRevision,
+        );
+        if (
+          latest &&
+          latest.candidateHash === hash &&
+          latest.state === 'PENDING' &&
+          latest.expiresAt > new Date()
+        )
+          return this.ticketView(tx, actor, latest);
+        const ticket = await tx.agentCandidateSaveTicket.create({
+          data: {
+            id: randomUUID(),
+            candidateId: row.id,
+            ownerId: actor.id,
+            eventId: row.eventId,
+            planningId: row.planningId,
+            planningRevision,
+            baselineRevision,
+            candidateHash: hash,
+            toolName: 'schedule.draft.generate',
+            toolVersion: saveTool.version,
+            commandId: randomUUID(),
+            state: 'PENDING',
+            expiresAt: new Date(Date.now() + 30 * 60_000),
+          },
+          include: { receipt: true },
+        });
+        return this.ticketView(tx, actor, ticket);
+      },
+      { retries: 3, retryUnique: true },
+    );
+  }
+
+  latestSaveTicket(token: string, planningId: string, candidateId: string) {
+    return this.auth.run(
+      token,
+      'schedule.draft.generate.ticket.read',
+      candidateId,
+      {},
+      async (tx, actor) => {
+        const row = await tx.agentScheduleCandidate.findUnique({
+          where: { id: uuid(candidateId) },
+        });
+        if (
+          !row ||
+          row.planningId !== uuid(planningId) ||
+          row.ownerId !== actor.id
+        )
+          deny();
+        await scheduleDraftGenerate(tx, actor, row.eventId);
+        const ticket = await tx.agentCandidateSaveTicket.findFirst({
+          where: { candidateId: row.id, ownerId: actor.id },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          include: { receipt: true },
+        });
+        if (!ticket) throw new NotFoundException('No candidate save ticket');
+        return this.ticketView(tx, actor, ticket);
+      },
+    );
+  }
+
+  confirmSave(token: string, ticketId: string, input: unknown) {
+    const body = bodyObject(input, ['candidateId', 'candidateHash']);
+    const candidateId = uuid(body.candidateId);
+    const hash = String(body.candidateHash ?? '');
+    if (!/^[0-9a-f]{64}$/.test(hash))
+      throw new BadRequestException('Candidate binding required');
+    return this.auth.run(
+      token,
+      'schedule.draft.generate',
+      ticketId,
+      input,
+      async (tx, actor) => {
+        const id = uuid(ticketId);
+        await tx.$queryRaw`SELECT "id" FROM "AgentCandidateSaveTicket" WHERE "id"=${id}::uuid FOR UPDATE`;
+        const ticket = await tx.agentCandidateSaveTicket.findUnique({
+          where: { id },
+          include: { receipt: true },
+        });
+        if (!ticket || ticket.ownerId !== actor.id) deny();
+        await scheduleDraftGenerate(tx, actor, ticket.eventId);
+        if (ticket.candidateId !== candidateId || ticket.candidateHash !== hash)
+          throw new ConflictException('Candidate confirmation changed');
+        if (ticket.receipt)
+          return { ...(ticket.receipt.result as object), replayed: true };
+        if (ticket.state !== 'PENDING' || ticket.expiresAt <= new Date())
+          throw new ConflictException(
+            'Confirmation expired or cancelled; preview again',
+          );
+        if (
+          ticket.toolName !== 'schedule.draft.generate' ||
+          ticket.toolVersion !== saveTool.version
+        )
+          throw new ConflictException('Confirmation tool version changed');
+        const row = await tx.agentScheduleCandidate.findUnique({
+          where: { id: candidateId },
+        });
+        if (
+          !row ||
+          row.ownerId !== actor.id ||
+          row.eventId !== ticket.eventId ||
+          row.planningId !== ticket.planningId ||
+          row.planningRevision !== ticket.planningRevision ||
+          row.baselineRevision !== ticket.baselineRevision ||
+          candidateHash(row) !== hash
+        )
+          throw new ConflictException('Candidate confirmation binding changed');
+        const candidate = await this.validatedSave(
+          tx,
+          actor,
+          row,
+          ticket.planningRevision,
+          ticket.baselineRevision,
+        );
+        const schedule = await this.scheduling.saveCandidateInTransaction(
+          tx,
+          actor,
+          ticket.eventId,
+          {
+            commandId: ticket.commandId,
+            candidateHash: hash,
+            expectedRevision: ticket.baselineRevision,
+            config: candidate.config,
+            matches: candidate.matches,
+          },
+        );
+        const result = {
+          ticketId: ticket.id,
+          commandId: ticket.commandId,
+          candidateId: row.id,
+          eventId: ticket.eventId,
+          revision: schedule.revision,
+          status: 'DRAFT' as const,
+          matchCount: schedule.matches.length,
+          replayed: false,
+        };
+        await tx.agentCandidateSaveReceipt.create({
+          data: {
+            id: randomUUID(),
+            ticketId: ticket.id,
+            commandId: ticket.commandId,
+            ownerId: actor.id,
+            eventId: ticket.eventId,
+            candidateHash: hash,
+            result: json(result),
+          },
+        });
+        await tx.agentCandidateSaveTicket.update({
+          where: { id },
+          data: { state: 'EXECUTED', consumedAt: new Date() },
+        });
+        return result;
+      },
+      { retries: 3, retryUnique: true, timeout: 15_000 },
+    );
+  }
+
+  cancelSave(token: string, ticketId: string) {
+    return this.auth.run(
+      token,
+      'schedule.draft.generate.cancel',
+      ticketId,
+      {},
+      async (tx, actor) => {
+        const id = uuid(ticketId);
+        await tx.$queryRaw`SELECT "id" FROM "AgentCandidateSaveTicket" WHERE "id"=${id}::uuid FOR UPDATE`;
+        const ticket = await tx.agentCandidateSaveTicket.findUnique({
+          where: { id },
+        });
+        if (!ticket || ticket.ownerId !== actor.id) deny();
+        await scheduleDraftGenerate(tx, actor, ticket.eventId);
+        if (ticket.state === 'EXECUTED')
+          throw new ConflictException('Candidate already saved');
+        if (ticket.state === 'CANCELLED')
+          return { id, eventId: ticket.eventId, state: 'CANCELLED' as const };
+        await tx.agentCandidateSaveTicket.update({
+          where: { id },
+          data: { state: 'CANCELLED', consumedAt: new Date() },
+        });
+        return { id, eventId: ticket.eventId, state: 'CANCELLED' as const };
+      },
+      { retries: 3 },
     );
   }
   generate(token: string, planningId: string, input: unknown) {

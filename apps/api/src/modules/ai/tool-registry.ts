@@ -40,6 +40,12 @@ export const agentToolRegistry = {
     permission: 'schedule.draft.adjust',
     confirmation: 'BOUND_TICKET_BUTTON',
   },
+  'schedule.draft.generate': {
+    version: 'v1',
+    risk: 'DRAFT_WRITE',
+    permission: 'schedule.draft.generate',
+    confirmation: 'BOUND_TICKET_BUTTON',
+  },
 } as const;
 
 export type AgentToolName = keyof typeof agentToolRegistry;

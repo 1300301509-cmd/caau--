@@ -328,6 +328,127 @@
         "required": ["conditionId", "status", "reason"],
         "type": "object"
       },
+      "AgentCandidateSaveCancelledDto": {
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": ["CANCELLED"],
+            "type": "string"
+          }
+        },
+        "required": ["id", "eventId", "state"],
+        "type": "object"
+      },
+      "AgentCandidateSaveReceiptDto": {
+        "properties": {
+          "candidateId": {
+            "type": "string"
+          },
+          "commandId": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "matchCount": {
+            "type": "number"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "status": {
+            "enum": ["DRAFT"],
+            "type": "string"
+          },
+          "ticketId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticketId",
+          "commandId",
+          "candidateId",
+          "eventId",
+          "revision",
+          "status",
+          "matchCount",
+          "replayed"
+        ],
+        "type": "object"
+      },
+      "AgentCandidateSaveTicketDto": {
+        "properties": {
+          "baselineRevision": {
+            "type": "number"
+          },
+          "canConfirm": {
+            "type": "boolean"
+          },
+          "candidateHash": {
+            "type": "string"
+          },
+          "candidateId": {
+            "type": "string"
+          },
+          "commandId": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "matchCount": {
+            "type": "number"
+          },
+          "planningId": {
+            "type": "string"
+          },
+          "planningRevision": {
+            "type": "number"
+          },
+          "receipt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentCandidateSaveReceiptDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "state": {
+            "enum": ["PENDING", "EXECUTED", "CANCELLED"],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "candidateId",
+          "planningId",
+          "eventId",
+          "planningRevision",
+          "baselineRevision",
+          "candidateHash",
+          "commandId",
+          "state",
+          "expiresAt",
+          "matchCount",
+          "canConfirm"
+        ],
+        "type": "object"
+      },
       "AgentConfirmationSummaryDto": {
         "properties": {
           "afterStartAt": {
@@ -887,6 +1008,9 @@
           "baselineRevision": {
             "type": "number"
           },
+          "canSave": {
+            "type": "boolean"
+          },
           "changes": {
             "items": {
               "$ref": "#/components/schemas/AgentCandidateChangeDto"
@@ -970,7 +1094,8 @@
           "issues",
           "preferences",
           "explored",
-          "createdAt"
+          "createdAt",
+          "canSave"
         ],
         "type": "object"
       },
@@ -1546,6 +1671,18 @@
           }
         },
         "required": ["expectedRevision", "requirements"],
+        "type": "object"
+      },
+      "ConfirmAgentCandidateSaveDto": {
+        "properties": {
+          "candidateHash": {
+            "type": "string"
+          },
+          "candidateId": {
+            "type": "string"
+          }
+        },
+        "required": ["candidateId", "candidateHash"],
         "type": "object"
       },
       "ConfirmAgentPlanningRequestDto": {
@@ -4257,6 +4394,18 @@
         "required": ["id", "displayName"],
         "type": "object"
       },
+      "PrepareAgentCandidateSaveDto": {
+        "properties": {
+          "expectedBaselineRevision": {
+            "type": "number"
+          },
+          "expectedPlanningRevision": {
+            "type": "number"
+          }
+        },
+        "required": ["expectedPlanningRevision", "expectedBaselineRevision"],
+        "type": "object"
+      },
       "PreviewScheduleAdjustmentDto": {
         "properties": {
           "expectedRevision": {
@@ -5531,6 +5680,91 @@
         "tags": ["event-hosting-applications"]
       }
     },
+    "/api/v1/agent/candidate-save-tickets/{ticketId}/cancel": {
+      "post": {
+        "operationId": "cancelAgentCandidateDraftSave",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticketId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCandidateSaveCancelledDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/candidate-save-tickets/{ticketId}/confirm": {
+      "post": {
+        "description": "Re-authorize and atomically save one DRAFT schedule version and immutable receipt.",
+        "operationId": "confirmAgentCandidateDraftSave",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticketId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmAgentCandidateSaveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCandidateSaveReceiptDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
     "/api/v1/agent/confirmation-tickets/{ticketId}/cancel": {
       "post": {
         "operationId": "cancelAgentScheduleAdjustment",
@@ -5887,6 +6121,107 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AgentScheduleCandidateViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/planning-requests/{planningId}/candidates/{candidateId}/save-ticket": {
+      "post": {
+        "description": "Create a bound, expiring ticket for one fresh candidate; no schedule write.",
+        "operationId": "prepareAgentCandidateDraftSave",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "planningId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "candidateId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareAgentCandidateSaveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCandidateSaveTicketDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
+    "/api/v1/agent/planning-requests/{planningId}/candidates/{candidateId}/save-ticket/latest": {
+      "get": {
+        "operationId": "getLatestAgentCandidateDraftSaveTicket",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "planningId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "candidateId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCandidateSaveTicketDto"
                 }
               }
             },

@@ -867,6 +867,7 @@ export function AgentPage() {
                 planning={planning}
                 schedule={schedule}
                 token={login.token}
+                onSaved={onSaved}
                 onAccessError={(cause) => {
                   if (cause instanceof ApiError && cause.status === 401)
                     clearSession();

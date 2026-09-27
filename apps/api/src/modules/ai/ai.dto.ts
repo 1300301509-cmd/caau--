@@ -324,6 +324,47 @@ export class AgentScheduleCandidateViewDto {
   preferences!: AgentCandidatePreferenceDto[];
   @ApiProperty() explored!: number;
   @ApiProperty() createdAt!: string;
+  @ApiProperty() canSave!: boolean;
+}
+
+export class PrepareAgentCandidateSaveDto {
+  @ApiProperty() expectedPlanningRevision!: number;
+  @ApiProperty() expectedBaselineRevision!: number;
+}
+export class ConfirmAgentCandidateSaveDto {
+  @ApiProperty() candidateId!: string;
+  @ApiProperty() candidateHash!: string;
+}
+export class AgentCandidateSaveReceiptDto {
+  @ApiProperty() ticketId!: string;
+  @ApiProperty() commandId!: string;
+  @ApiProperty() candidateId!: string;
+  @ApiProperty() eventId!: string;
+  @ApiProperty() revision!: number;
+  @ApiProperty({ enum: ['DRAFT'] }) status!: 'DRAFT';
+  @ApiProperty() matchCount!: number;
+  @ApiProperty() replayed!: boolean;
+}
+export class AgentCandidateSaveTicketDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() candidateId!: string;
+  @ApiProperty() planningId!: string;
+  @ApiProperty() eventId!: string;
+  @ApiProperty() planningRevision!: number;
+  @ApiProperty() baselineRevision!: number;
+  @ApiProperty() candidateHash!: string;
+  @ApiProperty() commandId!: string;
+  @ApiProperty({ enum: ['PENDING', 'EXECUTED', 'CANCELLED'] }) state!: string;
+  @ApiProperty() expiresAt!: string;
+  @ApiProperty() matchCount!: number;
+  @ApiProperty() canConfirm!: boolean;
+  @ApiPropertyOptional({ type: AgentCandidateSaveReceiptDto, nullable: true })
+  receipt!: AgentCandidateSaveReceiptDto | null;
+}
+export class AgentCandidateSaveCancelledDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() eventId!: string;
+  @ApiProperty({ enum: ['CANCELLED'] }) state!: 'CANCELLED';
 }
 
 export class AgentPendingQuestionDto {

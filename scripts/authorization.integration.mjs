@@ -133,6 +133,7 @@ export async function authorizationIntegration(t) {
                   '202609270004_governance_acknowledgement',
                   '202609270005_agent_memory',
                   '202609280001_agent_skill_runtime',
+                  '202609290001_agent_candidate_draft_confirmation',
                 ],
               ],
             )
@@ -991,7 +992,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          29, // Existing 23, four governance, agent memory and skill runtime.
+          30, // Includes the forward-only candidate draft confirmation migration.
         );
       },
     );

@@ -14,6 +14,7 @@ import {
 import {
   deny,
   scheduleDraftAdjust,
+  scheduleDraftGenerate,
   schedulePublish,
   scheduleRead,
   type Actor,
@@ -265,6 +266,81 @@ export class SchedulingService {
       },
       { retries: 2, retryUnique: true },
     );
+  }
+
+  // The candidate and its confirmed requirements are independently checked by
+  // the caller in this same transaction. This is the sole formal schedule
+  // writer for an agent-generated whole-schedule draft.
+  async saveCandidateInTransaction(
+    tx: Tx,
+    actor: Actor,
+    eventId: string,
+    input: {
+      commandId: string;
+      candidateHash: string;
+      expectedRevision: number;
+      config: ScheduleConfigDto;
+      matches: ScheduleMatchDto[];
+    },
+  ) {
+    await scheduleDraftGenerate(tx, actor, eventId);
+    const commandId = uuid(input.commandId);
+    if (
+      !Number.isSafeInteger(input.expectedRevision) ||
+      input.expectedRevision < 0 ||
+      !/^[0-9a-f]{64}$/.test(input.candidateHash)
+    )
+      throw new BadRequestException('Invalid candidate command binding');
+    const config = this.config(input.config);
+    const current = await tx.eventSchedule.findUnique({ where: { eventId } });
+    if ((current?.revision ?? 0) !== input.expectedRevision)
+      throw new ConflictException('Schedule revision changed');
+    if (
+      current?.status === 'PUBLISHED' ||
+      current?.format === 'SINGLE_ELIMINATION'
+    )
+      throw new ConflictException(
+        'Published or elimination schedule is protected',
+      );
+    const teams = await this.teams(tx, eventId);
+    const active = teams.filter((item) => item.active).map((item) => item.id);
+    if (
+      config.teamIds.length !== active.length ||
+      config.teamIds.some((id) => !active.includes(id))
+    )
+      throw new ConflictException('Event participation changed');
+    const issues = validateSchedule(config, input.matches, teams);
+    if (issues.length)
+      throw new ConflictException('Candidate has unresolved schedule issues');
+    const data = {
+      format: 'ROUND_ROBIN' as const,
+      status: 'DRAFT' as const,
+      config: json(config),
+      matches: json(input.matches),
+      issues: json([]),
+      revision: input.expectedRevision + 1,
+      lastCommandId: commandId,
+      lastCommandHash: input.candidateHash,
+      updatedBy: actor.id,
+      updatedAt: new Date(),
+      publishedBy: null,
+      publishedAt: null,
+    };
+    const row = current
+      ? await (async () => {
+          const changed = await tx.eventSchedule.updateMany({
+            where: { eventId, revision: input.expectedRevision },
+            data,
+          });
+          if (changed.count !== 1)
+            throw new ConflictException('Schedule revision changed');
+          return tx.eventSchedule.findUniqueOrThrow({ where: { eventId } });
+        })()
+      : await tx.eventSchedule.create({
+          data: { ...data, eventId, createdBy: actor.id },
+        });
+    await this.version(tx, row, actor.id);
+    return this.view(tx, row);
   }
 
   async adjustInTransaction(

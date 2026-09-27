@@ -1407,6 +1407,7 @@ export class AuthorizationService {
     } catch (error) {
       const databaseError = error as {
         code?: string;
+        cause?: { originalCode?: string; kind?: string };
         meta?: {
           code?: string;
           driverAdapterError?: { cause?: { originalCode?: string } };
@@ -1414,20 +1415,26 @@ export class AuthorizationService {
       };
       const sqlState =
         databaseError.meta?.code ??
-        databaseError.meta?.driverAdapterError?.cause?.originalCode;
+        databaseError.meta?.driverAdapterError?.cause?.originalCode ??
+        databaseError.cause?.originalCode;
       const serializationConflict =
         databaseError.code === 'P2034' ||
-        (databaseError.code === 'P2010' &&
-          ['40001', '40P01'].includes(sqlState ?? ''));
+        ['40001', '40P01'].includes(sqlState ?? '') ||
+        databaseError.cause?.kind === 'TransactionWriteConflict';
       if (
         (serializationConflict ||
           (options.retryUnique && databaseError.code === 'P2002')) &&
         (options.retries ?? 0) > 0
-      )
+      ) {
+        if (serializationConflict)
+          await new Promise((resolve) =>
+            setTimeout(resolve, 5 + Math.floor(Math.random() * 25)),
+          );
         return this.run(token, action, resource, input, work, {
           ...options,
           retries: options.retries! - 1,
         });
+      }
       try {
         await db.auditRecord.create({
           data: {

@@ -1097,6 +1097,7 @@ export class AiService implements OnModuleDestroy {
           } satisfies ConversationContext,
         };
       },
+      { retries: 24 },
     );
   }
 
@@ -1136,6 +1137,7 @@ export class AiService implements OnModuleDestroy {
           })),
         };
       },
+      { retries: 24 },
     );
     if (!source) return;
     let summary: string;
@@ -1165,6 +1167,7 @@ export class AiService implements OnModuleDestroy {
         });
         return {};
       },
+      { retries: 24 },
     );
   }
 

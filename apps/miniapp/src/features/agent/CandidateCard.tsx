@@ -9,20 +9,24 @@ type Planning = S['AgentPlanningRequestViewDto'];
 type Schedule = S['ScheduleViewDto'];
 type Config = S['ScheduleConfigDto'];
 type Candidate = S['AgentScheduleCandidateViewDto'];
+type SaveTicket = S['AgentCandidateSaveTicketDto'];
 export function CandidateCard({
   planning,
   schedule,
   token,
   onAccessError,
+  onSaved,
 }: {
   planning: Planning;
   schedule?: Schedule;
   token: string;
   onAccessError: (cause: unknown) => void;
+  onSaved: () => Promise<void>;
 }) {
   const access = useRef(onAccessError);
   access.current = onAccessError;
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [ticket, setTicket] = useState<SaveTicket | null>(null);
   const [config, setConfig] = useState<Partial<Config>>({});
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
   const [fixed, setFixed] = useState<string[]>([]);
@@ -44,6 +48,7 @@ export function CandidateCard({
       schedule.config.startDate === from &&
       schedule.config.endDate === to;
     setCandidate(null);
+    setTicket(null);
     setError('');
     setTeams([]);
     setFixed([]);
@@ -113,7 +118,99 @@ export function CandidateCard({
     schedule?.revision,
     token,
   ]);
+  useEffect(() => {
+    if (!candidate) return;
+    let live = true;
+    void client
+      .request('getLatestAgentCandidateDraftSaveTicket', {
+        token,
+        path: { planningId: planning.id, candidateId: candidate.id },
+      })
+      .then((next) => {
+        if (live) setTicket(next);
+      })
+      .catch((cause) => {
+        if (!live) return;
+        if (cause instanceof ApiError && [401, 403].includes(cause.status))
+          access.current(cause);
+        else if (!(cause instanceof ApiError && cause.status === 404))
+          setError('恢复草稿确认状态失败。');
+      });
+    return () => {
+      live = false;
+    };
+  }, [candidate?.id, planning.id, token]);
   if (planning.status !== 'CONFIRMED') return null;
+  const restoreTicket = async (item: Candidate) => {
+    try {
+      const next = await client.request(
+        'getLatestAgentCandidateDraftSaveTicket',
+        {
+          token,
+          path: { planningId: planning.id, candidateId: item.id },
+        },
+      );
+      setTicket(next);
+      return next;
+    } catch (cause) {
+      if (cause instanceof ApiError && [401, 403].includes(cause.status))
+        onAccessError(cause);
+      else if (!(cause instanceof ApiError && cause.status === 404))
+        setError('恢复草稿确认状态失败。');
+    }
+  };
+  const saveAction = async (action: 'prepare' | 'confirm' | 'cancel') => {
+    if (!candidate || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (action === 'prepare') {
+        const next = await client.request('prepareAgentCandidateDraftSave', {
+          token,
+          path: { planningId: planning.id, candidateId: candidate.id },
+          body: {
+            expectedPlanningRevision: candidate.planningRevision,
+            expectedBaselineRevision: candidate.baselineRevision,
+          },
+        });
+        setTicket(next);
+      } else if (ticket && action === 'confirm') {
+        await client.request('confirmAgentCandidateDraftSave', {
+          token,
+          path: { ticketId: ticket.id },
+          body: {
+            candidateId: ticket.candidateId,
+            candidateHash: ticket.candidateHash,
+          },
+        });
+        await restoreTicket(candidate);
+        await onSaved();
+      } else if (ticket) {
+        await client.request('cancelAgentCandidateDraftSave', {
+          token,
+          path: { ticketId: ticket.id },
+        });
+        await restoreTicket(candidate);
+      }
+    } catch (cause) {
+      if (cause instanceof ApiError && [401, 403].includes(cause.status))
+        onAccessError(cause);
+      else {
+        setError(
+          cause instanceof ApiError && cause.status === 409
+            ? '需求、候选或赛程已变化，请刷新后重新核对。'
+            : '结果尚未确认；请刷新或重试，系统会恢复原回执。',
+        );
+        const recovered = await restoreTicket(candidate);
+        if (recovered?.receipt) {
+          setError('');
+          await onSaved();
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
   const update = (key: keyof Config, value: string) => {
     setSource('EXPLICIT');
     setConfig((current) => ({
@@ -172,6 +269,7 @@ export function CandidateCard({
         },
       });
       setCandidate(result);
+      setTicket(null);
     } catch (cause) {
       setCandidate(null);
       if (cause instanceof ApiError && [401, 403].includes(cause.status))
@@ -188,7 +286,7 @@ export function CandidateCard({
   };
   return (
     <View className="agent-planning-card" aria-label="整套候选赛程预览">
-      <Text className="subtitle">单循环整套候选 · 仅预览</Text>
+      <Text className="subtitle">单循环整套候选</Text>
       <Text className="competition-note">
         已确认需求 V{planning.revision} · 基础赛程 V{schedule?.revision ?? 0} ·
         配置来源：
@@ -273,7 +371,8 @@ export function CandidateCard({
       {candidate && (
         <View role="status">
           <Text className="subtitle">
-            候选预览，尚未保存 · {candidate.status}
+            {ticket?.receipt ? '候选执行回执' : '候选预览，尚未保存'} ·{' '}
+            {candidate.status}
           </Text>
           <Text className="competition-note">
             {candidate.warning} · 已探索 {candidate.explored} 节点 · 固定场次{' '}
@@ -323,6 +422,58 @@ export function CandidateCard({
                   );
                 })}
             </>
+          )}
+          {candidate.canSave &&
+            (!ticket ||
+              ticket.state === 'CANCELLED' ||
+              (ticket.state === 'PENDING' && !ticket.canConfirm)) && (
+              <Action
+                disabled={busy}
+                onClick={() => void saveAction('prepare')}
+              >
+                准备保存整套 DRAFT
+              </Action>
+            )}
+          {ticket && (
+            <View className="agent-planning-condition">
+              <Text className="subtitle">
+                整套候选草稿确认 · {ticket.state}
+              </Text>
+              <Text className="competition-note">
+                候选 {ticket.matchCount} 场 · 需求 V{ticket.planningRevision} ·
+                基础 V{ticket.baselineRevision} · 截至 {bj(ticket.expiresAt)}
+              </Text>
+              {ticket.state === 'PENDING' && (
+                <>
+                  <Text className="competition-note">
+                    仅保存 DRAFT，不发布。请核对上方全部场次后人工确认。
+                  </Text>
+                  <Action
+                    disabled={busy || !ticket.canConfirm}
+                    onClick={() => void saveAction('confirm')}
+                  >
+                    确认保存为 DRAFT
+                  </Action>
+                  <Action
+                    disabled={busy}
+                    onClick={() => void saveAction('cancel')}
+                  >
+                    取消
+                  </Action>
+                </>
+              )}
+              {ticket.receipt && (
+                <Text className="competition-note">
+                  当时执行 DRAFT V{ticket.receipt.revision} ·{' '}
+                  {ticket.receipt.matchCount} 场 · 命令{' '}
+                  {ticket.receipt.commandId}。赛程当前：
+                  {schedule?.exists
+                    ? `${schedule.status} V${schedule.revision}`
+                    : '待刷新'}
+                  。
+                </Text>
+              )}
+            </View>
           )}
         </View>
       )}

@@ -3110,4 +3110,264 @@ export async function schedulingIntegration(t, context) {
       );
     },
   );
+
+  await t.test(
+    'agent candidate save: bound human confirmation creates one DRAFT and replays its receipt',
+    async () => {
+      const session = await call('manager', 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const messages = `agent/sessions/${session.id}/messages`;
+      let reply = await call('manager', 'POST', messages, {
+        message: '收集排程需求，赛事日期范围 2027-06-01 到 2027-06-07',
+        eventId: event.id,
+      });
+      const planId = reply.planningRequest.id;
+      for (const message of [
+        '合成赛程球队2只能周三（模型短ID回归）',
+        '尽量让合成赛程球队3只能周二',
+      ]) {
+        reply = await call('manager', 'POST', messages, {
+          message,
+          eventId: event.id,
+          planningId: planId,
+          planningRevision: reply.planningRequest.revision,
+        });
+      }
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${planId}/confirm`,
+        {
+          expectedRevision: reply.planningRequest.revision,
+        },
+      );
+      const baseline = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      const currentTeams = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/teams`,
+      );
+      const url = `agent/planning-requests/${planId}/candidates`;
+      const input = {
+        expectedRevision: reply.planningRequest.revision,
+        baselineRevision: baseline.revision,
+        format: 'ROUND_ROBIN',
+        configSource: 'EXPLICIT',
+        fixedMatchIds: [],
+        config: {
+          ...baseline.config,
+          teamIds: currentTeams
+            .filter((item) => item.active)
+            .map((item) => item.id),
+          startDate: '2027-06-01',
+          endDate: '2027-06-07',
+        },
+      };
+      const candidate = await call('manager', 'POST', url, input);
+      assert.equal(candidate.status, 'FOUND');
+      assert.equal(candidate.canSave, true);
+      const second = await call('manager', 'POST', url, input);
+      const before = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [event.id],
+        )
+      ).rows[0].n;
+      const preparePath = `${url}/${candidate.id}/save-ticket`;
+      const ticketInput = {
+        expectedPlanningRevision: candidate.planningRevision,
+        expectedBaselineRevision: candidate.baselineRevision,
+      };
+      await call('reviewer', 'POST', preparePath, ticketInput, 403);
+      await call(
+        'manager',
+        'POST',
+        preparePath,
+        { ...ticketInput, expectedBaselineRevision: baseline.revision + 1 },
+        409,
+      );
+      const ticket = await call('manager', 'POST', preparePath, ticketInput);
+      assert.equal(ticket.state, 'PENDING');
+      assert.equal(ticket.canConfirm, true);
+      assert.equal(
+        (await call('manager', 'POST', preparePath, ticketInput)).id,
+        ticket.id,
+      );
+      assert.equal(
+        (await call('manager', 'GET', `${preparePath}/latest`)).id,
+        ticket.id,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        before,
+      );
+      const otherTicket = await call(
+        'manager',
+        'POST',
+        `${url}/${second.id}/save-ticket`,
+        ticketInput,
+      );
+      const third = await call('manager', 'POST', url, input);
+      const cancelledTicket = await call(
+        'manager',
+        'POST',
+        `${url}/${third.id}/save-ticket`,
+        ticketInput,
+      );
+      assert.equal(
+        (
+          await call(
+            'manager',
+            'POST',
+            `agent/candidate-save-tickets/${cancelledTicket.id}/cancel`,
+          )
+        ).state,
+        'CANCELLED',
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/candidate-save-tickets/${cancelledTicket.id}/confirm`,
+        {
+          candidateId: third.id,
+          candidateHash: cancelledTicket.candidateHash,
+        },
+        409,
+      );
+      const expiredCandidate = await call('manager', 'POST', url, input);
+      const expiredId = randomUUID();
+      await sql.query(
+        'INSERT INTO "AgentCandidateSaveTicket" (id,"candidateId","ownerId","eventId","planningId","planningRevision","baselineRevision","candidateHash","toolName","toolVersion","commandId",state,"expiresAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now()-interval \'1 minute\')',
+        [
+          expiredId,
+          expiredCandidate.id,
+          users.manager,
+          event.id,
+          planId,
+          candidate.planningRevision,
+          candidate.baselineRevision,
+          'a'.repeat(64),
+          'schedule.draft.generate',
+          'v1',
+          randomUUID(),
+          'PENDING',
+        ],
+      );
+      await call(
+        'manager',
+        'POST',
+        `agent/candidate-save-tickets/${expiredId}/confirm`,
+        {
+          candidateId: expiredCandidate.id,
+          candidateHash: 'a'.repeat(64),
+        },
+        409,
+      );
+      const confirmPath = `agent/candidate-save-tickets/${ticket.id}/confirm`;
+      await call(
+        'reviewer',
+        'POST',
+        confirmPath,
+        { candidateId: candidate.id, candidateHash: ticket.candidateHash },
+        403,
+      );
+      await call(
+        'manager',
+        'POST',
+        confirmPath,
+        { candidateId: candidate.id, candidateHash: '0'.repeat(64) },
+        409,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=false WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      await call('manager', 'GET', `${preparePath}/latest`, undefined, 403);
+      await call(
+        'manager',
+        'POST',
+        confirmPath,
+        { candidateId: candidate.id, candidateHash: ticket.candidateHash },
+        403,
+      );
+      await sql.query(
+        'UPDATE "EventGrant" SET active=true WHERE "eventId"=$1 AND "memberId"=$2',
+        [event.id, members.manager],
+      );
+      const [confirmed, concurrentReplay] = await Promise.all([
+        call('manager', 'POST', confirmPath, {
+          candidateId: candidate.id,
+          candidateHash: ticket.candidateHash,
+        }),
+        call('manager', 'POST', confirmPath, {
+          candidateId: candidate.id,
+          candidateHash: ticket.candidateHash,
+        }),
+      ]).then((rows) =>
+        rows.sort((a, b) => Number(a.replayed) - Number(b.replayed)),
+      );
+      assert.equal(confirmed.status, 'DRAFT');
+      assert.equal(confirmed.revision, baseline.revision + 1);
+      assert.equal(confirmed.matchCount, candidate.matches.length);
+      assert.equal(confirmed.replayed, false);
+      assert.equal(concurrentReplay.replayed, true);
+      assert.equal(concurrentReplay.commandId, confirmed.commandId);
+      base = await restartApi();
+      const replay = await call('manager', 'POST', confirmPath, {
+        candidateId: candidate.id,
+        candidateHash: ticket.candidateHash,
+      });
+      assert.equal(replay.commandId, confirmed.commandId);
+      assert.equal(replay.replayed, true);
+      const recovered = await call('manager', 'GET', `${preparePath}/latest`);
+      assert.equal(recovered.state, 'EXECUTED');
+      assert.equal(recovered.receipt.commandId, confirmed.commandId);
+      await call(
+        'manager',
+        'POST',
+        `agent/candidate-save-tickets/${otherTicket.id}/confirm`,
+        {
+          candidateId: second.id,
+          candidateHash: otherTicket.candidateHash,
+        },
+        409,
+      );
+      const current = await call(
+        'manager',
+        'GET',
+        `events/${event.id}/schedule`,
+      );
+      assert.equal(current.status, 'DRAFT');
+      assert.equal(current.revision, confirmed.revision);
+      assert.deepEqual(current.matches, candidate.matches);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        before + 1,
+      );
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentCandidateSaveReceipt" WHERE "eventId"=$1',
+            [event.id],
+          )
+        ).rows[0].n,
+        1,
+      );
+    },
+  );
 }

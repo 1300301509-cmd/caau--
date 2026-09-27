@@ -552,7 +552,7 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       const whole = anotherAccount.getByRole('region', {
         name: '整套候选赛程预览',
       });
-      await expect(whole).toContainText('仅预览');
+      await expect(whole).toContainText('仅生成候选预览，不保存赛程');
       await whole.getByLabel('起始日期 YYYY-MM-DD').fill('2027-06-01');
       await whole.getByLabel('结束日期 YYYY-MM-DD').fill('2027-06-07');
       await whole.getByRole('checkbox').check();
@@ -562,6 +562,22 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       await expect(whole).toContainText('候选预览，尚未保存');
       await expect(whole).toContainText('共 6 场');
       await expect(whole.locator('tbody tr')).toHaveCount(6);
+      await whole.getByRole('button', { name: '准备保存整套 DRAFT' }).click();
+      await expect(
+        whole.getByRole('region', { name: '候选草稿确认' }),
+      ).toContainText('PENDING');
+      expect(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [eventId],
+          )
+        ).rows[0].n,
+      ).toBe(baselinePlans);
+      await whole.getByRole('button', { name: /取\s*消/ }).click();
+      await expect(
+        whole.getByRole('region', { name: '候选草稿确认' }),
+      ).toContainText('CANCELLED');
       await anotherAccount.reload();
       await anotherAccount
         .getByRole('button', { name: '打开 CAAU 智能助手' })

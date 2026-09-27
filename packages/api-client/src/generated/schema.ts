@@ -65,6 +65,39 @@ export interface paths {
     patch: operations['HostingController_reviewGrantActive'];
     trace?: never;
   };
+  '/api/v1/agent/candidate-save-tickets/{ticketId}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['cancelAgentCandidateDraftSave'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/candidate-save-tickets/{ticketId}/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Re-authorize and atomically save one DRAFT schedule version and immutable receipt. */
+    post: operations['confirmAgentCandidateDraftSave'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/agent/confirmation-tickets/{ticketId}/cancel': {
     parameters: {
       query?: never;
@@ -202,6 +235,39 @@ export interface paths {
       cookie?: never;
     };
     get: operations['getAgentScheduleCandidate'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/planning-requests/{planningId}/candidates/{candidateId}/save-ticket': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Create a bound, expiring ticket for one fresh candidate; no schedule write. */
+    post: operations['prepareAgentCandidateDraftSave'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/agent/planning-requests/{planningId}/candidates/{candidateId}/save-ticket/latest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getLatestAgentCandidateDraftSaveTicket'];
     put?: never;
     post?: never;
     delete?: never;
@@ -2477,6 +2543,39 @@ export interface components {
       /** @enum {string} */
       status: 'SATISFIED' | 'UNMET' | 'NOT_APPLICABLE';
     };
+    AgentCandidateSaveCancelledDto: {
+      eventId: string;
+      id: string;
+      /** @enum {string} */
+      state: 'CANCELLED';
+    };
+    AgentCandidateSaveReceiptDto: {
+      candidateId: string;
+      commandId: string;
+      eventId: string;
+      matchCount: number;
+      replayed: boolean;
+      revision: number;
+      /** @enum {string} */
+      status: 'DRAFT';
+      ticketId: string;
+    };
+    AgentCandidateSaveTicketDto: {
+      baselineRevision: number;
+      canConfirm: boolean;
+      candidateHash: string;
+      candidateId: string;
+      commandId: string;
+      eventId: string;
+      expiresAt: string;
+      id: string;
+      matchCount: number;
+      planningId: string;
+      planningRevision: number;
+      receipt?: components['schemas']['AgentCandidateSaveReceiptDto'] | null;
+      /** @enum {string} */
+      state: 'PENDING' | 'EXECUTED' | 'CANCELLED';
+    };
     AgentConfirmationSummaryDto: {
       afterStartAt: string;
       afterVenue: string;
@@ -2651,6 +2750,7 @@ export interface components {
     };
     AgentScheduleCandidateViewDto: {
       baselineRevision: number;
+      canSave: boolean;
       changes: components['schemas']['AgentCandidateChangeDto'][];
       config: components['schemas']['ScheduleConfigDto'];
       configSource: string;
@@ -2843,6 +2943,10 @@ export interface components {
     ConfigureTaskDto: {
       expectedRevision: number;
       requirements: components['schemas']['RequirementsDto'];
+    };
+    ConfirmAgentCandidateSaveDto: {
+      candidateHash: string;
+      candidateId: string;
     };
     ConfirmAgentPlanningRequestDto: {
       expectedRevision: number;
@@ -3706,6 +3810,10 @@ export interface components {
       /** Format: uuid */
       id: string;
     };
+    PrepareAgentCandidateSaveDto: {
+      expectedBaselineRevision: number;
+      expectedPlanningRevision: number;
+    };
     PreviewScheduleAdjustmentDto: {
       expectedRevision: number;
       matchId: string;
@@ -4176,6 +4284,52 @@ export interface operations {
       };
     };
   };
+  cancelAgentCandidateDraftSave: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentCandidateSaveCancelledDto'];
+        };
+      };
+    };
+  };
+  confirmAgentCandidateDraftSave: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConfirmAgentCandidateSaveDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentCandidateSaveReceiptDto'];
+        };
+      };
+    };
+  };
   cancelAgentScheduleAdjustment: {
     parameters: {
       query?: never;
@@ -4388,6 +4542,54 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['AgentScheduleCandidateViewDto'];
+        };
+      };
+    };
+  };
+  prepareAgentCandidateDraftSave: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        planningId: string;
+        candidateId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrepareAgentCandidateSaveDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentCandidateSaveTicketDto'];
+        };
+      };
+    };
+  };
+  getLatestAgentCandidateDraftSaveTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        planningId: string;
+        candidateId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentCandidateSaveTicketDto'];
         };
       };
     };

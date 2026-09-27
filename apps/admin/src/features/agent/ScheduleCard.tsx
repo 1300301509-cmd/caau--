@@ -856,6 +856,7 @@ export function ScheduleCard({
                 schedule={schedule}
                 token={token}
                 onAccessError={issue}
+                onSaved={() => refreshSchedule(planning.eventId)}
               />
             )}
           </details>

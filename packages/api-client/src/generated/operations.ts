@@ -114,6 +114,81 @@ export const operations = {
     },
     authenticated: true,
   },
+  cancelAgentCandidateDraftSave: {
+    path: '/api/v1/agent/candidate-save-tickets/{ticketId}/cancel',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          eventId: { type: 'string' },
+          id: { type: 'string' },
+          state: { enum: ['CANCELLED'], type: 'string' },
+        },
+        required: ['id', 'eventId', 'state'],
+        type: 'object',
+      },
+    },
+    parameters: [
+      {
+        in: 'path',
+        name: 'ticketId',
+        required: true,
+        schema: { type: 'string' },
+      },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  confirmAgentCandidateDraftSave: {
+    path: '/api/v1/agent/candidate-save-tickets/{ticketId}/confirm',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          candidateId: { type: 'string' },
+          commandId: { type: 'string' },
+          eventId: { type: 'string' },
+          matchCount: { type: 'number' },
+          replayed: { type: 'boolean' },
+          revision: { type: 'number' },
+          status: { enum: ['DRAFT'], type: 'string' },
+          ticketId: { type: 'string' },
+        },
+        required: [
+          'ticketId',
+          'commandId',
+          'candidateId',
+          'eventId',
+          'revision',
+          'status',
+          'matchCount',
+          'replayed',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      {
+        in: 'path',
+        name: 'ticketId',
+        required: true,
+        schema: { type: 'string' },
+      },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        candidateHash: { type: 'string' },
+        candidateId: { type: 'string' },
+      },
+      required: ['candidateId', 'candidateHash'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
   cancelAgentScheduleAdjustment: {
     path: '/api/v1/agent/confirmation-tickets/{ticketId}/cancel',
     method: 'POST',
@@ -367,6 +442,7 @@ export const operations = {
       '200': {
         properties: {
           baselineRevision: { type: 'number' },
+          canSave: { type: 'boolean' },
           changes: {
             items: {
               properties: {
@@ -508,6 +584,7 @@ export const operations = {
           'preferences',
           'explored',
           'createdAt',
+          'canSave',
         ],
         type: 'object',
       },
@@ -574,6 +651,7 @@ export const operations = {
       '200': {
         properties: {
           baselineRevision: { type: 'number' },
+          canSave: { type: 'boolean' },
           changes: {
             items: {
               properties: {
@@ -715,6 +793,7 @@ export const operations = {
           'preferences',
           'explored',
           'createdAt',
+          'canSave',
         ],
         type: 'object',
       },
@@ -739,6 +818,7 @@ export const operations = {
       '200': {
         properties: {
           baselineRevision: { type: 'number' },
+          canSave: { type: 'boolean' },
           changes: {
             items: {
               properties: {
@@ -880,6 +960,140 @@ export const operations = {
           'preferences',
           'explored',
           'createdAt',
+          'canSave',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      {
+        in: 'path',
+        name: 'planningId',
+        required: true,
+        schema: { type: 'string' },
+      },
+      {
+        in: 'path',
+        name: 'candidateId',
+        required: true,
+        schema: { type: 'string' },
+      },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  prepareAgentCandidateDraftSave: {
+    path: '/api/v1/agent/planning-requests/{planningId}/candidates/{candidateId}/save-ticket',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          baselineRevision: { type: 'number' },
+          canConfirm: { type: 'boolean' },
+          candidateHash: { type: 'string' },
+          candidateId: { type: 'string' },
+          commandId: { type: 'string' },
+          eventId: { type: 'string' },
+          expiresAt: { type: 'string' },
+          id: { type: 'string' },
+          matchCount: { type: 'number' },
+          planningId: { type: 'string' },
+          planningRevision: { type: 'number' },
+          receipt: {
+            allOf: [
+              { $ref: '#/components/schemas/AgentCandidateSaveReceiptDto' },
+            ],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
+          state: { enum: ['PENDING', 'EXECUTED', 'CANCELLED'], type: 'string' },
+        },
+        required: [
+          'id',
+          'candidateId',
+          'planningId',
+          'eventId',
+          'planningRevision',
+          'baselineRevision',
+          'candidateHash',
+          'commandId',
+          'state',
+          'expiresAt',
+          'matchCount',
+          'canConfirm',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      {
+        in: 'path',
+        name: 'planningId',
+        required: true,
+        schema: { type: 'string' },
+      },
+      {
+        in: 'path',
+        name: 'candidateId',
+        required: true,
+        schema: { type: 'string' },
+      },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        expectedBaselineRevision: { type: 'number' },
+        expectedPlanningRevision: { type: 'number' },
+      },
+      required: ['expectedPlanningRevision', 'expectedBaselineRevision'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  getLatestAgentCandidateDraftSaveTicket: {
+    path: '/api/v1/agent/planning-requests/{planningId}/candidates/{candidateId}/save-ticket/latest',
+    method: 'GET',
+    responses: {
+      '200': {
+        properties: {
+          baselineRevision: { type: 'number' },
+          canConfirm: { type: 'boolean' },
+          candidateHash: { type: 'string' },
+          candidateId: { type: 'string' },
+          commandId: { type: 'string' },
+          eventId: { type: 'string' },
+          expiresAt: { type: 'string' },
+          id: { type: 'string' },
+          matchCount: { type: 'number' },
+          planningId: { type: 'string' },
+          planningRevision: { type: 'number' },
+          receipt: {
+            allOf: [
+              { $ref: '#/components/schemas/AgentCandidateSaveReceiptDto' },
+            ],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
+          state: { enum: ['PENDING', 'EXECUTED', 'CANCELLED'], type: 'string' },
+        },
+        required: [
+          'id',
+          'candidateId',
+          'planningId',
+          'eventId',
+          'planningRevision',
+          'baselineRevision',
+          'candidateHash',
+          'commandId',
+          'state',
+          'expiresAt',
+          'matchCount',
+          'canConfirm',
         ],
         type: 'object',
       },

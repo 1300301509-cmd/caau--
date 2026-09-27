@@ -115,6 +115,14 @@ export async function scheduleDraftAdjust(
   await eventOperations(tx, actor, eventId);
 }
 
+export async function scheduleDraftGenerate(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  eventId: string,
+) {
+  await eventOperations(tx, actor, eventId);
+}
+
 export async function schedulePublish(
   tx: Prisma.TransactionClient,
   actor: Actor,

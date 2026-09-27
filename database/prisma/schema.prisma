@@ -72,6 +72,8 @@ model InternalUser {
   agentTasks AgentTask[]
   agentPlanningRequests AgentPlanningRequest[]
   agentScheduleCandidates AgentScheduleCandidate[]
+  agentCandidateSaveTickets AgentCandidateSaveTicket[]
+  agentCandidateSaveReceipts AgentCandidateSaveReceipt[]
   agentConfirmationTickets AgentConfirmationTicket[]
   agentCommandReceipts AgentCommandReceipt[]
 
@@ -357,6 +359,8 @@ model Event {
   approvedApplication   EventHostingApplication?      @relation("ApprovedHostingEvent")
   agentConfirmationTickets AgentConfirmationTicket[]
   agentCommandReceipts AgentCommandReceipt[]
+  agentCandidateSaveTickets AgentCandidateSaveTicket[]
+  agentCandidateSaveReceipts AgentCandidateSaveReceipt[]
 }
 
 model EventSchedule {
@@ -514,6 +518,7 @@ model AgentPlanningRequest {
   pending Json @default("[]")
   unresolved Json @default("[]")
   candidates AgentScheduleCandidate[]
+  candidateSaveTickets AgentCandidateSaveTicket[]
   pendingQuestions AgentPendingQuestion[]
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @db.Timestamptz(3)
@@ -522,7 +527,8 @@ model AgentPlanningRequest {
   @@index([ownerId, updatedAt])
 }
 
-// Immutable, non-executable preview. Never linked to schedule commands/versions.
+// Immutable preview. A separately authorized, expiring ticket may later bind
+// one candidate to a draft command; the preview itself is never executable.
 model AgentScheduleCandidate {
   id String @id @db.Uuid
   planningId String @db.Uuid
@@ -546,10 +552,54 @@ model AgentScheduleCandidate {
   preferences Json
   outcome String @db.VarChar(24)
   explored Int
+  saveTickets AgentCandidateSaveTicket[]
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([planningId, createdAt])
   @@index([ownerId, createdAt])
+}
+
+model AgentCandidateSaveTicket {
+  id String @id @db.Uuid
+  candidateId String @db.Uuid
+  candidate AgentScheduleCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  planningId String @db.Uuid
+  planning AgentPlanningRequest @relation(fields: [planningId], references: [id], onDelete: Restrict)
+  planningRevision Int
+  baselineRevision Int
+  candidateHash String @db.Char(64)
+  toolName String @db.VarChar(80)
+  toolVersion String @db.VarChar(16)
+  commandId String @unique @db.Uuid
+  state String @default("PENDING") @db.VarChar(16)
+  expiresAt DateTime @db.Timestamptz(3)
+  consumedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  receipt AgentCandidateSaveReceipt?
+
+  @@index([candidateId, createdAt])
+  @@index([ownerId, state, expiresAt])
+}
+
+model AgentCandidateSaveReceipt {
+  id String @id @db.Uuid
+  ticketId String @unique @db.Uuid
+  ticket AgentCandidateSaveTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  commandId String @unique @db.Uuid
+  ownerId String @db.Uuid
+  owner InternalUser @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  candidateHash String @db.Char(64)
+  result Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([ownerId, createdAt])
+  @@index([eventId, createdAt])
 }
 
 model AgentConfirmationTicket {
