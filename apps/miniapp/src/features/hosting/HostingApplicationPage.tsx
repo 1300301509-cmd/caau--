@@ -69,6 +69,8 @@ type AttachmentChange = {
 };
 
 const maxBytes = 10 * 1024 * 1024;
+const pickerResumeMs = 15 * 60 * 1000;
+const pickerResumeKey = (scope: string) => `${scope}:file-picker-resume`;
 const editableStatus = (status?: string) =>
   status === 'DRAFT' || status === 'NEEDS_SUPPLEMENT';
 const when = (value: string) => new Date(value).toLocaleString();
@@ -164,6 +166,19 @@ export function HostingApplicationPage({
       return;
     }
     const saved = Taro.getStorageSync<MaterialCache>(cacheScope.current);
+    let returningFromPicker = false;
+    try {
+      const key = pickerResumeKey(cacheScope.current);
+      const expiresAt = Taro.getStorageSync<number>(key);
+      const remainingMs = expiresAt - Date.now();
+      returningFromPicker =
+        typeof expiresAt === 'number' &&
+        remainingMs > 0 &&
+        remainingMs <= pickerResumeMs;
+      Taro.removeStorageSync(key);
+    } catch {
+      // A storage failure must not bypass the normal recovery choice.
+    }
     let restoredForm = hostingFormFrom(next.draft);
     let excluded: string[] = [];
     let revision = next.draftRevision;
@@ -173,6 +188,10 @@ export function HostingApplicationPage({
       revision = saved.revision;
       setPendingSubmit(saved.pending);
       setNotice('上次提交结果待确认，请先核实或重试。');
+    } else if (returningFromPicker && saved?.form) {
+      restoredForm = saved.form;
+      excluded = saved.omitted;
+      revision = saved.revision;
     } else if (
       saved?.form ||
       (!newMaterialIds.current.has(next.id) && hasMaterialInput(next))
@@ -569,6 +588,19 @@ export function HostingApplicationPage({
         showCancel: false,
       });
       return;
+    }
+    const resumeKey =
+      materials && cacheScope.current
+        ? pickerResumeKey(cacheScope.current)
+        : '';
+    if (resumeKey) {
+      cacheMaterial();
+      try {
+        Taro.setStorageSync(resumeKey, Date.now() + pickerResumeMs);
+      } catch {
+        setError('本机材料状态无法保存，请检查设备存储空间后重试。');
+        return;
+      }
     }
     let choice: Taro.chooseMessageFile.SuccessCallbackResult;
     try {
