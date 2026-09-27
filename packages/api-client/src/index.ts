@@ -13,6 +13,13 @@ export {
 } from './individual-workspace.js';
 import type { operations } from './generated/schema.js';
 export type { paths, components, operations } from './generated/schema.js';
+export {
+  AgentStreamInterruptedError,
+  agentStreamPath,
+  createAgentStreamDecoder,
+  type AgentStreamInput,
+  type AgentStreamReply,
+} from './agent-stream.js';
 
 export type RequestOptions = {
   url: string;
@@ -94,6 +101,12 @@ function matches(schema: WireSchema, value: unknown): boolean {
   }
   if (schema.type === 'integer') return Number.isInteger(value);
   return typeof value === schema.type;
+}
+
+export function isAgentReply(
+  value: unknown,
+): value is operations['sendAgentMessage']['responses'][200]['content']['application/json'] {
+  return matches(wire.sendAgentMessage.responses[200], value);
 }
 
 // Handwritten transport facade. Paths, statuses, response types and wire enums

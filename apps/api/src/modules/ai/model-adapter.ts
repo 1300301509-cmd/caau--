@@ -1,5 +1,8 @@
 import { captureUsage, captureFailure } from '../governance/usage.service.js';
-import { ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ChatOpenAI } from '@langchain/openai';
 import { z } from 'zod';
 import { queryPlanSchema, type QueryPlan } from './schedule-tools.js';
@@ -109,6 +112,12 @@ type ModelFailure =
   | 'invalid_output'
   | 'unknown';
 class InvalidModelOutput extends Error {}
+class StreamAnswerTooLong extends Error {}
+class StreamDeliveryError extends Error {
+  constructor(readonly original: unknown) {
+    super('Stream delivery stopped');
+  }
+}
 const knownErrorTypes = new Set([
   'APIError',
   'APIConnectionError',
@@ -322,6 +331,13 @@ export interface AgentModelAdapter {
     message: string,
     context: ConversationContext,
     kind: 'CHAT' | 'CLARIFY' | 'UNSUPPORTED',
+  ): Promise<string>;
+  chatStream(
+    message: string,
+    context: ConversationContext,
+    kind: 'CHAT' | 'CLARIFY' | 'UNSUPPORTED',
+    onDelta: (text: string) => Promise<void>,
+    signal?: AbortSignal,
   ): Promise<string>;
   summarize(previous: string, turns: ConversationTurn[]): Promise<string>;
   status(): AgentModelStatus;
@@ -673,6 +689,16 @@ export class RuleAgentModelAdapter implements AgentModelAdapter {
       ? `你好！${capabilities}你也可以直接讨论赛事组织思路，无需先选择赛事。`
       : `可以讨论赛事组织与赛制方案。${capabilities}我不会凭空声称查到了具体赛事数据。`;
   }
+  async chatStream(
+    message: string,
+    context: ConversationContext,
+    kind: 'CHAT' | 'CLARIFY' | 'UNSUPPORTED',
+    onDelta: (text: string) => Promise<void>,
+  ): Promise<string> {
+    const answer = await this.chat(message, context, kind);
+    await onDelta(answer);
+    return answer;
+  }
   async summarize(
     previous: string,
     turns: ConversationTurn[],
@@ -903,6 +929,11 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
       );
       return value;
     } catch (error) {
+      if (error instanceof StreamDeliveryError) throw error.original;
+      if (error instanceof StreamAnswerTooLong) {
+        captureFailure('invalid_output');
+        throw new BadGatewayException('Agent answer exceeds limit');
+      }
       captureFailure(modelFailureMetadata(error).category);
       console.info(
         'CAAU agent model',
@@ -1108,6 +1139,63 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
       // The service validates the complete answer before storing/responding.
       // Do not truncate here: that would silently persist an unfinished reply.
       return { value: content, raw: answer };
+    });
+  }
+  async chatStream(
+    message: string,
+    context: ConversationContext,
+    kind: 'CHAT' | 'CLARIFY' | 'UNSUPPORTED',
+    onDelta: (text: string) => Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    return this.measured('chat', async () => {
+      const prompt = [
+        { role: 'system' as const, content: chatPrompt(context, kind) },
+        ...context.history.map((turn) => ({
+          role:
+            turn.role === 'USER' ? ('user' as const) : ('assistant' as const),
+          content: turn.content,
+        })),
+        { role: 'user' as const, content: message },
+      ];
+      const stream = await this.chatModel.stream(prompt, { signal });
+      let content = '';
+      let pending = '';
+      let emitted = false;
+      let usage: unknown;
+      let providerId: string | undefined;
+      for await (const chunk of stream) {
+        if (signal?.aborted)
+          throw new StreamDeliveryError(new Error('Stream closed'));
+        if (chunk.usage_metadata) usage = chunk.usage_metadata;
+        if (chunk.id) providerId = chunk.id;
+        const part = typeof chunk.content === 'string' ? chunk.content : '';
+        if (!part) continue;
+        content += part;
+        pending += part;
+        if (Array.from(content).length > 4000) throw new StreamAnswerTooLong();
+        if (Array.from(pending).length >= (emitted ? 80 : 12)) {
+          try {
+            await onDelta(pending);
+          } catch (error) {
+            throw new StreamDeliveryError(error);
+          }
+          pending = '';
+          emitted = true;
+        }
+      }
+      if (!content.trim()) throw new InvalidModelOutput();
+      if (pending) {
+        try {
+          await onDelta(pending);
+        } catch (error) {
+          throw new StreamDeliveryError(error);
+        }
+      }
+      return {
+        value: content,
+        raw: { usage_metadata: usage, id: providerId },
+      };
     });
   }
   async summarize(

@@ -1532,6 +1532,36 @@ export const operations = {
     },
     authenticated: true,
   },
+  streamAgentMessage: {
+    path: '/api/v1/agent/sessions/{sessionId}/messages/stream',
+    method: 'POST',
+    responses: { '200': { type: 'string' } },
+    parameters: [
+      {
+        in: 'path',
+        name: 'sessionId',
+        required: true,
+        schema: { type: 'string' },
+      },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/x-ndjson',
+    body: {
+      properties: {
+        eventId: { type: 'string' },
+        matchId: { type: 'string' },
+        message: { type: 'string' },
+        newTask: { type: 'boolean' },
+        planningId: { type: 'string' },
+        planningRevision: { type: 'number' },
+        taskId: { type: 'string' },
+        teamId: { type: 'string' },
+      },
+      required: ['message'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
   setAiCostAssignment: {
     path: '/api/v1/ai-usage/accounts/{id}/assignment',
     method: 'POST',

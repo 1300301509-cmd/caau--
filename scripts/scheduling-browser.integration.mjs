@@ -51,12 +51,20 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     page.on('response', async (response) => {
       if (
         response.url().includes('/agent/sessions/') &&
-        response.url().endsWith('/messages')
-      )
+        response.url().endsWith('/messages/stream')
+      ) {
+        const events = (await response.text())
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line));
         agentResponses.push({
           status: response.status(),
-          body: await response.text(),
+          body: JSON.stringify(
+            events.find((event) => event.type === 'result')?.reply ??
+              events.at(-1),
+          ),
         });
+      }
     });
     await page.goto(
       `http://127.0.0.1:4173/competition?module=schedule&event=${eventId}`,
@@ -192,6 +200,7 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await page.getByLabel('对话消息').fill('七支球队适合什么赛制？');
     await page.getByRole('button', { name: '发送消息' }).click();
     await expect(page.locator('.schedule-agent-history')).toContainText('21场');
+    await expect.poll(() => agentResponses.length).toBeGreaterThanOrEqual(2);
     expect(
       await page
         .locator('.schedule-agent-history .agent-message')

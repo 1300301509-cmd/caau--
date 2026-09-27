@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ApiError, createApiClient } from '../dist/index.js';
-import { createFetchTransport } from '../dist/fetch.js';
-import { createTaroTransport } from '../dist/taro.js';
+import {
+  ApiError,
+  createApiClient,
+  createAgentStreamDecoder,
+} from '../dist/index.js';
+import {
+  createFetchTransport,
+  streamAgentMessageFetch,
+} from '../dist/fetch.js';
+import { createTaroTransport, streamAgentMessageTaro } from '../dist/taro.js';
 
 const ready = { status: 'ready', service: 'caau-api' };
 const notReady = {
@@ -47,6 +54,108 @@ test('conversation request has enough time for routing and model reply on fetch 
     ).status,
     'CHAT',
   );
+});
+
+test('stream decoder handles split UTF-8 and JSON boundaries, then requires a final persisted result', () => {
+  const shown = [];
+  const decoder = createAgentStreamDecoder((piece) => shown.push(piece));
+  const final = {
+    sessionId: '00000000-0000-4000-8000-000000000001',
+    status: 'CHAT',
+    message: '你好，赛程可以讨论。',
+    candidates: [],
+    task: null,
+    planningRequest: null,
+  };
+  const bytes = new TextEncoder().encode(
+    `${JSON.stringify({ type: 'phase', value: 'WORKING' })}\n${JSON.stringify({ type: 'delta', text: '你好，' })}\n${JSON.stringify({ type: 'delta', text: '赛程可以讨论。' })}\n${JSON.stringify({ type: 'result', reply: final })}\n`,
+  );
+  for (let offset = 0; offset < bytes.length; offset += 3)
+    decoder.push(bytes.slice(offset, offset + 3));
+  assert.deepEqual(shown, ['你好，', '赛程可以讨论。']);
+  assert.deepEqual(decoder.finish(), final);
+  const interrupted = createAgentStreamDecoder(() => {});
+  interrupted.push(
+    new TextEncoder().encode('{"type":"delta","text":"未保存"}\n'),
+  );
+  assert.throws(() => interrupted.finish(), /中断/);
+  const failed = createAgentStreamDecoder(() => {});
+  assert.throws(
+    () =>
+      failed.push(new TextEncoder().encode('{"type":"error","status":403}\n')),
+    (error) => error instanceof ApiError && error.status === 403,
+  );
+});
+
+test('fetch and Taro stream transports deliver deltas and the same final reply', async () => {
+  const final = {
+    sessionId: '00000000-0000-4000-8000-000000000001',
+    status: 'CHAT',
+    message: '你好',
+    candidates: [],
+    task: null,
+    planningRequest: null,
+  };
+  const bytes = new TextEncoder().encode(
+    `${JSON.stringify({ type: 'delta', text: '你' })}\n${JSON.stringify({ type: 'delta', text: '好' })}\n${JSON.stringify({ type: 'result', reply: final })}\n`,
+  );
+  const browserDeltas = [];
+  const browser = await streamAgentMessageFetch({
+    baseUrl: 'http://localhost',
+    sessionId: final.sessionId,
+    body: { message: '你好' },
+    csrfToken: 'synthetic-csrf',
+    onDelta: (part) => browserDeltas.push(part),
+    request: async (url, options) => {
+      assert.equal(
+        url,
+        `http://localhost/api/v1/agent/sessions/${final.sessionId}/messages/stream`,
+      );
+      assert.equal(options.headers['X-CSRF-Token'], 'synthetic-csrf');
+      assert.equal(options.credentials, 'include');
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(bytes.slice(0, 11));
+            controller.enqueue(bytes.slice(11));
+            controller.close();
+          },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  assert.deepEqual(browserDeltas, ['你', '好']);
+  assert.deepEqual(browser, final);
+  const mobileDeltas = [];
+  const mobile = await streamAgentMessageTaro(
+    {
+      baseUrl: 'http://localhost',
+      sessionId: final.sessionId,
+      body: { message: '你好' },
+      token: 'synthetic-token',
+      onDelta: (part) => mobileDeltas.push(part),
+    },
+    (options) => {
+      assert.equal(options.enableChunked, true);
+      assert.equal(options.header.Authorization, 'Bearer synthetic-token');
+      let onChunk;
+      const task = new Promise((resolve) =>
+        queueMicrotask(() => {
+          onChunk({ data: bytes.slice(0, 9).buffer });
+          onChunk({ data: bytes.slice(9).buffer });
+          resolve({ statusCode: 200, data: bytes.buffer });
+        }),
+      );
+      task.onChunkReceived = (callback) => {
+        onChunk = callback;
+      };
+      task.abort = () => {};
+      return task;
+    },
+  );
+  assert.deepEqual(mobileDeltas, ['你', '好']);
+  assert.deepEqual(mobile, final);
 });
 
 test('known 503 has a typed stable code; unknown errors never echo server bodies', async () => {

@@ -318,6 +318,15 @@ export async function authorizationIntegration(t) {
             throw agentModelUnavailable();
           return simulatedAgentModel.chat(message, context, kind);
         },
+        async chatStream(message, context, kind, onDelta) {
+          const answer = await this.chat(message, context, kind);
+          if (answer.length <= 500 && answer.length > 1) {
+            const middle = Math.floor(answer.length / 2);
+            await onDelta(answer.slice(0, middle));
+            await onDelta(answer.slice(middle));
+          } else await onDelta(answer);
+          return answer;
+        },
         summarize(previous, turns) {
           agentModelCalls += 1;
           return simulatedAgentModel.summarize(previous, turns);

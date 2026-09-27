@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Input, Select, Tag } from 'antd';
-import { ApiError, type components } from '@caau/api-client';
-import { client } from '../materials/client';
+import {
+  AgentStreamInterruptedError,
+  ApiError,
+  type components,
+} from '@caau/api-client';
+import { client, streamAgentMessage } from '../materials/client';
 import { useAuth } from '../auth/AuthContext';
 import { CandidateCard } from './CandidateCard';
 import { AgentIcon } from './AgentIcon';
@@ -161,11 +165,14 @@ export function ScheduleCard({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streamingUser, setStreamingUser] = useState('');
+  const [streamingText, setStreamingText] = useState('');
   const [forceNew, setForceNew] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const lock = useRef(false);
   const generation = useRef(0);
+  const activeStream = useRef<AbortController | null>(null);
   const thread = useRef<HTMLDivElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const sessionRef = useRef(session);
@@ -211,6 +218,8 @@ export function ScheduleCard({
   }, [session?.id, session?.turns?.length, reply?.status, result, visible]);
 
   function clear() {
+    activeStream.current?.abort();
+    activeStream.current = null;
     generation.current++;
     setSession(undefined);
     setReply(undefined);
@@ -221,6 +230,8 @@ export function ScheduleCard({
     setSchedule(undefined);
     setSessions([]);
     setLoading(false);
+    setStreamingUser('');
+    setStreamingText('');
     setNotice('');
     setBlocked(true);
   }
@@ -243,6 +254,8 @@ export function ScheduleCard({
       setError('AI额度不足或已暂停，请联系管理员；输入已保留。');
     else if (cause instanceof ApiError && cause.status === 503)
       setError('本次回复暂不可用，输入已保留，请稍后重试。');
+    else if (cause instanceof AgentStreamInterruptedError)
+      setError('连接中断，请刷新会话核对本轮是否已保存；输入已保留。');
     else setError('结果暂不确定，请刷新回执核对后重试原确认。');
   }
   async function run(work: (valid: () => boolean) => Promise<void>) {
@@ -424,13 +437,16 @@ export function ScheduleCard({
   }
   async function send(candidate?: Candidate) {
     const message = input.trim() || (candidate ? lastMessage : '');
-    if (!session || !message) return;
+    if (!session || !message || lock.current) return;
+    const controller = new AbortController();
+    activeStream.current = controller;
+    setStreamingUser(message);
+    setStreamingText('');
     await run(async (valid) => {
       const current = reply ? reply.task : session.task;
-      const next = await client.request('sendAgentMessage', {
-        token,
-        path: { sessionId: session.id },
-        body: {
+      const next = await streamAgentMessage(
+        session.id,
+        {
           message,
           ...(reply?.status === 'NEED_EVENT' && candidate
             ? { eventId: candidate.id }
@@ -451,7 +467,12 @@ export function ScheduleCard({
               ? { newTask: true }
               : {}),
         },
-      });
+        token,
+        (text) => {
+          if (valid()) setStreamingText((old) => old + text);
+        },
+        controller.signal,
+      );
       if (!valid()) return;
       const latest = await client.request('getAgentSession', {
         token,
@@ -470,6 +491,9 @@ export function ScheduleCard({
         setSelectedEvent(next.planningRequest.eventId);
       if (next.status === 'STALE') setError('预览已过期，请重新生成。');
     });
+    if (activeStream.current === controller) activeStream.current = null;
+    setStreamingUser('');
+    setStreamingText('');
   }
 
   async function saveSuggestedMemory() {
@@ -767,9 +791,27 @@ export function ScheduleCard({
               </div>
             </div>
           ))}
+          {streamingUser && (
+            <>
+              <div className="agent-message agent-message-user">
+                <div className="agent-message-body">
+                  <p>{streamingUser}</p>
+                </div>
+              </div>
+              <div className="agent-message agent-message-assistant">
+                <span className="agent-message-avatar" aria-hidden="true">
+                  <AgentIcon />
+                </span>
+                <div className="agent-message-body" aria-live="polite">
+                  <strong>CAAU 智能助手</strong>
+                  <p>{streamingText || '正在理解你的问题…'}</p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
         <div ref={messageEnd} aria-hidden="true" />
-        {loading && (
+        {loading && !streamingUser && (
           <p className="agent-responding" role="status">
             智能助手正在回复…
           </p>

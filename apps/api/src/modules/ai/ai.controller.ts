@@ -3,15 +3,19 @@ import {
   Controller,
   Get,
   HttpCode,
+  HttpException,
   Param,
   Post,
   Req,
+  Res,
 } from '@nestjs/common';
+import type { ServerResponse } from 'node:http';
 import {
   ApiBearerAuth,
   ApiCookieAuth,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiTags,
 } from '@nestjs/swagger';
 import type { AuthRequest } from '../authorization/authorization.service.js';
@@ -303,5 +307,51 @@ export class AiController {
     @Body() body: AgentMessageInputDto,
   ) {
     return this.service.message(request.token ?? '', sessionId, body);
+  }
+
+  @Post('sessions/:sessionId/messages/stream')
+  @HttpCode(200)
+  @Permission('agent.message')
+  @ApiProduces('application/x-ndjson')
+  @ApiOperation({
+    operationId: 'streamAgentMessage',
+    description:
+      'Newline-delimited phase/delta/result/error events. Delta is provisional; only result confirms persistence. Business replies are sent as a final result after validation.',
+  })
+  @ApiOkResponse({ schema: { type: 'string' } })
+  async streamMessage(
+    @Req() request: AuthRequest,
+    @Param('sessionId') sessionId: string,
+    @Body() body: AgentMessageInputDto,
+    @Res() response: ServerResponse,
+  ) {
+    response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    response.setHeader('Cache-Control', 'no-cache, no-transform');
+    response.setHeader('X-Accel-Buffering', 'no');
+    const abort = new AbortController();
+    response.on('close', () => abort.abort());
+    const write = (value: unknown) => {
+      if (response.destroyed || abort.signal.aborted)
+        throw new Error('Stream closed');
+      response.write(`${JSON.stringify(value)}\n`);
+    };
+    try {
+      write({ type: 'phase', value: 'WORKING' });
+      const reply = await this.service.message(
+        request.token ?? '',
+        sessionId,
+        body,
+        async (text) => write({ type: 'delta', text }),
+        abort.signal,
+      );
+      write({ type: 'result', reply });
+    } catch (error) {
+      if (!response.destroyed && !abort.signal.aborted) {
+        const status = error instanceof HttpException ? error.getStatus() : 503;
+        write({ type: 'error', status });
+      }
+    } finally {
+      if (!response.destroyed) response.end();
+    }
   }
 }

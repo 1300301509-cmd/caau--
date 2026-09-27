@@ -40,6 +40,14 @@ LangGraph checkpoint 只保存结构化流程/资源/版本状态，不保存 Co
 
 ## API
 
+### CAAU-090 流式消息
+
+`POST /api/v1/agent/sessions/:sessionId/messages/stream` 与原 `.../messages` 接收相同的消息和结构化选择字段，权限与业务链路相同。响应为 `application/x-ndjson`：先发 `phase`，普通对话随模型返回 `delta`，成功保存后发唯一 `result`（包含原 `AgentReplyDto`）。赛程查询、需求修订和单场调整等业务分支只在原后端校验完成后发 `result`，不把模型的中间提议当作业务结论。
+
+`delta` 只是屏幕上的临时文字；超长回答、模型失败、断连或撤权后的 `error` 均不代表该轮已保存。前端丢弃临时气泡并保留输入；网络中断且没有 `result` 时先刷新有权会话核对原 turn，再决定是否重发。服务端在送出每段文字前重验会话、历史赛事及明确传入的赛事权限，保存前沿用原事务鉴权。流式端点不承担确认操作；需求和赛程草稿仍必须点击对应按钮。
+
+Web 使用 Fetch 响应流；小程序通过 Taro 的 `enableChunked`/`onChunkReceived` 接收分块，不能分块的运行时会在请求完成后解析同一响应。分块可能截断 UTF-8 字符或 JSON 行，共享客户端负责增量拼接与最终结果校验。微信开发者工具和真机行为须单独验收，编译通过不等于运行时分块已验证。
+
 ### CAAU-086 Skill 与工具目录（后端第一阶段）
 
 总部超级管理员可调用 `GET/POST /api/v1/observability/agent/skills` 列出和创建 `INTENT_ROUTING`、`TOOL_SELECTION` 指令草稿，`POST /api/v1/observability/agent/skills/:id/activate` 启用指定草稿版本；`GET /api/v1/observability/agent/skills/tools/catalog` 查看固定工具名、风险、权限和确认方式。草稿版本不生效，启用新版会退役旧版；要回退需以旧文案创建新版本。普通账号访问这些管理接口返回 403。当前只有后端 API，治理页面编辑入口待做。

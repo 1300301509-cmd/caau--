@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Picker, Text, View } from '@tarojs/components';
 import Taro, { useDidShow, useRouter } from '@tarojs/taro';
-import { ApiError } from '@caau/api-client';
+import { AgentStreamInterruptedError, ApiError } from '@caau/api-client';
 import {
   clearSession,
   client,
+  streamAgentMessage,
   session as login,
   subscribeSession,
 } from '../materials/session';
@@ -165,12 +166,15 @@ export function AgentPage() {
     current?.planningRequest?.eventId ??
     selectedEvent;
   const [busy, setBusy] = useState(!!cached?.current);
+  const [streamingUser, setStreamingUser] = useState('');
+  const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [blocked, setBlocked] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const lock = useRef(false);
+  const activeStream = useRef<AbortController | null>(null);
   const serial = useRef(0);
   const alive = useRef(true);
   const event = useRef(eventId);
@@ -214,6 +218,8 @@ export function AgentPage() {
     }
   }
   const reset = () => {
+    activeStream.current?.abort();
+    activeStream.current = null;
     setCurrent(undefined);
     setReply(undefined);
     setReceipt(undefined);
@@ -226,6 +232,8 @@ export function AgentPage() {
     serial.current++;
     lock.current = false;
     setBusy(false);
+    setStreamingUser('');
+    setStreamingText('');
     volatile = undefined;
   };
   useEffect(() => {
@@ -269,6 +277,8 @@ export function AgentPage() {
       setError('AI额度不足或已暂停，请联系管理员；输入已保留。');
     } else if (cause instanceof ApiError && cause.status === 503) {
       setError('模型或智能体服务暂时不可用，未修改赛程。请稍后重试。');
+    } else if (cause instanceof AgentStreamInterruptedError) {
+      setError('连接中断，请刷新会话核对本轮是否已保存；输入已保留。');
     } else {
       setError('结果尚未确认。请先核对执行回执，再使用原票据重试。');
     }
@@ -438,13 +448,16 @@ export function AgentPage() {
   }
   async function send(candidate?: Candidate) {
     const message = input.trim() || (candidate ? lastMessage : '');
-    if (!current || !message) return;
+    if (!current || !message || lock.current) return;
+    const controller = new AbortController();
+    activeStream.current = controller;
+    setStreamingUser(message);
+    setStreamingText('');
     await operate(async (token, valid) => {
       const active = reply ? reply.task : current.task;
-      const next = await client.request('sendAgentMessage', {
-        token,
-        path: { sessionId: current.id },
-        body: {
+      const next = await streamAgentMessage(
+        current.id,
+        {
           message,
           ...(reply?.status === 'NEED_EVENT' && candidate
             ? { eventId: candidate.id }
@@ -470,7 +483,12 @@ export function AgentPage() {
               ? { newTask: true }
               : {}),
         },
-      });
+        token,
+        (text) => {
+          if (valid()) setStreamingText((old) => old + text);
+        },
+        controller.signal,
+      );
       if (!valid()) return;
       const latest = await client.request('getAgentSession', {
         token,
@@ -490,6 +508,9 @@ export function AgentPage() {
       if (next.status === 'STALE')
         setError('预览已过期或版本已变化，请刷新赛程后重新预览。');
     });
+    if (activeStream.current === controller) activeStream.current = null;
+    setStreamingUser('');
+    setStreamingText('');
   }
   async function saveSuggestedMemory() {
     const suggested = reply?.suggestedMemory;
@@ -739,6 +760,21 @@ export function AgentPage() {
               </View>
             </View>
           ))}
+          {streamingUser && (
+            <>
+              <View className="agent-message agent-message-user">
+                <View className="agent-message-bubble">
+                  <Text>{streamingUser}</Text>
+                </View>
+              </View>
+              <View className="agent-message agent-message-assistant">
+                <View className="agent-message-bubble">
+                  <Text className="agent-message-name">CAAU 智能助手</Text>
+                  <Text>{streamingText || '正在理解你的问题…'}</Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
         {error && (
           <View className="competition-error" role="alert">
@@ -750,7 +786,7 @@ export function AgentPage() {
             <Text>{notice}</Text>
           </View>
         )}
-        {busy && (
+        {busy && !streamingUser && (
           <View className="competition-note" role="status">
             正在处理，请稍候…
           </View>

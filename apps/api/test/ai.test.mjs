@@ -5,6 +5,7 @@ import {
   intentSchema,
   modelFailureMetadata,
   qwenIntentSystemPrompt,
+  QwenAgentModelAdapter,
   routePrompt,
   RuleAgentModelAdapter,
 } from '../dist/modules/ai/model-adapter.js';
@@ -36,6 +37,50 @@ import {
   isWholeScheduleRequest,
   explicitRoundRobin,
 } from '../dist/modules/ai/planning.js';
+
+test('Qwen chat stream forwards real model chunks, propagates delivery denial and limits unfinished output', async () => {
+  const model = new QwenAgentModelAdapter(
+    'synthetic-key',
+    'synthetic-model',
+    'http://localhost',
+  );
+  model.chatModel = {
+    stream: async function* () {
+      yield { content: '赛'.repeat(80), id: 'provider-1' };
+      yield {
+        content: '程回答',
+        usage_metadata: { input_tokens: 10, output_tokens: 83 },
+      };
+    },
+  };
+  const deltas = [];
+  const answer = await model.chatStream(
+    '问赛程',
+    { history: [] },
+    'CHAT',
+    async (part) => {
+      deltas.push(part);
+    },
+  );
+  assert.equal(answer, '赛'.repeat(80) + '程回答');
+  assert.deepEqual(deltas, ['赛'.repeat(80), '程回答']);
+  const denied = new Error('permission denied');
+  await assert.rejects(
+    model.chatStream('问赛程', { history: [] }, 'CHAT', async () => {
+      throw denied;
+    }),
+    (error) => error === denied,
+  );
+  model.chatModel = {
+    stream: async function* () {
+      yield { content: '长'.repeat(4001) };
+    },
+  };
+  await assert.rejects(
+    model.chatStream('长回答', { history: [] }, 'CHAT', async () => {}),
+    (error) => error.getStatus?.() === 502,
+  );
+});
 
 test('page event and match context cannot turn CHAT or PLAN into task continuation', () => {
   const resolve = (...args) =>

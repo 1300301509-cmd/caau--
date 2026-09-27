@@ -2001,6 +2001,74 @@ export async function schedulingIntegration(t, context) {
   );
 
   await t.test(
+    'agent stream: provisional text ends in one persisted reply and owner checks still apply',
+    async () => {
+      const chat = await call('manager', 'POST', 'agent/sessions', {});
+      const url = `${base}/api/v1/agent/sessions/${chat.id}/messages/stream`;
+      const send = async (key, message = '你好') => {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${tokens[key]}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message }),
+        });
+        return {
+          status: response.status,
+          events: (await response.text())
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line)),
+        };
+      };
+      const allowed = await send('manager');
+      assert.equal(allowed.status, 200);
+      assert.equal(allowed.events[0].type, 'phase');
+      assert.equal(
+        allowed.events.at(-1).type,
+        'result',
+        JSON.stringify(allowed.events),
+      );
+      assert.equal(allowed.events.at(-1).reply.status, 'CHAT');
+      assert.ok(
+        allowed.events.filter((event) => event.type === 'delta').length >= 2,
+      );
+      assert.equal(
+        allowed.events
+          .filter((event) => event.type === 'delta')
+          .map((event) => event.text)
+          .join(''),
+        allowed.events.at(-1).reply.message,
+      );
+      const saved = await call('manager', 'GET', `agent/sessions/${chat.id}`);
+      assert.deepEqual(
+        saved.turns.map((turn) => turn.role),
+        ['USER', 'ASSISTANT'],
+      );
+      assert.equal(saved.turns[1].content, allowed.events.at(-1).reply.message);
+      const denied = await send('a');
+      assert.equal(denied.events.at(-1).type, 'error');
+      assert.equal(denied.events.at(-1).status, 403);
+      assert.equal(
+        denied.events.some((event) => event.type === 'delta'),
+        false,
+      );
+      const tooLong = await send(
+        'manager',
+        '__CAAU_SYNTHETIC_CHAT_LENGTH_4001__',
+      );
+      assert.equal(tooLong.events.at(-1).type, 'error');
+      assert.equal(tooLong.events.at(-1).status, 502);
+      assert.equal(
+        (await call('manager', 'GET', `agent/sessions/${chat.id}`)).turns
+          .length,
+        2,
+      );
+    },
+  );
+
+  await t.test(
     'agent dialogue: no-context chat, task insertion, denial and exactly-once draft',
     async () => {
       const chat = await call('manager', 'POST', 'agent/sessions', {});

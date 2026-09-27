@@ -2,9 +2,13 @@ import Taro from '@tarojs/taro';
 import {
   createApiClient,
   uuidFromBytes,
+  type AgentStreamInput,
   type components,
 } from '@caau/api-client';
-import { createTaroTransport } from '@caau/api-client/taro';
+import {
+  createTaroTransport,
+  streamAgentMessageTaro,
+} from '@caau/api-client/taro';
 export const client = createApiClient(
   __API_BASE_URL__,
   createTaroTransport((options) =>
@@ -15,6 +19,25 @@ export const client = createApiClient(
     }),
   ),
 );
+export function streamAgentMessage(
+  sessionId: string,
+  body: AgentStreamInput,
+  token: string,
+  onDelta: (text: string) => void,
+  signal?: AbortSignal,
+) {
+  return streamAgentMessageTaro(
+    {
+      baseUrl: __API_BASE_URL__,
+      sessionId,
+      body,
+      token,
+      onDelta,
+      signal,
+    },
+    (options) => Taro.request<unknown>(options),
+  );
+}
 export const session: {
   token: string;
   identity?: components['schemas']['WorkspaceIdentityDto'];

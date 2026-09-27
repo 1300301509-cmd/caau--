@@ -107,6 +107,8 @@ type RuntimeContext = {
   matchId?: string;
   taskId?: string;
   skills?: RuntimeSkills;
+  onDelta?: (text: string) => Promise<void>;
+  signal?: AbortSignal;
 };
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 type QuerySource = {
@@ -358,11 +360,19 @@ export class AiService implements OnModuleDestroy {
           },
         );
         return {
-          answer: await this.model.chat(
-            state.message,
-            { ...checked.context, skills: runtime.skills },
-            state.kind as 'CHAT' | 'CLARIFY' | 'UNSUPPORTED',
-          ),
+          answer: runtime.onDelta
+            ? await this.model.chatStream(
+                state.message,
+                { ...checked.context, skills: runtime.skills },
+                state.kind as 'CHAT' | 'CLARIFY' | 'UNSUPPORTED',
+                runtime.onDelta,
+                runtime.signal,
+              )
+            : await this.model.chat(
+                state.message,
+                { ...checked.context, skills: runtime.skills },
+                state.kind as 'CHAT' | 'CLARIFY' | 'UNSUPPORTED',
+              ),
         };
       })
       .addEdge(START, 'route')
@@ -2293,8 +2303,24 @@ export class AiService implements OnModuleDestroy {
       .compile();
   }
 
-  async message(token: string, sessionId: string, input: unknown) {
+  async message(
+    token: string,
+    sessionId: string,
+    input: unknown,
+    onDelta?: (text: string) => Promise<void>,
+    signal?: AbortSignal,
+  ) {
     const body = this.parseMessage(input);
+    const deliver = onDelta
+      ? async (text: string) => {
+          if (signal?.aborted) throw new Error('Stream closed');
+          // Recheck the session, task, event and historical resources before
+          // each visible piece; the final save performs the same checks again.
+          await this.checkedDialogueContext(token, sessionId, body);
+          if (signal?.aborted) throw new Error('Stream closed');
+          await onDelta(text);
+        }
+      : undefined;
     const scope = requestScope.getStore();
     if (scope) scope.sessionId = sessionId;
     await this.refreshConversationSummary(token, sessionId);
@@ -2348,6 +2374,8 @@ export class AiService implements OnModuleDestroy {
         matchId: body.matchId,
         taskId: body.taskId,
         skills,
+        onDelta: deliver,
+        signal,
       },
       () =>
         this.dialogGraph.invoke({
@@ -2384,15 +2412,28 @@ export class AiService implements OnModuleDestroy {
     if (kind !== 'START' && kind !== 'CONTINUE') {
       const response =
         (dialog.kind === kind && dialog.answer) ||
-        (await this.model.chat(
-          body.message,
-          {
-            ...(await this.checkedDialogueContext(token, sessionId, body))
-              .context,
-            skills,
-          },
-          kind,
-        ));
+        (deliver
+          ? await this.model.chatStream(
+              body.message,
+              {
+                ...(await this.checkedDialogueContext(token, sessionId, body))
+                  .context,
+                skills,
+              },
+              kind,
+              deliver,
+              signal,
+            )
+          : await this.model.chat(
+              body.message,
+              {
+                ...(await this.checkedDialogueContext(token, sessionId, body))
+                  .context,
+                skills,
+              },
+              kind,
+            ));
+      if (signal?.aborted) throw new Error('Stream closed');
       return this.saveDialogue(token, sessionId, body, kind, response);
     }
     const workflowBody = this.adjustmentInput(kind, body, context.lastQuery);

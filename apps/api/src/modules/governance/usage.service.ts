@@ -196,6 +196,7 @@ export class UsageService {
       parse: 'intent',
       planQuery: 'query_plan',
       planPlanning: 'planning',
+      chatStream: 'chat',
       testConnection: 'connection',
     };
     return new Proxy(model, {

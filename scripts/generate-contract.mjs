@@ -64,7 +64,8 @@ for (const [url, item] of Object.entries(spec.paths)) {
     for (const [status, response] of Object.entries(operation.responses)) {
       const schema =
         response.content?.['application/json']?.schema ??
-        response.content?.['application/octet-stream']?.schema;
+        response.content?.['application/octet-stream']?.schema ??
+        response.content?.['application/x-ndjson']?.schema;
       if (schema) responses[status] = resolveSchema(schema);
     }
     assert.ok(
@@ -85,7 +86,9 @@ for (const [url, item] of Object.entries(spec.paths)) {
         'application/octet-stream'
       ]
         ? 'application/octet-stream'
-        : 'application/json',
+        : operation.responses['200'].content?.['application/x-ndjson']
+          ? 'application/x-ndjson'
+          : 'application/json',
       body: operation.requestBody
         ? resolveSchema(
             (

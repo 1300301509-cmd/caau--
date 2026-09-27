@@ -6440,6 +6440,54 @@
         "tags": ["agent"]
       }
     },
+    "/api/v1/agent/sessions/{sessionId}/messages/stream": {
+      "post": {
+        "description": "Newline-delimited phase/delta/result/error events. Delta is provisional; only result confirms persistence. Business replies are sent as a final result after validation.",
+        "operationId": "streamAgentMessage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentMessageInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["agent"]
+      }
+    },
     "/api/v1/ai-usage/accounts/{id}/assignment": {
       "post": {
         "operationId": "setAiCostAssignment",
