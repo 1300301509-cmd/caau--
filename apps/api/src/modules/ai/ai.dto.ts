@@ -414,6 +414,7 @@ export class AgentReplyDto {
       'QUERY',
       'PLAN',
       'NEED_TEAM',
+      'EXECUTED',
     ],
   })
   status!:
@@ -428,7 +429,13 @@ export class AgentReplyDto {
     | 'UNSUPPORTED'
     | 'QUERY'
     | 'PLAN'
-    | 'NEED_TEAM';
+    | 'NEED_TEAM'
+    | 'EXECUTED';
+  @ApiPropertyOptional({
+    type: AgentScheduleAdjustmentResultDto,
+    nullable: true,
+  })
+  execution?: AgentScheduleAdjustmentResultDto | null;
   @ApiProperty({ maxLength: 4000 }) message!: string;
   @ApiProperty({ type: [AgentCandidateDto] }) candidates!: AgentCandidateDto[];
   @ApiPropertyOptional({ type: AgentTaskViewDto, nullable: true })

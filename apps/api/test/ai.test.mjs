@@ -5,6 +5,7 @@ import {
   intentSchema,
   modelFailureMetadata,
   qwenIntentSystemPrompt,
+  routeSchema,
   QwenAgentModelAdapter,
   routePrompt,
   RuleAgentModelAdapter,
@@ -112,7 +113,7 @@ test('editable skills cannot register or upgrade executable tools', () => {
   const catalog = agentToolCatalog();
   assert.equal(
     catalog.find((tool) => tool.name === 'schedule.draft.adjust').confirmation,
-    'BOUND_TICKET_BUTTON',
+    'BOUND_TICKET_BUTTON_OR_DIALOGUE',
   );
   assert.equal(
     catalog.find((tool) => tool.name === 'schedule.adjust.preview').permission,
@@ -149,6 +150,16 @@ test('simulated model extracts the supported Chinese schedule adjustment intent'
     targetHour: 10,
     targetMinute: 0,
   });
+  assert.deepEqual(
+    await new RuleAgentModelAdapter().parse('把周一第二场改到周日上午十点半'),
+    {
+      sourceWeekday: 1,
+      sourceOrdinal: 2,
+      targetWeekday: 7,
+      targetHour: 10,
+      targetMinute: 30,
+    },
+  );
   assert.deepEqual(await new RuleAgentModelAdapter().parse('再晚半小时'), {
     targetOffsetMinutes: 30,
   });
@@ -188,6 +199,14 @@ test('conversation router separates chat, task continuation and unsupported oper
   assert.equal(await model.route('赛制规则是什么？', waiting), 'CHAT');
   assert.equal(await model.route('上午十点', waiting), 'CONTINUE');
   assert.equal(await model.route('好的', waiting), 'CHAT');
+  assert.equal(await model.route('确认执行', waiting), 'CLARIFY');
+  const pending = {
+    ...waiting,
+    task: { ...waiting.task, step: 'PREVIEW_READY', pendingConfirmation: true },
+  };
+  assert.equal(await model.route('确认执行', pending), 'CONFIRM');
+  assert.equal(await model.route('好的', pending), 'CHAT');
+  assert.equal(await model.route('如果确认会影响什么？', pending), 'CHAT');
   assert.equal(await model.route('查2027-06-05的赛程', empty), 'QUERY');
   assert.equal(await model.route('刚才那场的场地呢？', waiting), 'QUERY');
   assert.equal(await model.route('把周六第二场移到周日', waiting), 'CONTINUE');
@@ -210,6 +229,39 @@ test('conversation router separates chat, task continuation and unsupported oper
     /21场/,
   );
   assert.match(routePrompt(waiting), /编排整套赛程/);
+});
+
+test('Qwen structured route, not a production keyword matcher, proposes confirmation', async () => {
+  const model = new QwenAgentModelAdapter(
+    'synthetic-key',
+    'synthetic-model',
+    'http://localhost',
+  );
+  assert.equal(routeSchema.parse({ kind: 'CONFIRM' }).kind, 'CONFIRM');
+  model.routeModel = {
+    invoke: async () => ({ parsed: { kind: 'CONFIRM' }, raw: {} }),
+  };
+  const context = {
+    history: [],
+    task: {
+      step: 'PREVIEW_READY',
+      goal: 'single adjustment',
+      pendingFields: [],
+      preview: {},
+      pendingConfirmation: true,
+    },
+  };
+  assert.equal(await model.route('确认执行', context), 'CONFIRM');
+  assert.equal(
+    AiService.prototype.resolveDialogueRoute.call(
+      { model },
+      'CONFIRM',
+      context.task,
+      { message: '确认执行' },
+    ),
+    'CONFIRM',
+  );
+  assert.match(routePrompt(context), /pendingConfirmation/);
 });
 
 test('planning routing, extraction and date expansion remain separate from execution', async () => {

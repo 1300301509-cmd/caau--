@@ -356,6 +356,9 @@ export function AgentPage() {
       }));
     if (!valid()) return;
     setCurrent(latest);
+    // The server snapshot, not an in-memory reply, owns the active preview.
+    setReply(undefined);
+    setReceipt(undefined);
     setBlocked(false);
     setSessions((items) =>
       items.some((item) => item.id === latest.id) ? items : [latest, ...items],
@@ -534,11 +537,15 @@ export function AgentPage() {
       if (!valid()) return;
       setReply(next);
       setCurrent(latest);
+      if (next.execution) {
+        setReceipt(next.execution);
+        await onSaved();
+      }
       if (next.task?.eventId) setSelectedEvent(next.task.eventId);
       else if (next.planningRequest?.eventId)
         setSelectedEvent(next.planningRequest.eventId);
       setForceNew(false);
-      setReceipt(undefined);
+      if (!next.execution) setReceipt(undefined);
       setBlocked(false);
       setLastMessage(message);
       setInput('');
@@ -1091,8 +1098,17 @@ export function AgentPage() {
                     <Text className="competition-note">
                       尚未保存 · 有效至{' '}
                       {bj(preview.expiresAt).replace('T', ' ')}
-                      ；过期或版本变化须重新预览。
+                      ；过期或版本变化须重新预览。修改条件后旧预览立即失效。
                     </Text>
+                    {ticket?.state === 'PENDING' &&
+                      !expired &&
+                      !staleRevision &&
+                      !blocked && (
+                        <Text className="competition-line">
+                          核对这份预览后，在本对话回复“确认执行”即可保存一个
+                          DRAFT；普通聊天不会执行。
+                        </Text>
+                      )}
                     {ticket?.state === 'PENDING' && (
                       <View>
                         <Text className="competition-line">
@@ -1146,7 +1162,11 @@ export function AgentPage() {
                     value={input}
                     maxlength={2000}
                     disabled={busy}
-                    placeholder="请随时提出问题，我会帮你一起解决"
+                    placeholder={
+                      ticket?.state === 'PENDING'
+                        ? '核对预览后回复“确认执行”，或继续修改条件'
+                        : '请随时提出问题，我会帮你一起解决'
+                    }
                     onInput={(e) => setInput(e.detail.value)}
                   />
                   <Button

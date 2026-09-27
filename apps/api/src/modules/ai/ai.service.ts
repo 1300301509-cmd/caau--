@@ -87,7 +87,8 @@ type ReplyStatus =
   | 'UNSUPPORTED'
   | 'QUERY'
   | 'PLAN'
-  | 'NEED_TEAM';
+  | 'NEED_TEAM'
+  | 'EXECUTED';
 type Candidate = { id: string; label: string; detail?: string };
 type MessageBody = {
   message: string;
@@ -382,7 +383,8 @@ export class AiService implements OnModuleDestroy {
           state.kind === 'START' ||
           state.kind === 'CONTINUE' ||
           state.kind === 'QUERY' ||
-          state.kind === 'PLAN'
+          state.kind === 'PLAN' ||
+          state.kind === 'CONFIRM'
             ? 'other'
             : 'chat',
         { other: END, chat: 'respond_chat' },
@@ -580,7 +582,17 @@ export class AiService implements OnModuleDestroy {
     return this.model.testConnection();
   }
 
-  confirmScheduleAdjustment(token: string, ticketId: string, input: unknown) {
+  confirmScheduleAdjustment(
+    token: string,
+    ticketId: string,
+    input: unknown,
+    dialogue?: {
+      sessionId: string;
+      message: string;
+      taskId: string;
+      revision: number;
+    },
+  ) {
     requireAgentTool('schedule.draft.adjust', 'DRAFT_WRITE');
     const body = bodyObject(input, ['eventId', 'matchId', 'parameterHash']);
     const eventId = uuid(body.eventId);
@@ -605,6 +617,21 @@ export class AiService implements OnModuleDestroy {
           ticket.task.ownerId !== actor.id
         )
           deny();
+        if (dialogue) {
+          const { session } = await this.validateSessionAccess(
+            tx,
+            actor,
+            dialogue.sessionId,
+            dialogue.taskId,
+          );
+          if (
+            session.tasks[0]?.id !== dialogue.taskId ||
+            ticket.task.sessionId !== dialogue.sessionId ||
+            ticket.taskId !== dialogue.taskId ||
+            ticket.task.revision !== dialogue.revision
+          )
+            throw new ConflictException('Action changed; refresh the preview');
+        }
         if (ticket.eventId !== eventId || ticket.matchId !== matchId)
           throw new ConflictException('Confirmation resource changed');
         await scheduleDraftAdjust(tx, actor, ticket.eventId);
@@ -694,11 +721,47 @@ export class AiService implements OnModuleDestroy {
             updatedAt: new Date(),
           },
         });
-        await tx.agentSession.update({
-          where: { id: ticket.task.sessionId },
-          data: { updatedAt: new Date() },
-        });
-        return result;
+        const answer = `已按当前预览保存赛事 ${ticket.eventName} 的单场赛程 DRAFT V${result.revision}。原命令回执：${result.commandId}；比赛 ${result.matchId}。这不是发布，工作台以重新读取的当前版本为准。`;
+        if (dialogue) {
+          await this.appendTurns(
+            tx,
+            dialogue.sessionId,
+            dialogue.message,
+            answer,
+            json({ kind: 'CONFIRM', taskId: ticket.taskId }),
+            json({
+              kind: 'EXECUTED',
+              eventId: ticket.eventId,
+              ticketId,
+              commandId: result.commandId,
+            }),
+          );
+        } else {
+          await tx.agentSession.update({
+            where: { id: ticket.task.sessionId },
+            data: { updatedAt: new Date() },
+          });
+        }
+        return dialogue
+          ? {
+              sessionId: dialogue.sessionId,
+              status: 'EXECUTED' as const,
+              message: answer,
+              candidates: [],
+              execution: result,
+              task: this.taskView({
+                ...ticket.task,
+                step: 'EXECUTED',
+                previewExpiresAt: null,
+                confirmationTickets: [],
+              }),
+              planningRequest: await this.planning.latest(
+                tx,
+                actor,
+                dialogue.sessionId,
+              ),
+            }
+          : result;
       },
       { retries: 3, retryUnique: true, timeout: 10_000 },
     );
@@ -992,6 +1055,19 @@ export class AiService implements OnModuleDestroy {
         )
           task = undefined;
         if (!task) {
+          await tx.agentConfirmationTicket.updateMany({
+            where: { task: { sessionId }, state: 'PENDING' },
+            data: { state: 'CANCELLED', consumedAt: new Date() },
+          });
+          await tx.agentTask.updateMany({
+            where: { sessionId, step: 'PREVIEW_READY' },
+            data: {
+              step: 'STALE',
+              preview: json({}),
+              previewExpiresAt: null,
+              revision: { increment: 1 },
+            },
+          });
           task = await tx.agentTask.create({
             data: {
               id: randomUUID(),
@@ -1063,8 +1139,23 @@ export class AiService implements OnModuleDestroy {
             ? pending
             : null;
         const skills = await this.skills?.activeInTransaction(tx);
+        const ticket =
+          task?.step === 'PREVIEW_READY'
+            ? await tx.agentConfirmationTicket.findFirst({
+                where: { taskId: task.id, state: 'PENDING' },
+                orderBy: { createdAt: 'desc' },
+              })
+            : null;
+        const pendingTicket =
+          ticket &&
+          ticket.expiresAt > new Date() &&
+          task?.previewExpiresAt &&
+          task.previewExpiresAt > new Date()
+            ? await this.visibleConfirmation(tx, actor, ticket)
+            : null;
         return {
           task,
+          pendingTicket,
           pendingQuestion,
           context: {
             skills,
@@ -1101,6 +1192,7 @@ export class AiService implements OnModuleDestroy {
                     pendingFields: strings(task.pendingFields),
                     preview:
                       task.step === 'PREVIEW_READY' ? task.preview : null,
+                    pendingConfirmation: !!pendingTicket,
                   },
                 }
               : {}),
@@ -2004,7 +2096,9 @@ export class AiService implements OnModuleDestroy {
   ): MessageBody {
     if (kind !== 'START') return body;
     const reference =
-      lastQuery?.matchId && /(?:刚才那场|那场|这场)/.test(body.message)
+      this.model.status().mode === 'SIMULATED' &&
+      lastQuery?.matchId &&
+      /(?:刚才那场|那场|这场)/.test(body.message)
         ? lastQuery
         : undefined;
     return {
@@ -2330,9 +2424,11 @@ export class AiService implements OnModuleDestroy {
       task: activeTask,
       context,
       pendingQuestion,
+      pendingTicket,
     } = await this.checkedDialogueContext(token, sessionId, body);
     const skills = context.skills;
     if (
+      this.model.status().mode === 'SIMULATED' &&
       pendingQuestion?.kind === 'ROUND_ROBIN' &&
       /^(?:是|是的|对|对的|没错|确定|确认|可以|好的)[。！!，,\s]*$/.test(
         body.message.trim(),
@@ -2390,6 +2486,30 @@ export class AiService implements OnModuleDestroy {
       context.lastQuery,
       context.planning,
     );
+    if (kind === 'CONFIRM') {
+      if (!activeTask || !pendingTicket || activeTask.step !== 'PREVIEW_READY')
+        throw new ConflictException(
+          'No current confirmation; refresh and preview again',
+        );
+      // The model proposes only the action type. Identity, session, task revision,
+      // ticket binding and business CAS are checked in the original write transaction.
+      if (signal?.aborted) throw new Error('Stream closed');
+      return this.confirmScheduleAdjustment(
+        token,
+        pendingTicket.id,
+        {
+          eventId: pendingTicket.eventId,
+          matchId: pendingTicket.matchId,
+          parameterHash: pendingTicket.parameterHash,
+        },
+        {
+          sessionId,
+          message: body.message,
+          taskId: activeTask.id,
+          revision: activeTask.revision,
+        },
+      );
+    }
     if (kind === 'PLAN') {
       const proposal = await this.planRequirements(
         token,
@@ -2779,6 +2899,12 @@ export class AiService implements OnModuleDestroy {
       throw new ConflictException(
         'Agent task changed; retry with latest state',
       );
+    // The old ticket loses authority as soon as any condition/location changes,
+    // even if the new preview fails or the client still displays an old card.
+    await tx.agentConfirmationTicket.updateMany({
+      where: { taskId: task.id, state: 'PENDING' },
+      data: { state: 'CANCELLED', consumedAt: new Date() },
+    });
     return {
       workflowVersion: 2,
       revision: input.state.revision + 1,

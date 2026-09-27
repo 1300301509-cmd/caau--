@@ -334,7 +334,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** @description Route authorized chat, read-only queries, requirement collection and single-match scheduling; requirement confirmation cannot write a schedule. */
+    /** @description Route authorized chat, read-only queries, requirement collection and single-match scheduling. An explicit text confirmation of the current bound single-match preview may save one DRAFT; requirement confirmation cannot write a schedule. */
     post: operations['sendAgentMessage'];
     delete?: never;
     options?: never;
@@ -351,7 +351,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** @description Newline-delimited phase/delta/result/error events. Delta is provisional; only result confirms persistence. Business replies are sent as a final result after validation. */
+    /** @description Newline-delimited phase/delta/result/error events. Delta is provisional; only result confirms persistence. Explicit confirmation of a bound single-match preview may save a DRAFT; business replies are sent after validation. */
     post: operations['streamAgentMessage'];
     delete?: never;
     options?: never;
@@ -2731,6 +2731,9 @@ export interface components {
     };
     AgentReplyDto: {
       candidates: components['schemas']['AgentCandidateDto'][];
+      execution?:
+        | components['schemas']['AgentScheduleAdjustmentResultDto']
+        | null;
       message: string;
       pendingQuestion?: components['schemas']['AgentPendingQuestionDto'] | null;
       planningRequest?:
@@ -2750,7 +2753,8 @@ export interface components {
         | 'UNSUPPORTED'
         | 'QUERY'
         | 'PLAN'
-        | 'NEED_TEAM';
+        | 'NEED_TEAM'
+        | 'EXECUTED';
       suggestedMemory?: string | null;
       task?: components['schemas']['AgentTaskViewDto'] | null;
     };

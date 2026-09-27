@@ -298,7 +298,7 @@ export class AiController {
   @ApiOperation({
     operationId: 'sendAgentMessage',
     description:
-      'Route authorized chat, read-only queries, requirement collection and single-match scheduling; requirement confirmation cannot write a schedule.',
+      'Route authorized chat, read-only queries, requirement collection and single-match scheduling. An explicit text confirmation of the current bound single-match preview may save one DRAFT; requirement confirmation cannot write a schedule.',
   })
   @ApiOkResponse({ type: AgentReplyDto })
   message(
@@ -316,7 +316,7 @@ export class AiController {
   @ApiOperation({
     operationId: 'streamAgentMessage',
     description:
-      'Newline-delimited phase/delta/result/error events. Delta is provisional; only result confirms persistence. Business replies are sent as a final result after validation.',
+      'Newline-delimited phase/delta/result/error events. Delta is provisional; only result confirms persistence. Explicit confirmation of a bound single-match preview may save a DRAFT; business replies are sent after validation.',
   })
   @ApiOkResponse({ schema: { type: 'string' } })
   async streamMessage(

@@ -199,6 +199,86 @@ async function main() {
       )[1];
     assert.ok(source, 'Saturday second match must exist');
     const baseline = JSON.stringify(generated.matches);
+    if (process.env.CAAU_095_EXACT_ONLY === '1') {
+      stage = 'CAAU-095 exact Monday instruction';
+      const mondaySchedule = await api(
+        token,
+        'POST',
+        `events/${event.id}/schedule/generate`,
+        {
+          commandId: randomUUID(),
+          format: 'ROUND_ROBIN',
+          config: {
+            teamIds: teams.map((team) => team.id),
+            venues: ['一号场', '二号场'],
+            startDate: '2027-06-07',
+            endDate: '2027-06-13',
+            dailyStart: '09:00',
+            dailyEnd: '18:00',
+            durationMinutes: 40,
+            bufferMinutes: 10,
+            minRestMinutes: 60,
+          },
+        },
+      );
+      const mondaySource = mondaySchedule.matches
+        .filter((match) => match.startAt.startsWith('2027-06-07'))
+        .sort(
+          (a, b) =>
+            Date.parse(a.startAt) - Date.parse(b.startAt) || a.order - b.order,
+        )[1];
+      assert.ok(
+        mondaySource,
+        'Monday second match exists in the synthetic event',
+      );
+      const mondaySession = await api(token, 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const mondayPath = `agent/sessions/${mondaySession.id}`;
+      const exact = await api(token, 'POST', `${mondayPath}/messages`, {
+        eventId: event.id,
+        message: '把周一第二场改到周日上午十点半',
+      });
+      assert.equal(exact.status, 'PREVIEW');
+      assert.equal(exact.task.preview.before.id, mondaySource.id);
+      assert.equal(
+        exact.task.preview.after.startAt,
+        '2027-06-13T02:30:00.000Z',
+      );
+      assert.equal(
+        (await api(token, 'GET', `events/${event.id}/schedule`)).revision,
+        mondaySchedule.revision,
+      );
+      const exactConfirmed = await api(
+        token,
+        'POST',
+        `${mondayPath}/messages`,
+        {
+          eventId: event.id,
+          message: '确认执行',
+        },
+      );
+      assert.equal(exactConfirmed.status, 'EXECUTED');
+      assert.equal(
+        exactConfirmed.execution.revision,
+        mondaySchedule.revision + 1,
+      );
+      const refreshed = await api(token, 'GET', mondayPath);
+      assert.equal(
+        refreshed.lastExecution.result.commandId,
+        exactConfirmed.execution.commandId,
+      );
+      assert.equal(
+        (await api(token, 'GET', `events/${event.id}/schedule`)).matches.find(
+          (match) => match.id === mondaySource.id,
+        ).startAt,
+        '2027-06-13T02:30:00.000Z',
+      );
+      console.log(
+        'CAAU-095 exact Monday instruction, Qwen proposal, single DRAFT and original text receipt: verified',
+      );
+      return;
+    }
     stage = 'CAAU-062 real Qwen read-only query and follow-up';
     const querySession = await api(token, 'POST', 'agent/sessions', {});
     const queryPath = `agent/sessions/${querySession.id}/messages`;
@@ -248,21 +328,23 @@ async function main() {
     const page = await browser.newPage({
       viewport: { width: 1440, height: 1000 },
     });
+    const isAgentMessageRequest = (url) =>
+      /\/messages(?:\/stream)?$/.test(new URL(url).pathname);
     page.on('request', (request) => {
-      if (request.url().endsWith('/messages'))
+      if (isAgentMessageRequest(request.url()))
         console.log(
           `Agent message request sent +${Date.now() - probeOrigin}ms`,
         );
     });
     page.on('requestfailed', (request) => {
-      if (request.url().endsWith('/messages'))
+      if (isAgentMessageRequest(request.url()))
         console.log(
           `Agent message request failed in browser +${Date.now() - probeOrigin}ms`,
         );
     });
     const messageStatuses = [];
     page.on('response', (response) => {
-      if (response.url().endsWith('/messages'))
+      if (isAgentMessageRequest(response.url()))
         messageStatuses.push(response.status());
     });
     await page.goto(`http://127.0.0.1:${webPort}/workspace`);
@@ -287,7 +369,9 @@ async function main() {
     async function send(text) {
       const scenario = stage;
       stage = `${scenario}: input`;
-      await expect(page.getByLabel('对话消息')).toBeEnabled({ timeout: 20000 });
+      await expect(page.getByLabel('对话消息')).toBeEnabled({
+        timeout: 20000,
+      });
       await page.getByLabel('对话消息').fill(text);
       stage = `${scenario}: send button readiness`;
       await expect(page.getByRole('button', { name: '发送消息' })).toBeEnabled({
@@ -409,17 +493,37 @@ async function main() {
     );
     stage = 'Qwen turn 2 after question';
     await send('上午十点');
-    await expect(page.locator('.schedule-agent-preview')).toBeVisible({
-      timeout: 30000,
-    });
     const afterSecond = (await api(token, 'GET', 'agent/sessions')).find(
       (item) => item.currentEventId === event.id,
     );
+    console.log(
+      'Second turn task step:',
+      afterSecond?.task?.step,
+      'continued original task:',
+      afterSecond?.task?.id === afterFirst.task.id,
+      'preview present:',
+      !!afterSecond?.task?.preview,
+      'source weekday:',
+      afterSecond?.task?.parameters?.sourceWeekday,
+      'source ordinal:',
+      afterSecond?.task?.parameters?.sourceOrdinal,
+      'selected match:',
+      !!afterSecond?.task?.parameters?.sourceMatchId,
+      'target weekday:',
+      afterSecond?.task?.parameters?.targetWeekday,
+      'target hour:',
+      afterSecond?.task?.parameters?.targetHour,
+    );
+    assert.ok(afterSecond?.task?.preview, 'Second turn must create a preview');
+    await expect(page.locator('.schedule-agent-preview')).toBeVisible({
+      timeout: 30000,
+    });
     assert.equal(
       afterSecond?.task?.preview?.after?.startAt,
       '2027-06-06T02:00:00.000Z',
     );
     stage = 'Qwen turn 3';
+    const previousTicket = afterSecond?.task?.confirmation;
     await send('再晚半小时');
     const thirdTask = (
       await api(token, 'GET', `agent/sessions/${chatSession.id}`)
@@ -447,6 +551,31 @@ async function main() {
     assert.equal(preview.after.startAt, targetTime);
     assert.equal(preview.after.venue, source.venue);
     assert.equal(preview.before.venue, source.venue);
+    if (process.env.CAAU_095_TEXT_CONFIRM === '1') {
+      assert.ok(
+        previousTicket && previousTicket.id !== active.task.confirmation.id,
+      );
+      const obsolete = await fetch(
+        `${origin}/api/v1/agent/confirmation-tickets/${previousTicket.id}/confirm`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            eventId: event.id,
+            matchId: previousTicket.matchId,
+            parameterHash: previousTicket.parameterHash,
+          }),
+        },
+      );
+      assert.equal(
+        obsolete.status,
+        409,
+        'Changed conditions invalidate the old preview',
+      );
+    }
     await expect(page.locator('.schedule-agent-preview')).toContainText(
       '此操作尚未保存',
     );
@@ -468,12 +597,30 @@ async function main() {
       ).rows[0].n,
       1,
     );
-    stage = 'Web confirmation';
-    await page.getByRole('button', { name: '确认保存草稿' }).click();
-    await expect(page.locator('.schedule-agent-result-details')).toContainText(
-      '首次执行回执',
-      { timeout: 20000 },
-    );
+    stage =
+      process.env.CAAU_095_TEXT_CONFIRM === '1'
+        ? 'CAAU-095 Qwen text confirmation'
+        : 'Web confirmation';
+    let textResult;
+    if (process.env.CAAU_095_TEXT_CONFIRM === '1') {
+      textResult = await api(
+        token,
+        'POST',
+        `agent/sessions/${active.id}/messages`,
+        {
+          message: '确认执行',
+          eventId: event.id,
+        },
+      );
+      assert.equal(textResult.status, 'EXECUTED');
+      assert.equal(textResult.execution.ticketId, active.task.confirmation.id);
+      assert.ok(textResult.message.includes(textResult.execution.commandId));
+    } else {
+      await page.getByRole('button', { name: '确认保存草稿' }).click();
+      await expect(
+        page.locator('.schedule-agent-result-details'),
+      ).toContainText('首次执行回执', { timeout: 20000 });
+    }
     const saved = await api(token, 'GET', `events/${event.id}/schedule`);
     assert.equal(saved.revision, generated.revision + 1);
     assert.equal(saved.status, 'DRAFT');
@@ -499,6 +646,11 @@ async function main() {
     assert.ok(receipt?.commandId);
     assert.equal(receipt.matchId, source.id);
     assert.equal(receipt.revision, saved.revision);
+    if (textResult) {
+      assert.equal(receipt.commandId, textResult.execution.commandId);
+      assert.equal(afterSession.turns.at(-2).content, '确认执行');
+      assert.ok(afterSession.turns.at(-1).content.includes(receipt.commandId));
+    }
     stage = 'Web refresh and retry';
     await page.reload();
     await page.getByRole('button', { name: '打开 CAAU 智能助手' }).click();
@@ -561,7 +713,9 @@ async function main() {
       0,
     );
     console.log(
-      'PASS: real Qwen three-turn Web preview, single DRAFT write, refresh and persisted retry; temporary synthetic database only',
+      process.env.CAAU_095_TEXT_CONFIRM === '1'
+        ? 'PASS: real Qwen three-turn preview, changed conditions invalidate ticket, text confirmation writes one DRAFT, refresh and persisted retry; temporary synthetic database only'
+        : 'PASS: real Qwen three-turn Web preview, single DRAFT write, refresh and persisted retry; temporary synthetic database only',
     );
     console.log(
       'Execution revision:',

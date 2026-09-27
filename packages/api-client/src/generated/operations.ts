@@ -1461,6 +1461,14 @@ export const operations = {
             },
             type: 'array',
           },
+          execution: {
+            allOf: [
+              { $ref: '#/components/schemas/AgentScheduleAdjustmentResultDto' },
+            ],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
           message: { maxLength: 4000, type: 'string' },
           pendingQuestion: {
             allOf: [{ $ref: '#/components/schemas/AgentPendingQuestionDto' }],
@@ -1491,6 +1499,7 @@ export const operations = {
               'QUERY',
               'PLAN',
               'NEED_TEAM',
+              'EXECUTED',
             ],
             type: 'string',
           },

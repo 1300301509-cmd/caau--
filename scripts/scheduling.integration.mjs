@@ -57,7 +57,7 @@ export async function schedulingIntegration(t, context) {
       assert.equal(
         catalog.find((tool) => tool.name === 'schedule.draft.adjust')
           .confirmation,
-        'BOUND_TICKET_BUTTON',
+        'BOUND_TICKET_BUTTON_OR_DIALOGUE',
       );
       await call(
         'manager',
@@ -1721,6 +1721,22 @@ export async function schedulingIntegration(t, context) {
           body: { eventId, taskId: second.task.id, message: '再晚半小时' },
         });
         assert.equal(third.status, 'PREVIEW');
+        assert.notEqual(
+          third.task.confirmation.id,
+          second.task.confirmation.id,
+        );
+        await assert.rejects(
+          mobile.request('confirmAgentScheduleAdjustment', {
+            token,
+            path: { ticketId: second.task.confirmation.id },
+            body: {
+              eventId,
+              matchId: second.task.confirmation.matchId,
+              parameterHash: second.task.confirmation.parameterHash,
+            },
+          }),
+          { status: 409 },
+        );
         const ticket = third.task.confirmation;
         assert.equal(
           third.task.preview.after.startAt,
@@ -1744,12 +1760,23 @@ export async function schedulingIntegration(t, context) {
           matchId: ticket.matchId,
           parameterHash: ticket.parameterHash,
         };
-        const result = await mobile.request('confirmAgentScheduleAdjustment', {
+        const impact = await mobile.request('sendAgentMessage', {
           token,
-          path: { ticketId: ticket.id },
-          body,
+          path: { sessionId: agent.id },
+          body: { eventId, message: '如果确认会影响什么？' },
         });
+        assert.equal(impact.status, 'CHAT');
+        assert.equal(impact.task.confirmation.id, ticket.id);
+        const executed = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: agent.id },
+          body: { eventId, message: '确认执行' },
+        });
+        assert.equal(executed.status, 'EXECUTED');
+        const result = executed.execution;
         assert.equal(result.status, 'DRAFT');
+        assert.equal(result.ticketId, ticket.id);
+        assert.ok(executed.message.includes(result.commandId));
         assert.equal(result.revision, generated.revision + 1);
         const restored = await mobile.request('getAgentSession', {
           token,
@@ -1758,6 +1785,25 @@ export async function schedulingIntegration(t, context) {
         assert.equal(
           restored.lastExecution?.result.commandId,
           result.commandId,
+        );
+        assert.equal(restored.task.step, 'EXECUTED');
+        assert.equal(restored.turns.at(-2).content, '确认执行');
+        assert.ok(restored.turns.at(-1).content.includes(result.commandId));
+        assert.equal(
+          (
+            await mobile.request('getEventSchedule', {
+              token,
+              path: { eventId },
+            })
+          ).revision,
+          result.revision,
+        );
+        await assert.rejects(
+          mobile.request('getAgentSession', {
+            token: tokens.manager,
+            path: { sessionId: agent.id },
+          }),
+          { status: 403 },
         );
         assert.equal(
           (
@@ -1777,6 +1823,163 @@ export async function schedulingIntegration(t, context) {
             })
           ).revision,
           result.revision,
+        );
+        const monday = await mobile.request('generateEventSchedule', {
+          token,
+          path: { eventId },
+          body: {
+            commandId: randomUUID(),
+            format: 'ROUND_ROBIN',
+            config: {
+              ...config,
+              teamIds: attached
+                .filter((item) => teamIds.includes(item.teamId))
+                .map((item) => item.id),
+              startDate: '2027-06-07',
+              endDate: '2027-06-13',
+            },
+          },
+        });
+        const mondaySession = await mobile.request('createAgentSession', {
+          token,
+          body: { currentEventId: eventId },
+        });
+        const exact = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: mondaySession.id },
+          body: { eventId, message: '把周一第二场改到周日上午十点半' },
+        });
+        assert.equal(exact.status, 'PREVIEW');
+        assert.equal(
+          exact.task.preview.after.startAt,
+          '2027-06-13T02:30:00.000Z',
+        );
+        assert.equal(
+          exact.task.preview.before.id,
+          monday.matches
+            .filter((match) => match.startAt.startsWith('2027-06-07'))
+            .sort(
+              (a, b) =>
+                Date.parse(a.startAt) - Date.parse(b.startAt) ||
+                a.order - b.order,
+            )[1].id,
+        );
+        assert.equal(
+          (
+            await mobile.request('getEventSchedule', {
+              token,
+              path: { eventId },
+            })
+          ).revision,
+          monday.revision,
+        );
+        const old = exact.task.confirmation;
+        const modified = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: mondaySession.id },
+          body: {
+            eventId,
+            taskId: exact.task.id,
+            message: '改成周日上午十一点',
+          },
+        });
+        assert.equal(modified.status, 'PREVIEW');
+        assert.equal(
+          modified.task.preview.after.startAt,
+          '2027-06-13T03:00:00.000Z',
+        );
+        await assert.rejects(
+          mobile.request('confirmAgentScheduleAdjustment', {
+            token,
+            path: { ticketId: old.id },
+            body: {
+              eventId,
+              matchId: old.matchId,
+              parameterHash: old.parameterHash,
+            },
+          }),
+          { status: 409 },
+        );
+        const stream = await fetch(
+          `${base}/api/v1/agent/sessions/${mondaySession.id}/messages/stream`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ eventId, message: '确认执行' }),
+          },
+        );
+        assert.equal(stream.status, 200);
+        const frames = (await stream.text())
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line));
+        assert.equal(
+          frames.filter((frame) => frame.type === 'result').length,
+          1,
+        );
+        assert.ok(
+          !frames.some(
+            (frame) => frame.type === 'delta' || frame.type === 'error',
+          ),
+        );
+        const latest = frames.find((frame) => frame.type === 'result').reply;
+        assert.equal(latest.status, 'EXECUTED');
+        assert.equal(latest.execution.revision, monday.revision + 1);
+        assert.equal(
+          (
+            await mobile.request('getEventSchedule', {
+              token,
+              path: { eventId },
+            })
+          ).matches.find((match) => match.id === old.matchId).startAt,
+          '2027-06-13T03:00:00.000Z',
+        );
+        const abandoned = await mobile.request('createAgentSession', {
+          token,
+          body: { currentEventId: eventId },
+        });
+        const abandonedPreview = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: abandoned.id },
+          body: {
+            eventId,
+            matchId: old.matchId,
+            message: '把这场改到周日下午14点',
+          },
+        });
+        assert.equal(abandonedPreview.status, 'PREVIEW');
+        const otherAction = await mobile.request('sendAgentMessage', {
+          token,
+          path: { sessionId: abandoned.id },
+          body: {
+            eventId,
+            newTask: true,
+            matchId: abandonedPreview.task.matchId,
+            message: '把这场改到周日下午三点',
+          },
+        });
+        // A separate action must invalidate the earlier ticket even if the
+        // new action needs another answer before it can be previewed.
+        assert.ok(
+          ['PREVIEW', 'NEED_PARAMETERS', 'NEED_MATCH'].includes(
+            otherAction.status,
+          ),
+        );
+        assert.notEqual(otherAction.task.id, abandonedPreview.task.id);
+        await assert.rejects(
+          mobile.request('confirmAgentScheduleAdjustment', {
+            token,
+            path: { ticketId: abandonedPreview.task.confirmation.id },
+            body: {
+              eventId,
+              matchId: abandonedPreview.task.confirmation.matchId,
+              parameterHash: abandonedPreview.task.confirmation.parameterHash,
+            },
+          }),
+          { status: 409 },
         );
         await sql.query(
           'UPDATE "HostingApplicationHandlerGrant" SET active=false WHERE "memberId"=$1',

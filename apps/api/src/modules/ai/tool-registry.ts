@@ -38,7 +38,7 @@ export const agentToolRegistry = {
     version: 'v1',
     risk: 'DRAFT_WRITE',
     permission: 'schedule.draft.adjust',
-    confirmation: 'BOUND_TICKET_BUTTON',
+    confirmation: 'BOUND_TICKET_BUTTON_OR_DIALOGUE',
   },
   'schedule.draft.generate': {
     version: 'v1',

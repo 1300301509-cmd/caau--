@@ -481,7 +481,8 @@ export function ScheduleCard({
       if (!valid()) return;
       setSession(latest);
       setReply(next);
-      setResult(undefined);
+      setResult(next.execution ?? undefined);
+      if (next.execution) await refreshSchedule(next.execution.eventId);
       setBlocked(false);
       setForceNew(false);
       setInput('');
