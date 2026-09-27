@@ -513,7 +513,7 @@ export function HostingApplicationPage({
       setBusy(false);
     }
   }
-  async function prepareMaterials() {
+  async function removeOmittedMaterials() {
     let next = detailRef.current;
     if (!next || conflict) throw new Error('材料已变化，请先核对');
     for (const id of omittedRef.current) {
@@ -530,6 +530,16 @@ export function HostingApplicationPage({
       baseRevisionRef.current = next.draftRevision;
       cacheMaterial({ revision: next.draftRevision });
     }
+    if (omittedRef.current.length) {
+      omittedRef.current = [];
+      setOmitted([]);
+      applyDetail(next, true);
+      cacheMaterial({ revision: next.draftRevision, omitted: [] });
+    }
+    return next;
+  }
+  async function prepareMaterials() {
+    let next = await removeOmittedMaterials();
     next = await client.request('HostingController_save', {
       token: session.token,
       path: { id: next.id },
@@ -589,7 +599,8 @@ export function HostingApplicationPage({
     setError('');
     setNotice('');
     try {
-      if (materials) await prepareMaterials();
+      // 附件绑定与表单保存独立，未完成的表单字段不应阻断文件上传。
+      if (materials) await removeOmittedMaterials();
       const bytes = await readBytes(file.path);
       const extension = file.name.split('.').at(-1)!.toLowerCase() as
         | 'pdf'
