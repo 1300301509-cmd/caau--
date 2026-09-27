@@ -109,7 +109,7 @@ export function HostingApplicationPage({
   const materialEventRef = useRef(materialEventId);
 
   const foreground = useRef(false);
-  const running = useRef(false);
+  const running = useRef<number | null>(null);
   const generation = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const failures = useRef(0);
@@ -269,9 +269,10 @@ export function HostingApplicationPage({
     }
   }
   async function refresh(initial = false) {
-    if (!session.token || !foreground.current || running.current) return;
-    running.current = true;
     const epoch = generation.current;
+    if (!session.token || !foreground.current || running.current === epoch)
+      return;
+    running.current = epoch;
     const token = session.token;
     if (initial) setLoading(true);
     try {
@@ -390,7 +391,7 @@ export function HostingApplicationPage({
         setError('申请暂时无法更新；当前输入已保留，恢复网络后自动重试。');
       }
     } finally {
-      running.current = false;
+      if (running.current === epoch) running.current = null;
       if (epoch === generation.current) {
         setLoading(false);
         if (session.token && foreground.current)
@@ -416,7 +417,8 @@ export function HostingApplicationPage({
   useDidShow(show);
   useDidHide(() => {
     cacheMaterial();
-    restoredId.current = '';
+    // 原生文件选择器也会触发隐藏/显示；当前页面的草稿已在内存中，
+    // 只需返回后重新核权，不要再弹一次恢复草稿确认。
     foreground.current = false;
     stop();
   });
