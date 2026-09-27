@@ -165,6 +165,7 @@ async function main() {
       'CAAU063合成B队',
       'CAAU063合成C队',
       'CAAU063合成D队',
+      ...(process.env.CAAU_DAYPART_ONLY === '1' ? ['CAAU063合成E队'] : []),
     ])
       await request(token, 'POST', 'teams', {
         id: randomUUID(),
@@ -187,6 +188,128 @@ async function main() {
     const before = await sql.query(
       'SELECT (SELECT count(*)::int FROM "EventScheduleVersion") versions, (SELECT count(*)::int FROM "AgentConfirmationTicket") tickets, (SELECT count(*)::int FROM "AgentTask") tasks',
     );
+    if (process.env.CAAU_DAYPART_ONLY === '1') {
+      const chat = await request(token, 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const route = `agent/sessions/${chat.id}/messages`;
+      const send = (message, plan) =>
+        request(token, 'POST', route, {
+          message,
+          eventId: event.id,
+          ...(plan
+            ? { planningId: plan.id, planningRevision: plan.revision }
+            : {}),
+        });
+      stage = 'ten-day whole-schedule request';
+      let reply = await send(
+        '帮我重新编排赛程，从2027-06-01开始，10天完成，所有队伍都比过一场',
+      );
+      console.log('Qwen daypart stage', {
+        status: reply.status,
+        conditions:
+          reply.planningRequest?.conditions?.map((item) => ({
+            kind: item.kind,
+            from: item.from,
+            to: item.to,
+          })) ?? [],
+        pendingCount: reply.planningRequest?.pending?.length ?? 0,
+      });
+      assert.equal(reply.status, 'PLAN');
+      let plan = reply.planningRequest;
+      assert.equal(
+        plan.conditions.find((item) => item.kind === 'DATE_RANGE')?.to,
+        '2027-06-10',
+      );
+      assert.ok(plan.pending.some((item) => item.includes('对阵规则')));
+      stage = 'natural-language round robin and three daily capacities';
+      reply = await send(
+        '每两只队伍各交手一次，上午最多排一场，下午可以排两场，晚上可以排一场',
+        plan,
+      );
+      assert.equal(reply.status, 'PLAN');
+      plan = reply.planningRequest;
+      assert.equal(
+        plan.conditions.find((item) => item.kind === 'FORMAT')?.format,
+        'ROUND_ROBIN',
+      );
+      assert.equal(
+        plan.conditions.filter((item) => item.kind === 'DAYPART_CAPACITY')
+          .length,
+        3,
+      );
+      assert.equal(
+        plan.conditions.find((item) => item.kind === 'DATE_RANGE')?.to,
+        '2027-06-10',
+      );
+      assert.ok(plan.pending.some((item) => item.includes('从几点到几点')));
+      stage = 'time boundaries and event-wide scope';
+      reply = await send(
+        '按整个赛事每天统计。上午09:00到12:00，下午13:00到17:00，晚上18:00到21:00。',
+        plan,
+      );
+      assert.equal(reply.status, 'PLAN');
+      plan = reply.planningRequest;
+      assert.deepEqual(plan.pending, []);
+      assert.equal(
+        plan.conditions.find((item) => item.daypart === 'MORNING')
+          ?.capacityScope,
+        'EVENT',
+      );
+      stage = 'confirm requirements only';
+      await request(
+        token,
+        'POST',
+        `agent/planning-requests/${plan.id}/confirm`,
+        {
+          expectedRevision: plan.revision,
+        },
+      );
+      const participants = await request(
+        token,
+        'GET',
+        `events/${event.id}/teams`,
+      );
+      stage = 'calculate independent ten-match candidate';
+      const candidate = await request(
+        token,
+        'POST',
+        `agent/planning-requests/${plan.id}/candidates`,
+        {
+          expectedRevision: plan.revision,
+          baselineRevision: 0,
+          format: 'ROUND_ROBIN',
+          configSource: 'EXPLICIT',
+          config: {
+            teamIds: participants.map((team) => team.id),
+            venues: ['合成一号场'],
+            startDate: '2027-06-01',
+            endDate: '2027-06-10',
+            dailyStart: '09:00',
+            dailyEnd: '21:00',
+            durationMinutes: 60,
+            bufferMinutes: 0,
+            minRestMinutes: 60,
+          },
+          fixedMatchIds: [],
+        },
+      );
+      assert.equal(candidate.status, 'FOUND');
+      assert.equal(candidate.matches.length, 10);
+      assert.deepEqual(candidate.issues, []);
+      assert.deepEqual(
+        (
+          await sql.query(
+            'SELECT (SELECT count(*)::int FROM "EventScheduleVersion") versions, (SELECT count(*)::int FROM "AgentConfirmationTicket") tickets, (SELECT count(*)::int FROM "AgentTask") tasks',
+          )
+        ).rows,
+        before.rows,
+      );
+      console.log(
+        'PASS: QWEN three-turn daypart requirements, confirmed candidate with 10 matches; no formal schedule write.',
+      );
+      return;
+    }
     if (process.env.CAAU_CANDIDATE_ONLY !== '1') {
       const chat = await request(token, 'POST', 'agent/sessions', {});
       const route = `agent/sessions/${chat.id}`;
@@ -293,6 +416,13 @@ async function main() {
       kinds:
         previewReply.planningRequest?.conditions?.map((item) => item.kind) ??
         [],
+      conditions:
+        previewReply.planningRequest?.conditions?.map((item) => ({
+          kind: item.kind,
+          availability: item.availability,
+          priority: item.priority,
+          dates: item.dates,
+        })) ?? [],
     });
     assert.equal(previewReply.status, 'PLAN');
     previewPlan = previewReply.planningRequest;

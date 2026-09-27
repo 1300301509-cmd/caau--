@@ -57,9 +57,11 @@ function PlanningCard({
               ? `赛事日期 ${item.from ?? '待明确'} 至 ${item.to ?? '待明确'}${item.durationDays ? `（共 ${item.durationDays} 天）` : ''}${item.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : item.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
               : item.kind === 'FORMAT'
                 ? '单循环：每两支参赛球队各交手一次'
-                : item.kind === 'TEAM_WINDOW'
-                  ? `${item.teamLabel}：${item.availability === 'ONLY' ? '只在' : item.availability === 'BLOCK' ? '不在' : '可在'} ${item.dates?.join('、')} ${item.startTime}—${item.endTime} 安排`
-                  : `${item.teamLabel} 与 ${item.opponentLabel}：${item.matchup === 'PREFER' ? '倾向相遇' : '尽量避免相遇'}（不新增比赛）`}
+                : item.kind === 'DAYPART_CAPACITY'
+                  ? `${{ MORNING: '上午', AFTERNOON: '下午', EVENING: '晚上' }[item.daypart ?? 'MORNING']} ${item.startTime ?? '时间待补'}—${item.endTime ?? '时间待补'}，${item.capacityScope === 'VENUE' ? '每个场地' : item.capacityScope === 'EVENT' ? '整个赛事' : '统计范围待补'}每天最多 ${item.maxMatchesPerDay ?? '待补'} 场`
+                  : item.kind === 'TEAM_WINDOW'
+                    ? `${item.teamLabel}：${item.availability === 'ONLY' ? '只在' : item.availability === 'BLOCK' ? '不在' : '可在'} ${item.dates?.join('、')} ${item.startTime}—${item.endTime} 安排`
+                    : `${item.teamLabel} 与 ${item.opponentLabel}：${item.matchup === 'PREFER' ? '倾向相遇' : '尽量避免相遇'}（不新增比赛）`}
           </Text>
           <Text className="competition-note">
             {item.priority === 'MUST' ? '必须满足' : '尽量满足'} ·{' '}
@@ -75,6 +77,15 @@ function PlanningCard({
           ))}
         </View>
       ))}
+      {new Set(
+        planning.conditions
+          .filter((item) => item.kind === 'DAYPART_CAPACITY')
+          .map((item) => item.daypart),
+      ).size === 3 && (
+        <Text className="competition-note">
+          已设置三个时段：候选比赛仅排在这些明确时段内，空档不会安排。
+        </Text>
+      )}
       {planning.status === 'STALE' && (
         <Text className="competition-error">
           参赛记录已停用，原确认失效；请移除条件后重新确认。

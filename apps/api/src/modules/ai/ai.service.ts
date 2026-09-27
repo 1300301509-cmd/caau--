@@ -26,6 +26,7 @@ import {
 } from '../authorization/authorization.service.js';
 import {
   deny,
+  eventOperationsScope,
   isHeadquartersSuperAdmin,
   scheduleDraftAdjust,
   scheduleRead,
@@ -35,6 +36,8 @@ import {
 import { SchedulingService } from '../scheduling/scheduling.service.js';
 import { PlanningService } from './planning.service.js';
 import { personalMemoryContent } from './memory-policy.js';
+import { AgentSkillService, type RuntimeSkills } from './skill.service.js';
+import { requireAgentTool } from './tool-registry.js';
 import type { CandidateService } from './candidate.service.js';
 import { planningProposalSchema, type PlanningProposal } from './planning.js';
 import type { ScheduleMatchDto } from '../scheduling/scheduling.dto.js';
@@ -103,6 +106,7 @@ type RuntimeContext = {
   eventId?: string;
   matchId?: string;
   taskId?: string;
+  skills?: RuntimeSkills;
 };
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 type QuerySource = {
@@ -328,6 +332,7 @@ export class AiService implements OnModuleDestroy {
     databaseUrl?: string,
     private readonly planning = new PlanningService(),
     private readonly candidates?: CandidateService,
+    private readonly skills?: AgentSkillService,
   ) {
     this.checkpoint = databaseUrl
       ? createAgentCheckpointer(databaseUrl)
@@ -355,7 +360,7 @@ export class AiService implements OnModuleDestroy {
         return {
           answer: await this.model.chat(
             state.message,
-            checked.context,
+            { ...checked.context, skills: runtime.skills },
             state.kind as 'CHAT' | 'CLARIFY' | 'UNSUPPORTED',
           ),
         };
@@ -447,6 +452,19 @@ export class AiService implements OnModuleDestroy {
         : null,
       expiresAt: task.previewExpiresAt?.toISOString() ?? null,
     };
+  }
+
+  private async visibleConfirmation(
+    tx: Tx,
+    actor: Actor,
+    ticket: AgentTicketRow | null | undefined,
+  ) {
+    if (!ticket || ticket.state !== 'PENDING') return ticket ?? null;
+    const allowed = await tx.event.findFirst({
+      where: { AND: [{ id: ticket.eventId }, eventOperationsScope(actor)] },
+      select: { id: true },
+    });
+    return allowed ? ticket : null;
   }
 
   private async validateSessionAccess(
@@ -553,6 +571,7 @@ export class AiService implements OnModuleDestroy {
   }
 
   confirmScheduleAdjustment(token: string, ticketId: string, input: unknown) {
+    requireAgentTool('schedule.draft.adjust', 'DRAFT_WRITE');
     const body = bodyObject(input, ['eventId', 'matchId', 'parameterHash']);
     const eventId = uuid(body.eventId);
     const matchId = uuid(body.matchId);
@@ -781,6 +800,7 @@ export class AiService implements OnModuleDestroy {
     const loaded = await tx.agentSession.findUniqueOrThrow({
       where: { id },
       include: {
+        pendingQuestion: true,
         turns: { orderBy: { sequence: 'desc' }, take: 20 },
         tasks: {
           orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
@@ -829,6 +849,9 @@ export class AiService implements OnModuleDestroy {
       }
     }
     const receiptEventId = loaded.currentEventId ?? task?.eventId;
+    const visibleTicket = task
+      ? await this.visibleConfirmation(tx, actor, task.confirmationTickets?.[0])
+      : null;
     const receipt = receiptEventId
       ? await tx.agentCommandReceipt.findFirst({
           where: {
@@ -851,10 +874,28 @@ export class AiService implements OnModuleDestroy {
         content: turn.content,
         createdAt: turn.createdAt.toISOString(),
       })),
-      task: task ? this.taskView(task) : null,
+      task: task
+        ? this.taskView({
+            ...task,
+            confirmationTickets: visibleTicket ? [visibleTicket] : [],
+          })
+        : null,
       planningRequest: planning
         ? await this.planning.view(tx, actor, planning)
         : null,
+      pendingQuestion:
+        loaded.pendingQuestion &&
+        loaded.pendingQuestion.expiresAt > new Date() &&
+        planning?.id === loaded.pendingQuestion.planningId &&
+        planning.revision === loaded.pendingQuestion.planningRevision
+          ? {
+              kind: loaded.pendingQuestion.kind,
+              question: loaded.pendingQuestion.question,
+              planningId: loaded.pendingQuestion.planningId,
+              planningRevision: loaded.pendingQuestion.planningRevision,
+              expiresAt: loaded.pendingQuestion.expiresAt.toISOString(),
+            }
+          : null,
       lastExecution: receipt
         ? {
             executedAt: receipt.createdAt.toISOString(),
@@ -905,6 +946,7 @@ export class AiService implements OnModuleDestroy {
     body: MessageBody,
     expectedTask?: { id: string; revision: number },
   ) {
+    requireAgentTool('schedule.adjust.preview', 'PREVIEW');
     return this.auth.run(
       token,
       'agent.workflow.prepare',
@@ -993,9 +1035,29 @@ export class AiService implements OnModuleDestroy {
           take: 30,
           select: { content: true },
         });
+        const pending = await tx.agentPendingQuestion.findUnique({
+          where: { sessionId },
+        });
+        if (
+          pending &&
+          ((body.eventId && body.eventId !== pending.eventId) || body.newTask)
+        )
+          await tx.agentPendingQuestion.delete({ where: { sessionId } });
+        const pendingQuestion =
+          pending &&
+          !body.newTask &&
+          (!body.eventId || body.eventId === pending.eventId) &&
+          pending.expiresAt > new Date() &&
+          planning?.id === pending.planningId &&
+          planning.revision === pending.planningRevision
+            ? pending
+            : null;
+        const skills = await this.skills?.activeInTransaction(tx);
         return {
           task,
+          pendingQuestion,
           context: {
+            skills,
             ...(session.contextSummary
               ? { summary: session.contextSummary }
               : {}),
@@ -1181,6 +1243,7 @@ export class AiService implements OnModuleDestroy {
               orderBy: { createdAt: 'desc' },
             })
           : null;
+        const visibleTicket = await this.visibleConfirmation(tx, actor, ticket);
         return {
           sessionId,
           status: kind,
@@ -1190,7 +1253,7 @@ export class AiService implements OnModuleDestroy {
           task: task
             ? this.taskView({
                 ...task,
-                confirmationTickets: ticket ? [ticket] : [],
+                confirmationTickets: visibleTicket ? [visibleTicket] : [],
               })
             : null,
         };
@@ -1203,13 +1266,17 @@ export class AiService implements OnModuleDestroy {
     token: string,
     sessionId: string,
     body: MessageBody,
+    skills?: RuntimeSkills,
   ): Promise<QueryPlan> {
     const { context } = await this.checkedDialogueContext(
       token,
       sessionId,
       body,
     );
-    const plan = await this.model.planQuery(body.message, context);
+    const plan = await this.model.planQuery(body.message, {
+      ...context,
+      skills,
+    });
     const parsed = queryPlanSchema.safeParse(plan);
     if (!parsed.success)
       throw new BadGatewayException('Invalid read-only query proposal');
@@ -1352,10 +1419,11 @@ export class AiService implements OnModuleDestroy {
           body.matchId || referencesMatch || ordinal
             ? 'schedule.match'
             : plan.tool;
+        const registered = requireAgentTool(toolName, 'READ');
         const tool = scheduleTools[toolName];
         if (
           tool.mutates ||
-          tool.permission !== 'schedule.read' ||
+          tool.permission !== registered.permission ||
           !tool.schema.safeParse(plan).success
         )
           throw new BadGatewayException('Invalid read-only tool arguments');
@@ -1544,6 +1612,7 @@ export class AiService implements OnModuleDestroy {
               orderBy: { createdAt: 'desc' },
             })
           : null;
+        const visibleTicket = await this.visibleConfirmation(tx, actor, ticket);
         return {
           sessionId,
           status: response.status,
@@ -1553,7 +1622,7 @@ export class AiService implements OnModuleDestroy {
           task: task
             ? this.taskView({
                 ...task,
-                confirmationTickets: ticket ? [ticket] : [],
+                confirmationTickets: visibleTicket ? [visibleTicket] : [],
               })
             : null,
         };
@@ -1566,13 +1635,17 @@ export class AiService implements OnModuleDestroy {
     token: string,
     sessionId: string,
     body: MessageBody,
+    skills?: RuntimeSkills,
   ): Promise<PlanningProposal> {
     const { context } = await this.checkedDialogueContext(
       token,
       sessionId,
       body,
     );
-    const result = await this.model.planPlanning(body.message, context);
+    const result = await this.model.planPlanning(body.message, {
+      ...context,
+      skills,
+    });
     const parsed = planningProposalSchema.safeParse(result);
     if (!parsed.success)
       throw new BadGatewayException('Invalid planning proposal');
@@ -1584,7 +1657,13 @@ export class AiService implements OnModuleDestroy {
     sessionId: string,
     body: MessageBody,
     proposal: PlanningProposal,
+    resolved?: {
+      message: string;
+      planningId: string;
+      planningRevision: number;
+    },
   ) {
+    requireAgentTool('schedule.requirements.collect', 'REQUIREMENTS');
     return this.auth.run(
       token,
       'agent.planning.collect',
@@ -1597,27 +1676,52 @@ export class AiService implements OnModuleDestroy {
           sessionId,
           body.taskId,
         );
+        if (resolved) {
+          const pending = await tx.agentPendingQuestion.findUnique({
+            where: { sessionId },
+          });
+          if (
+            !pending ||
+            pending.kind !== 'ROUND_ROBIN' ||
+            pending.planningId !== resolved.planningId ||
+            pending.planningRevision !== resolved.planningRevision ||
+            pending.expiresAt <= new Date()
+          )
+            throw new ConflictException(
+              'Clarification changed; refresh and retry',
+            );
+        }
         const sourceTurnId = randomUUID();
         const result = await this.planning.apply(
           tx,
           actor,
           {
             sessionId,
-            message: body.message,
+            message: resolved?.message ?? body.message,
             eventId: body.eventId,
-            planningId: body.planningId,
-            planningRevision: body.planningRevision,
+            planningId: resolved?.planningId ?? body.planningId,
+            planningRevision:
+              resolved?.planningRevision ?? body.planningRevision,
             teamId: body.teamId,
           },
           proposal,
           sourceTurnId,
+        );
+        const pendingQuestion = await this.syncPlanningQuestion(
+          tx,
+          sessionId,
+          result.planning,
         );
         await this.appendTurns(
           tx,
           sessionId,
           body.message,
           result.message,
-          json({ kind: 'PLAN', eventId: result.planning?.eventId ?? null }),
+          json({
+            kind: 'PLAN',
+            eventId: result.planning?.eventId ?? null,
+            ...(resolved ? { answeredQuestion: 'ROUND_ROBIN' } : {}),
+          }),
           json({
             kind: 'PLAN',
             eventId: result.planning?.eventId ?? null,
@@ -1632,6 +1736,7 @@ export class AiService implements OnModuleDestroy {
               orderBy: { createdAt: 'desc' },
             })
           : null;
+        const visibleTicket = await this.visibleConfirmation(tx, actor, ticket);
         return {
           sessionId,
           status: result.status,
@@ -1640,16 +1745,66 @@ export class AiService implements OnModuleDestroy {
           task: task
             ? this.taskView({
                 ...task,
-                confirmationTickets: ticket ? [ticket] : [],
+                confirmationTickets: visibleTicket ? [visibleTicket] : [],
               })
             : null,
           planningRequest:
             result.planning ??
             (await this.planning.latest(tx, actor, sessionId)),
+          pendingQuestion,
         };
       },
       { retries: 5 },
     );
+  }
+
+  private async syncPlanningQuestion(
+    tx: Tx,
+    sessionId: string,
+    planning: Awaited<ReturnType<PlanningService['latest']>>,
+  ) {
+    if (!planning) return null;
+    const first = planning.pending[0];
+    const kind = first
+      ? /起始日期|日期范围/.test(first)
+        ? 'START_DATE'
+        : /对阵规则|单循环/.test(first)
+          ? 'ROUND_ROBIN'
+          : null
+      : null;
+    if (!kind || !first) {
+      await tx.agentPendingQuestion.deleteMany({ where: { sessionId } });
+      return null;
+    }
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await tx.agentPendingQuestion.upsert({
+      where: { sessionId },
+      create: {
+        sessionId,
+        kind,
+        planningId: planning.id,
+        eventId: planning.eventId,
+        planningRevision: planning.revision,
+        question: first.slice(0, 500),
+        expiresAt,
+      },
+      update: {
+        kind,
+        planningId: planning.id,
+        eventId: planning.eventId,
+        planningRevision: planning.revision,
+        question: first.slice(0, 500),
+        expiresAt,
+        updatedAt: new Date(),
+      },
+    });
+    return {
+      kind,
+      question: first.slice(0, 500),
+      planningId: planning.id,
+      planningRevision: planning.revision,
+      expiresAt: expiresAt.toISOString(),
+    };
   }
 
   async confirmPlanningRequest(
@@ -1695,6 +1850,23 @@ export class AiService implements OnModuleDestroy {
     lastQuery?: { eventId: string; matchId?: string },
     planning?: ConversationContext['planning'],
   ): ConversationRoute {
+    // The production model's structured route is the semantic decision.
+    // Keep only task-state validation here; the simulated adapter below still
+    // exercises legacy fixtures without granting any business capability.
+    if (this.model?.status().mode === 'QWEN') {
+      if (
+        routed === 'CONTINUE' &&
+        (!activeTask ||
+          ![
+            'LOCATE_EVENT',
+            'LOCATE_MATCH',
+            'WAITING_PARAMETERS',
+            'PREVIEW_READY',
+          ].includes(activeTask.step))
+      )
+        return 'CLARIFY';
+      return routed;
+    }
     let kind = routed;
     if (
       /(?:收集|记录|建立|添加|修改|取消|撤销).*(?:排程需求|排程要求|排程约束|球队时间限制)/.test(
@@ -2125,11 +2297,31 @@ export class AiService implements OnModuleDestroy {
     await this.refreshConversationSummary(token, sessionId);
     // Read and authorize every historical task BEFORE sending any history or
     // preview to either the router or chat model. A revoked session fails closed.
-    const { task: activeTask, context } = await this.checkedDialogueContext(
-      token,
-      sessionId,
-      body,
-    );
+    const {
+      task: activeTask,
+      context,
+      pendingQuestion,
+    } = await this.checkedDialogueContext(token, sessionId, body);
+    const skills = context.skills;
+    if (
+      pendingQuestion?.kind === 'ROUND_ROBIN' &&
+      /^(?:是|是的|对|对的|没错|确定|确认|可以|好的)[。！!，,\s]*$/.test(
+        body.message.trim(),
+      )
+    ) {
+      const resolved = {
+        message: '每队与其他队都交手一次',
+        planningId: pendingQuestion.planningId,
+        planningRevision: pendingQuestion.planningRevision,
+      };
+      const proposal = await this.planRequirements(
+        token,
+        sessionId,
+        { ...body, message: resolved.message },
+        skills,
+      );
+      return this.saveRequirements(token, sessionId, body, proposal, resolved);
+    }
     const suggestedMemory = personalMemoryProposal(body.message);
     if (suggestedMemory) {
       const response = await this.saveDialogue(
@@ -2152,8 +2344,13 @@ export class AiService implements OnModuleDestroy {
         eventId: body.eventId,
         matchId: body.matchId,
         taskId: body.taskId,
+        skills,
       },
-      () => this.dialogGraph.invoke({ message: body.message, context }),
+      () =>
+        this.dialogGraph.invoke({
+          message: body.message,
+          context: { ...context, skills },
+        }),
     );
     const kind = this.resolveDialogueRoute(
       dialog.kind,
@@ -2163,11 +2360,16 @@ export class AiService implements OnModuleDestroy {
       context.planning,
     );
     if (kind === 'PLAN') {
-      const proposal = await this.planRequirements(token, sessionId, body);
+      const proposal = await this.planRequirements(
+        token,
+        sessionId,
+        body,
+        skills,
+      );
       return this.saveRequirements(token, sessionId, body, proposal);
     }
     if (kind === 'QUERY') {
-      const plan = await this.planScheduleQuery(token, sessionId, body);
+      const plan = await this.planScheduleQuery(token, sessionId, body, skills);
       const result = await this.executeScheduleQuery(
         token,
         sessionId,
@@ -2181,7 +2383,11 @@ export class AiService implements OnModuleDestroy {
         (dialog.kind === kind && dialog.answer) ||
         (await this.model.chat(
           body.message,
-          (await this.checkedDialogueContext(token, sessionId, body)).context,
+          {
+            ...(await this.checkedDialogueContext(token, sessionId, body))
+              .context,
+            skills,
+          },
           kind,
         ));
       return this.saveDialogue(token, sessionId, body, kind, response);
@@ -2230,6 +2436,7 @@ export class AiService implements OnModuleDestroy {
         eventId:
           workflowBody.eventId ?? prepared.sessionCurrentEventId ?? undefined,
         matchId: workflowBody.matchId,
+        skills,
       },
       () => this.graph.invoke(initial, config),
     );
@@ -2249,10 +2456,15 @@ export class AiService implements OnModuleDestroy {
           where: { taskId: current!.id },
           orderBy: { createdAt: 'desc' },
         });
-        return {
+        const visibleTicket = await this.visibleConfirmation(
+          tx,
+          actor,
+          confirmation,
+        );
+        return this.taskView({
           ...current!,
-          confirmationTickets: confirmation ? [confirmation] : [],
-        };
+          confirmationTickets: visibleTicket ? [visibleTicket] : [],
+        });
       },
     );
     return {
@@ -2260,7 +2472,7 @@ export class AiService implements OnModuleDestroy {
       status: state.status,
       message: state.responseMessage,
       candidates: state.candidates,
-      task: this.taskView(task),
+      task,
       planningRequest: await this.auth.run(
         token,
         'agent.planning.view',
@@ -2298,6 +2510,7 @@ export class AiService implements OnModuleDestroy {
     const patch = await this.model.parse(
       context.message,
       state.parameters ?? {},
+      context.skills?.TOOL_SELECTION?.instructions,
     );
     const next = mergeAgentIntent(state.parameters ?? {}, patch);
     if (context.matchId) {
@@ -2571,6 +2784,12 @@ export class AiService implements OnModuleDestroy {
           select: { name: true },
         });
         if (!event) deny();
+        const canConfirm = !!(await tx.event.findFirst({
+          where: {
+            AND: [{ id: preview.eventId }, eventOperationsScope(actor)],
+          },
+          select: { id: true },
+        }));
         const consumedAt = new Date();
         await tx.agentConfirmationTicket.updateMany({
           where: { taskId: task.id, state: 'PENDING' },
@@ -2593,27 +2812,28 @@ export class AiService implements OnModuleDestroy {
           expectedRevision: preview.baselineRevision,
           summary,
         });
-        await tx.agentConfirmationTicket.create({
-          data: {
-            id: randomUUID(),
-            taskId: task.id,
-            ownerId: actor.id,
-            actorDisplayName: actor.displayName,
-            eventId: preview.eventId,
-            eventName: event.name,
-            matchId: preview.after.id,
-            startAt: new Date(preview.after.startAt),
-            venue: preview.after.venue,
-            expectedRevision: preview.baselineRevision,
-            parameterSummary: json(summary),
-            parameterHash,
-            toolName: confirmationTool.name,
-            toolVersion: confirmationTool.version,
-            commandId: randomUUID(),
-            state: 'PENDING',
-            expiresAt: new Date(preview.expiresAt),
-          },
-        });
+        if (canConfirm)
+          await tx.agentConfirmationTicket.create({
+            data: {
+              id: randomUUID(),
+              taskId: task.id,
+              ownerId: actor.id,
+              actorDisplayName: actor.displayName,
+              eventId: preview.eventId,
+              eventName: event.name,
+              matchId: preview.after.id,
+              startAt: new Date(preview.after.startAt),
+              venue: preview.after.venue,
+              expectedRevision: preview.baselineRevision,
+              parameterSummary: json(summary),
+              parameterHash,
+              toolName: confirmationTool.name,
+              toolVersion: confirmationTool.version,
+              commandId: randomUUID(),
+              state: 'PENDING',
+              expiresAt: new Date(preview.expiresAt),
+            },
+          });
         const changed = await tx.agentTask.updateMany({
           where: { id: task.id, revision: state.revision },
           data: {
@@ -2629,17 +2849,19 @@ export class AiService implements OnModuleDestroy {
           throw new ConflictException(
             'Agent task changed; retry with latest state',
           );
-        return state.revision + 1;
+        return { revision: state.revision + 1, canConfirm };
       },
     );
     return {
-      revision: result,
+      revision: result.revision,
       step: 'PREVIEW_READY',
       pendingFields: [],
       status: 'PREVIEW' as const,
-      responseMessage: preview.issues.length
-        ? `预览已生成，确定性校验发现 ${preview.issues.length} 项冲突。此操作尚未保存。`
-        : '预览已生成，确定性校验未发现冲突。此操作尚未保存。',
+      responseMessage: !result.canConfirm
+        ? '已生成只读预览。当前账号没有保存赛程草稿的权限，未创建确认票据。'
+        : preview.issues.length
+          ? `预览已生成，确定性校验发现 ${preview.issues.length} 项冲突。此操作尚未保存。`
+          : '预览已生成，确定性校验未发现冲突。此操作尚未保存。',
       candidates: [],
     };
   }

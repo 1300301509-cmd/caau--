@@ -19,6 +19,7 @@ import type {
 } from '../scheduling/scheduling.dto.js';
 import { planningIssues, type PlanningCondition } from './planning.js';
 import { PlanningService } from './planning.service.js';
+import { requireAgentTool } from './tool-registry.js';
 import {
   calculateCandidate,
   type PreferenceReport,
@@ -249,6 +250,7 @@ export class CandidateService {
     );
   }
   generate(token: string, planningId: string, input: unknown) {
+    requireAgentTool('schedule.candidate.preview', 'PREVIEW');
     return this.auth.run(
       token,
       'agent.candidate.preview',

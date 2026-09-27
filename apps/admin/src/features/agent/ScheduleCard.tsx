@@ -72,9 +72,11 @@ function PlanningCard({
               ? `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `（共 ${condition.durationDays} 天）` : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
               : condition.kind === 'FORMAT'
                 ? '单循环：每两支参赛球队各交手一次'
-                : condition.kind === 'TEAM_WINDOW'
-                  ? `${condition.teamLabel}：${condition.availability === 'ONLY' ? '只在' : condition.availability === 'BLOCK' ? '不在' : '可在'} ${condition.dates?.join('、')} ${condition.startTime}—${condition.endTime} 安排`
-                  : `${condition.teamLabel} 与 ${condition.opponentLabel}：${condition.matchup === 'PREFER' ? '倾向交手' : '尽量避免交手'}（不新增比赛）`}
+                : condition.kind === 'DAYPART_CAPACITY'
+                  ? `${{ MORNING: '上午', AFTERNOON: '下午', EVENING: '晚上' }[condition.daypart ?? 'MORNING']} ${condition.startTime ?? '时间待补'}—${condition.endTime ?? '时间待补'}，${condition.capacityScope === 'VENUE' ? '每个场地' : condition.capacityScope === 'EVENT' ? '整个赛事' : '统计范围待补'}每天最多 ${condition.maxMatchesPerDay ?? '待补'} 场`
+                  : condition.kind === 'TEAM_WINDOW'
+                    ? `${condition.teamLabel}：${condition.availability === 'ONLY' ? '只在' : condition.availability === 'BLOCK' ? '不在' : '可在'} ${condition.dates?.join('、')} ${condition.startTime}—${condition.endTime} 安排`
+                    : `${condition.teamLabel} 与 ${condition.opponentLabel}：${condition.matchup === 'PREFER' ? '倾向交手' : '尽量避免交手'}（不新增比赛）`}
             <small>
               {' '}
               · {condition.priority === 'MUST' ? '必须满足' : '尽量满足'} ·{' '}
@@ -94,6 +96,15 @@ function PlanningCard({
           </li>
         ))}
       </ol>
+      {new Set(
+        planning.conditions
+          .filter((item) => item.kind === 'DAYPART_CAPACITY')
+          .map((item) => item.daypart),
+      ).size === 3 && (
+        <p>
+          已设置上午、下午、晚上三个时段：候选比赛仅排在这些明确时段内，空档不会安排。
+        </p>
+      )}
       {planning.status === 'STALE' && (
         <Alert
           type="error"

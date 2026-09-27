@@ -547,10 +547,41 @@
         ],
         "type": "object"
       },
+      "AgentPendingQuestionDto": {
+        "properties": {
+          "expiresAt": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "planningId": {
+            "type": "string"
+          },
+          "planningRevision": {
+            "type": "number"
+          },
+          "question": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "question",
+          "planningId",
+          "planningRevision",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
       "AgentPlanningConditionDto": {
         "properties": {
           "availability": {
             "enum": ["AVAILABLE", "ONLY", "BLOCK"],
+            "type": "string"
+          },
+          "capacityScope": {
+            "enum": ["EVENT", "VENUE"],
             "type": "string"
           },
           "confirmation": {
@@ -566,6 +597,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "daypart": {
+            "enum": ["MORNING", "AFTERNOON", "EVENING"],
+            "type": "string"
           },
           "durationDays": {
             "type": "number"
@@ -587,12 +622,21 @@
             "type": "string"
           },
           "kind": {
-            "enum": ["DATE_RANGE", "TEAM_WINDOW", "MATCHUP", "FORMAT"],
+            "enum": [
+              "DATE_RANGE",
+              "TEAM_WINDOW",
+              "MATCHUP",
+              "FORMAT",
+              "DAYPART_CAPACITY"
+            ],
             "type": "string"
           },
           "matchup": {
             "enum": ["PREFER", "AVOID"],
             "type": "string"
+          },
+          "maxMatchesPerDay": {
+            "type": "number"
           },
           "opponentId": {
             "type": "string"
@@ -738,6 +782,15 @@
           "message": {
             "maxLength": 4000,
             "type": "string"
+          },
+          "pendingQuestion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentPendingQuestionDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
           },
           "planningRequest": {
             "allOf": [
@@ -951,6 +1004,15 @@
             "nullable": true,
             "type": "object"
           },
+          "pendingQuestion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentPendingQuestionDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
           "planningRequest": {
             "allOf": [
               {
@@ -983,6 +1045,58 @@
           }
         },
         "required": ["id", "summary", "updatedAt", "turns"],
+        "type": "object"
+      },
+      "AgentSkillInputDto": {
+        "properties": {
+          "instructions": {
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "skillKey": {
+            "enum": ["INTENT_ROUTING", "TOOL_SELECTION", "SCHEDULE_PLANNING"],
+            "type": "string"
+          }
+        },
+        "required": ["skillKey", "instructions"],
+        "type": "object"
+      },
+      "AgentSkillVersionDto": {
+        "properties": {
+          "activatedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instructions": {
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "skillKey": {
+            "enum": ["INTENT_ROUTING", "TOOL_SELECTION", "SCHEDULE_PLANNING"],
+            "type": "string"
+          },
+          "state": {
+            "enum": ["DRAFT", "ACTIVE", "RETIRED"],
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "skillKey",
+          "instructions",
+          "id",
+          "version",
+          "state",
+          "createdAt"
+        ],
         "type": "object"
       },
       "AgentTaskParametersDto": {
@@ -1083,6 +1197,28 @@
           }
         },
         "required": ["id", "goal", "step", "parameters", "pendingFields"],
+        "type": "object"
+      },
+      "AgentToolDefinitionDto": {
+        "properties": {
+          "confirmation": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "risk": {
+            "enum": ["READ", "REQUIREMENTS", "PREVIEW", "DRAFT_WRITE"],
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "version", "risk", "permission", "confirmation"],
         "type": "object"
       },
       "AgentTurnViewDto": {
@@ -12206,6 +12342,141 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GovernanceResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/agent/skills": {
+      "get": {
+        "operationId": "listAgentSkillVersions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentSkillVersionDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      },
+      "post": {
+        "operationId": "createAgentSkillVersion",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSkillInputDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillVersionDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/agent/skills/tools/catalog": {
+      "get": {
+        "operationId": "listAgentToolCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentToolDefinitionDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": ["governance"]
+      }
+    },
+    "/api/v1/observability/agent/skills/{id}/activate": {
+      "post": {
+        "operationId": "activateAgentSkillVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSkillVersionDto"
                 }
               }
             },

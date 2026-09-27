@@ -1972,6 +1972,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/observability/agent/skills': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listAgentSkillVersions'];
+    put?: never;
+    post: operations['createAgentSkillVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/agent/skills/tools/catalog': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listAgentToolCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/observability/agent/skills/{id}/activate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['activateAgentSkillVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/observability/alerts/{id}/acknowledge': {
     parameters: {
       query?: never;
@@ -2496,14 +2544,25 @@ export interface components {
       mode: 'SIMULATED' | 'QWEN';
       modelName: string;
     };
+    AgentPendingQuestionDto: {
+      expiresAt: string;
+      kind: string;
+      planningId: string;
+      planningRevision: number;
+      question: string;
+    };
     AgentPlanningConditionDto: {
       /** @enum {string} */
       availability?: 'AVAILABLE' | 'ONLY' | 'BLOCK';
+      /** @enum {string} */
+      capacityScope?: 'EVENT' | 'VENUE';
       /** @enum {string} */
       confirmation: 'PENDING' | 'CONFIRMED';
       /** @enum {string} */
       dateSource?: 'USER' | 'EVENT_PROFILE' | 'EVENT_SCHEDULE';
       dates?: string[];
+      /** @enum {string} */
+      daypart?: 'MORNING' | 'AFTERNOON' | 'EVENING';
       durationDays?: number;
       endTime?: string;
       eventId: string;
@@ -2512,9 +2571,15 @@ export interface components {
       from?: string;
       id: string;
       /** @enum {string} */
-      kind: 'DATE_RANGE' | 'TEAM_WINDOW' | 'MATCHUP' | 'FORMAT';
+      kind:
+        | 'DATE_RANGE'
+        | 'TEAM_WINDOW'
+        | 'MATCHUP'
+        | 'FORMAT'
+        | 'DAYPART_CAPACITY';
       /** @enum {string} */
       matchup?: 'PREFER' | 'AVOID';
+      maxMatchesPerDay?: number;
       opponentId?: string;
       opponentLabel?: string;
       /** @enum {string} */
@@ -2551,6 +2616,7 @@ export interface components {
     AgentReplyDto: {
       candidates: components['schemas']['AgentCandidateDto'][];
       message: string;
+      pendingQuestion?: components['schemas']['AgentPendingQuestionDto'] | null;
       planningRequest?:
         | components['schemas']['AgentPlanningRequestViewDto']
         | null;
@@ -2612,6 +2678,7 @@ export interface components {
       currentMatchId?: string | null;
       id: string;
       lastExecution?: components['schemas']['AgentExecutionReceiptDto'] | null;
+      pendingQuestion?: components['schemas']['AgentPendingQuestionDto'] | null;
       planningRequest?:
         | components['schemas']['AgentPlanningRequestViewDto']
         | null;
@@ -2619,6 +2686,22 @@ export interface components {
       task?: components['schemas']['AgentTaskViewDto'] | null;
       turns: components['schemas']['AgentTurnViewDto'][];
       updatedAt: string;
+    };
+    AgentSkillInputDto: {
+      instructions: string;
+      /** @enum {string} */
+      skillKey: 'INTENT_ROUTING' | 'TOOL_SELECTION' | 'SCHEDULE_PLANNING';
+    };
+    AgentSkillVersionDto: {
+      activatedAt?: string | null;
+      createdAt: string;
+      id: string;
+      instructions: string;
+      /** @enum {string} */
+      skillKey: 'INTENT_ROUTING' | 'TOOL_SELECTION' | 'SCHEDULE_PLANNING';
+      /** @enum {string} */
+      state: 'DRAFT' | 'ACTIVE' | 'RETIRED';
+      version: number;
     };
     AgentTaskParametersDto: {
       sourceMatchId?: string;
@@ -2654,6 +2737,14 @@ export interface components {
         | 'FAILED'
         | 'EXECUTED'
         | 'CANCELLED';
+    };
+    AgentToolDefinitionDto: {
+      confirmation: string;
+      name: string;
+      permission: string;
+      /** @enum {string} */
+      risk: 'READ' | 'REQUIREMENTS' | 'PREVIEW' | 'DRAFT_WRITE';
+      version: string;
     };
     AgentTurnViewDto: {
       content: string;
@@ -9825,6 +9916,88 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['GovernanceResultDto'];
+        };
+      };
+    };
+  };
+  listAgentSkillVersions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentSkillVersionDto'][];
+        };
+      };
+    };
+  };
+  createAgentSkillVersion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AgentSkillInputDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentSkillVersionDto'];
+        };
+      };
+    };
+  };
+  listAgentToolCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentToolDefinitionDto'][];
+        };
+      };
+    };
+  };
+  activateAgentSkillVersion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AgentSkillVersionDto'];
         };
       };
     };

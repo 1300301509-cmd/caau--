@@ -10,15 +10,12 @@ import {
 import {
   conditionSummary,
   endAfterDays,
-  explicitRoundRobin,
   expandDays,
-  isWholeScheduleRequest,
   newCondition,
   parseUserDates,
   periodDates,
   planningIssues,
   planningPending,
-  requestedDurationDays,
   validDay,
   type PlanningChange,
   type PlanningCondition,
@@ -237,6 +234,32 @@ export class PlanningService {
     proposal: PlanningProposal,
     sourceTurnId: string,
   ): Promise<PlanningResponse> {
+    // Structured output can carry fields from another condition kind. Ignore
+    // those fields and collapse identical proposals before resolving a team;
+    // the authenticated business data and original user turn remain decisive.
+    const changes = [
+      ...new Map(
+        proposal.changes.map((change) => {
+          const normalized: PlanningChange =
+            change.kind === 'TEAM_WINDOW'
+              ? {
+                  operation: change.operation,
+                  kind: 'TEAM_WINDOW',
+                  eventName: change.eventName,
+                  teamName: change.teamName,
+                  teamId: change.teamId,
+                  dates: change.dates,
+                  weekdays: change.weekdays,
+                  startTime: change.startTime,
+                  endTime: change.endTime,
+                  availability: change.availability,
+                  priority: change.priority,
+                }
+              : change;
+          return [JSON.stringify(normalized), normalized] as const;
+        }),
+      ).values(),
+    ];
     const owned = await tx.agentPlanningRequest.findMany({
       where: { sessionId: context.sessionId, ownerId: actor.id },
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
@@ -253,7 +276,7 @@ export class PlanningService {
     const mentioned = events.filter((event) =>
       context.message.includes(event.name),
     );
-    const named = proposal.changes
+    const named = changes
       .map((change) => change.eventName)
       .filter(
         (value): value is string =>
@@ -316,7 +339,7 @@ export class PlanningService {
       context.teamId &&
       !teams.some((team) => team.id === context.teamId) &&
       !(
-        proposal.changes.every((change) => change.operation === 'REMOVE') &&
+        changes.every((change) => change.operation === 'REMOVE') &&
         row &&
         conditionsOf(row).some((item) => item.teamId === context.teamId)
       )
@@ -333,32 +356,23 @@ export class PlanningService {
       message: string,
       candidates: Candidate[] = [],
     ): PlanningResponse => ({ status, message, candidates, planning: null });
+    if (proposal.unhandled?.length)
+      return answer(
+        'CLARIFY',
+        `本轮还有暂不能可靠记录的要求：${proposal.unhandled.join('；')}。请先核对，不能忽略这些条件后生成赛程。`,
+      );
     const wholeRequest =
-      isWholeScheduleRequest(context.message) ||
-      (requestedDurationDays(context.message) !== null &&
-        proposal.changes.some(
+      proposal.goal === 'WHOLE_SCHEDULE' ||
+      (!row &&
+        changes.some(
           (change) =>
             change.kind === 'DATE_RANGE' && change.durationDays !== undefined,
         ));
-    const formatFollowup =
-      !!row &&
-      conditions.some(
-        (item) => item.kind === 'DATE_RANGE' && item.scheduleGoal,
-      ) &&
-      explicitRoundRobin(context.message);
     if (wholeRequest) {
-      if (
-        proposal.changes.some(
-          (change) =>
-            change.kind === 'TEAM_WINDOW' || change.kind === 'MATCHUP',
-        )
-      )
-        return answer(
-          'CLARIFY',
-          '这条消息同时包含整套赛程和球队时段或对阵偏好，请先明确赛制与日期，再逐条补充其它约束。',
-        );
-      const days = requestedDurationDays(context.message);
-      if (days !== null && (days < 1 || days > 31))
+      const days = changes.find(
+        (change) => change.kind === 'DATE_RANGE',
+      )?.durationDays;
+      if (days !== undefined && (days < 1 || days > 31))
         return {
           status: 'CLARIFY',
           message: '单次候选排程目前最多支持 31 天，请明确不超过 31 天的范围。',
@@ -430,8 +444,10 @@ export class PlanningService {
       );
     }
     if (
-      (wholeRequest || formatFollowup) &&
-      explicitRoundRobin(context.message)
+      wholeRequest &&
+      changes.some(
+        (change) => change.kind === 'FORMAT' && change.format === 'ROUND_ROBIN',
+      )
     ) {
       conditions = conditions.filter((item) => item.kind !== 'FORMAT');
       conditions.push(
@@ -444,7 +460,6 @@ export class PlanningService {
         }),
       );
     }
-    const dedicatedScheduleTurn = wholeRequest || formatFollowup;
     const resolveTeam = (
       name: string | undefined,
       proposedId: string | undefined,
@@ -507,8 +522,8 @@ export class PlanningService {
       .map((text) => text.trim())
       .filter(Boolean);
     if (
-      proposal.changes.length === 1 &&
-      proposal.changes[0]?.kind === 'TEAM_WINDOW' &&
+      changes.length === 1 &&
+      changes[0]?.kind === 'TEAM_WINDOW' &&
       uniqueIds(
         teams
           .filter((team) => team.name && context.message.includes(team.name))
@@ -519,50 +534,15 @@ export class PlanningService {
         'CLARIFY',
         '本轮提到了多支球队，但只识别出一项要求；请分别说明每支球队的时段，避免遗漏。',
       );
-    const mentionedTeams = teams.filter(
-      (team) => team.name && context.message.includes(team.name),
-    );
-    const intendedKinds = new Set<PlanningChange['kind']>();
-    if (
-      /(?:日期范围|比赛日期|赛事日期|排程日期)/.test(context.message) &&
-      parseUserDates(context.message).length
-    )
-      intendedKinds.add('DATE_RANGE');
-    if (
-      mentionedTeams.length &&
-      /(?:只能|仅能|可用|不可|不能|不安排|时间限制)/.test(context.message) &&
-      !/(?:没有|无需|不需要).*(?:时间限制|球队时段)/.test(context.message)
-    )
-      intendedKinds.add('TEAM_WINDOW');
-    if (
-      mentionedTeams.length >= 2 &&
-      /(?:对阵|交手|相遇|碰面)/.test(context.message) &&
-      /(?:希望|尽量|避免|倾向)/.test(context.message)
-    )
-      intendedKinds.add('MATCHUP');
-    if (
-      [...intendedKinds].some(
-        (kind) => !proposal.changes.some((change) => change.kind === kind),
-      )
-    )
-      return answer(
-        'CLARIFY',
-        '本轮提到的多项要求未被完整提取；请分别发送赛事日期、球队时段和对阵偏好，避免遗漏。',
-      );
-    if (
-      context.message.includes('晋级') ||
-      (!wholeRequest &&
-        /(?:增加比赛|改变赛制|覆盖赛程|生成赛程|发布赛程)/.test(
-          context.message,
-        ))
-    )
-      return answer(
-        'CLARIFY',
-        '本阶段仅收集排程要求，不能改变晋级规则、增加比赛、生成或覆盖赛程；请明确可记录的要求。',
-      );
-    for (const change of dedicatedScheduleTurn ? [] : proposal.changes) {
+    for (const change of changes.filter(
+      (item) => !wholeRequest || !['DATE_RANGE', 'FORMAT'].includes(item.kind),
+    )) {
       let sourceText = context.message;
-      if (proposal.changes.length > 1) {
+      if (
+        changes.length > 1 &&
+        change.kind !== 'FORMAT' &&
+        change.kind !== 'DAYPART_CAPACITY'
+      ) {
         const candidates = clauses.filter((part) => {
           if (change.kind === 'DATE_RANGE')
             return parseUserDates(part).length === 2;
@@ -627,7 +607,11 @@ export class PlanningService {
         continue;
       }
       if (change.kind === 'FORMAT') {
-        if (!explicitRoundRobin(sourceText) || change.format !== 'ROUND_ROBIN')
+        if (change.operation === 'REMOVE') {
+          conditions = conditions.filter((item) => item.kind !== 'FORMAT');
+          continue;
+        }
+        if (change.format !== 'ROUND_ROBIN')
           return answer(
             'CLARIFY',
             '请明确是否采用单循环：每两支参赛球队各交手一次。',
@@ -640,6 +624,49 @@ export class PlanningService {
             priority: 'MUST',
             format: 'ROUND_ROBIN',
             sourceTurnIds: [sourceTurnId],
+          }),
+        );
+        continue;
+      }
+      if (change.kind === 'DAYPART_CAPACITY') {
+        if (!change.daypart)
+          return answer(
+            'CLARIFY',
+            '请明确要修改上午、下午还是晚上的场数要求。',
+          );
+        const previous = conditions.find(
+          (item) =>
+            item.kind === 'DAYPART_CAPACITY' && item.daypart === change.daypart,
+        );
+        conditions = conditions.filter(
+          (item) =>
+            !(
+              item.kind === 'DAYPART_CAPACITY' &&
+              item.daypart === change.daypart
+            ),
+        );
+        if (change.operation === 'REMOVE') continue;
+        const startTime = change.startTime ?? previous?.startTime;
+        const endTime = change.endTime ?? previous?.endTime;
+        const maxMatchesPerDay =
+          change.maxMatchesPerDay ?? previous?.maxMatchesPerDay;
+        const capacityScope = change.capacityScope ?? previous?.capacityScope;
+        if (startTime && endTime && startTime >= endTime)
+          return answer('CLARIFY', '时段的结束时间必须晚于开始时间。');
+        conditions.push(
+          newCondition({
+            kind: 'DAYPART_CAPACITY',
+            eventId: chosenId,
+            priority: 'MUST',
+            daypart: change.daypart,
+            ...(startTime ? { startTime } : {}),
+            ...(endTime ? { endTime } : {}),
+            ...(maxMatchesPerDay !== undefined ? { maxMatchesPerDay } : {}),
+            ...(capacityScope ? { capacityScope } : {}),
+            sourceTurnIds: uniqueIds([
+              ...(previous?.sourceTurnIds ?? []),
+              sourceTurnId,
+            ]),
           }),
         );
         continue;
@@ -1015,7 +1042,7 @@ export class PlanningService {
         JSON.stringify(row ? unresolvedOf(row) : []);
     if (
       !row &&
-      !proposal.changes.length &&
+      !changes.length &&
       !wholeRequest &&
       !/(?:收集|记录|建立|创建|开始).*(?:排程需求|排程要求|约束)/.test(
         context.message,
@@ -1029,7 +1056,8 @@ export class PlanningService {
       return {
         status: 'CLARIFY',
         message:
-          '没有识别到可以修改的明确条件；请补充日期、参赛球队及约束内容。',
+          planningPending(conditions, unresolved)[0] ??
+          '这轮没有新增或修改需求条件；请说明要调整的具体条件。',
         candidates: [],
         planning: await this.view(tx, actor, row),
       };

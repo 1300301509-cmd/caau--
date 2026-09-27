@@ -333,6 +333,7 @@ model Event {
   agentSessions AgentSession[]
   agentTasks AgentTask[]
   agentPlanningRequests AgentPlanningRequest[]
+  agentPendingQuestions AgentPendingQuestion[]
   agentScheduleCandidates AgentScheduleCandidate[]
   staff EventStaff[]
   teams EventTeam[]
@@ -396,8 +397,46 @@ model AgentSession {
   planningRequests AgentPlanningRequest[]
   scheduleCandidates AgentScheduleCandidate[]
   memories AgentMemory[]
+  pendingQuestion AgentPendingQuestion?
 
   @@index([ownerId, updatedAt])
+}
+
+// Declarative instructions only. An active skill can propose an intent or a
+// tool choice, but the server's capability registry and domain policies decide
+// whether a tool may run. Versions are immutable after creation.
+model AgentSkillVersion {
+  id String @id @db.Uuid
+  skillKey String @db.VarChar(64)
+  version Int
+  instructions String @db.VarChar(8000)
+  state String @default("DRAFT") @db.VarChar(16)
+  createdBy String @db.Uuid
+  activatedBy String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  activatedAt DateTime? @db.Timestamptz(3)
+
+  @@unique([skillKey, version])
+  @@index([skillKey, state])
+}
+
+// One current clarification per dialogue. It points to a versioned business
+// request, not to the model's untrusted conversational memory.
+model AgentPendingQuestion {
+  sessionId String @id @db.Uuid
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(32)
+  planningId String @db.Uuid
+  planning AgentPlanningRequest @relation(fields: [planningId], references: [id], onDelete: Restrict)
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  planningRevision Int
+  question String @db.VarChar(500)
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([planningId])
 }
 
 model AgentMemory {
@@ -475,6 +514,7 @@ model AgentPlanningRequest {
   pending Json @default("[]")
   unresolved Json @default("[]")
   candidates AgentScheduleCandidate[]
+  pendingQuestions AgentPendingQuestion[]
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @db.Timestamptz(3)
 

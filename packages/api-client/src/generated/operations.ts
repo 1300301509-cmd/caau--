@@ -916,6 +916,7 @@ export const operations = {
                   enum: ['AVAILABLE', 'ONLY', 'BLOCK'],
                   type: 'string',
                 },
+                capacityScope: { enum: ['EVENT', 'VENUE'], type: 'string' },
                 confirmation: {
                   enum: ['PENDING', 'CONFIRMED'],
                   type: 'string',
@@ -925,6 +926,10 @@ export const operations = {
                   type: 'string',
                 },
                 dates: { items: { type: 'string' }, type: 'array' },
+                daypart: {
+                  enum: ['MORNING', 'AFTERNOON', 'EVENING'],
+                  type: 'string',
+                },
                 durationDays: { type: 'number' },
                 endTime: { type: 'string' },
                 eventId: { type: 'string' },
@@ -932,10 +937,17 @@ export const operations = {
                 from: { type: 'string' },
                 id: { type: 'string' },
                 kind: {
-                  enum: ['DATE_RANGE', 'TEAM_WINDOW', 'MATCHUP', 'FORMAT'],
+                  enum: [
+                    'DATE_RANGE',
+                    'TEAM_WINDOW',
+                    'MATCHUP',
+                    'FORMAT',
+                    'DAYPART_CAPACITY',
+                  ],
                   type: 'string',
                 },
                 matchup: { enum: ['PREFER', 'AVOID'], type: 'string' },
+                maxMatchesPerDay: { type: 'number' },
                 opponentId: { type: 'string' },
                 opponentLabel: { type: 'string' },
                 priority: { enum: ['MUST', 'PREFER'], type: 'string' },
@@ -1037,6 +1049,12 @@ export const operations = {
               type: 'object',
               properties: {},
             },
+            pendingQuestion: {
+              allOf: [{ $ref: '#/components/schemas/AgentPendingQuestionDto' }],
+              nullable: true,
+              type: 'object',
+              properties: {},
+            },
             planningRequest: {
               allOf: [
                 { $ref: '#/components/schemas/AgentPlanningRequestViewDto' },
@@ -1090,6 +1108,12 @@ export const operations = {
           id: { type: 'string' },
           lastExecution: {
             allOf: [{ $ref: '#/components/schemas/AgentExecutionReceiptDto' }],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
+          pendingQuestion: {
+            allOf: [{ $ref: '#/components/schemas/AgentPendingQuestionDto' }],
             nullable: true,
             type: 'object',
             properties: {},
@@ -1148,6 +1172,12 @@ export const operations = {
           id: { type: 'string' },
           lastExecution: {
             allOf: [{ $ref: '#/components/schemas/AgentExecutionReceiptDto' }],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
+          pendingQuestion: {
+            allOf: [{ $ref: '#/components/schemas/AgentPendingQuestionDto' }],
             nullable: true,
             type: 'object',
             properties: {},
@@ -1218,6 +1248,12 @@ export const operations = {
             type: 'array',
           },
           message: { maxLength: 4000, type: 'string' },
+          pendingQuestion: {
+            allOf: [{ $ref: '#/components/schemas/AgentPendingQuestionDto' }],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
           planningRequest: {
             allOf: [
               { $ref: '#/components/schemas/AgentPlanningRequestViewDto' },
@@ -9255,6 +9291,151 @@ export const operations = {
       required: ['reason'],
       type: 'object',
     },
+    authenticated: true,
+  },
+  listAgentSkillVersions: {
+    path: '/api/v1/observability/agent/skills',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            activatedAt: { nullable: true, type: 'string' },
+            createdAt: { type: 'string' },
+            id: { type: 'string' },
+            instructions: { maxLength: 8000, type: 'string' },
+            skillKey: {
+              enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+              type: 'string',
+            },
+            state: { enum: ['DRAFT', 'ACTIVE', 'RETIRED'], type: 'string' },
+            version: { type: 'number' },
+          },
+          required: [
+            'skillKey',
+            'instructions',
+            'id',
+            'version',
+            'state',
+            'createdAt',
+          ],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  createAgentSkillVersion: {
+    path: '/api/v1/observability/agent/skills',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          activatedAt: { nullable: true, type: 'string' },
+          createdAt: { type: 'string' },
+          id: { type: 'string' },
+          instructions: { maxLength: 8000, type: 'string' },
+          skillKey: {
+            enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+            type: 'string',
+          },
+          state: { enum: ['DRAFT', 'ACTIVE', 'RETIRED'], type: 'string' },
+          version: { type: 'number' },
+        },
+        required: [
+          'skillKey',
+          'instructions',
+          'id',
+          'version',
+          'state',
+          'createdAt',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: {
+      properties: {
+        instructions: { maxLength: 8000, type: 'string' },
+        skillKey: {
+          enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+          type: 'string',
+        },
+      },
+      required: ['skillKey', 'instructions'],
+      type: 'object',
+    },
+    authenticated: true,
+  },
+  listAgentToolCatalog: {
+    path: '/api/v1/observability/agent/skills/tools/catalog',
+    method: 'GET',
+    responses: {
+      '200': {
+        items: {
+          properties: {
+            confirmation: { type: 'string' },
+            name: { type: 'string' },
+            permission: { type: 'string' },
+            risk: {
+              enum: ['READ', 'REQUIREMENTS', 'PREVIEW', 'DRAFT_WRITE'],
+              type: 'string',
+            },
+            version: { type: 'string' },
+          },
+          required: ['name', 'version', 'risk', 'permission', 'confirmation'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    parameters: [],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
+    authenticated: true,
+  },
+  activateAgentSkillVersion: {
+    path: '/api/v1/observability/agent/skills/{id}/activate',
+    method: 'POST',
+    responses: {
+      '200': {
+        properties: {
+          activatedAt: { nullable: true, type: 'string' },
+          createdAt: { type: 'string' },
+          id: { type: 'string' },
+          instructions: { maxLength: 8000, type: 'string' },
+          skillKey: {
+            enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+            type: 'string',
+          },
+          state: { enum: ['DRAFT', 'ACTIVE', 'RETIRED'], type: 'string' },
+          version: { type: 'number' },
+        },
+        required: [
+          'skillKey',
+          'instructions',
+          'id',
+          'version',
+          'state',
+          'createdAt',
+        ],
+        type: 'object',
+      },
+    },
+    parameters: [
+      { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
+    ],
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    body: null,
     authenticated: true,
   },
   acknowledgeGovernanceAlert: {

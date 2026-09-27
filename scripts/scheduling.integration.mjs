@@ -42,6 +42,75 @@ export async function schedulingIntegration(t, context) {
     name: '合成赛程赛事',
     description: 'scheduling test',
   });
+  await t.test(
+    'agent skills are versioned admin instructions, not executable tools',
+    async () => {
+      const catalog = await call(
+        'super',
+        'GET',
+        'observability/agent/skills/tools/catalog',
+      );
+      assert.equal(
+        catalog.find((tool) => tool.name === 'schedule.list').risk,
+        'READ',
+      );
+      assert.equal(
+        catalog.find((tool) => tool.name === 'schedule.draft.adjust')
+          .confirmation,
+        'BOUND_TICKET_BUTTON',
+      );
+      await call(
+        'manager',
+        'GET',
+        'observability/agent/skills',
+        undefined,
+        403,
+      );
+      await call(
+        'manager',
+        'POST',
+        'observability/agent/skills',
+        {
+          skillKey: 'INTENT_ROUTING',
+          instructions: '测试指令',
+        },
+        403,
+      );
+      const first = await call('super', 'POST', 'observability/agent/skills', {
+        skillKey: 'INTENT_ROUTING',
+        instructions: '先区分自由对话与业务请求。',
+      });
+      assert.equal(first.state, 'DRAFT');
+      assert.equal(first.version, 1);
+      const active = await call(
+        'super',
+        'POST',
+        `observability/agent/skills/${first.id}/activate`,
+        {},
+      );
+      assert.equal(active.state, 'ACTIVE');
+      const second = await call('super', 'POST', 'observability/agent/skills', {
+        skillKey: 'INTENT_ROUTING',
+        instructions: '先区分自由对话、查询与改期。',
+      });
+      assert.equal(second.version, 2);
+      await call(
+        'super',
+        'POST',
+        `observability/agent/skills/${second.id}/activate`,
+        {},
+      );
+      const versions = await call('super', 'GET', 'observability/agent/skills');
+      assert.equal(
+        versions.find((item) => item.id === first.id).state,
+        'RETIRED',
+      );
+      assert.equal(
+        versions.find((item) => item.id === second.id).state,
+        'ACTIVE',
+      );
+    },
+  );
   const profile = (index) => ({
     name: `合成赛程球队${index}`,
     contactName: `负责人${index}`,
@@ -1086,6 +1155,31 @@ export async function schedulingIntegration(t, context) {
         { commandId: randomUUID(), expectedRevision: schedule.revision },
         403,
       );
+      const readOnlySession = await call('reviewer', 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const readOnlyPreview = await call(
+        'reviewer',
+        'POST',
+        `agent/sessions/${readOnlySession.id}/messages`,
+        { message: '把周六第二场比赛改到周日十点', eventId: event.id },
+      );
+      assert.equal(readOnlyPreview.status, 'PREVIEW');
+      assert.equal(readOnlyPreview.task.confirmation, null);
+      assert.match(readOnlyPreview.message, /只读预览.*未创建确认票据/);
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "AgentConfirmationTicket" WHERE "taskId"=$1',
+            [readOnlyPreview.task.id],
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (await call('reviewer', 'GET', `events/${event.id}/schedule`)).revision,
+        schedule.revision,
+      );
 
       const agentSession = await call('manager', 'POST', 'agent/sessions', {
         currentEventId: event.id,
@@ -1160,6 +1254,30 @@ export async function schedulingIntegration(t, context) {
 
       const bound = await issue();
       const boundId = bound.task.confirmation.id;
+      await sql.query('UPDATE "OrganizationMember" SET role=$1 WHERE id=$2', [
+        'REVIEWER',
+        members.manager,
+      ]);
+      try {
+        const downgraded = await call(
+          'manager',
+          'GET',
+          `agent/sessions/${agentSession.id}`,
+        );
+        assert.equal(downgraded.task.confirmation, null);
+        await call(
+          'manager',
+          'POST',
+          `agent/confirmation-tickets/${boundId}/confirm`,
+          confirmBody(bound),
+          403,
+        );
+      } finally {
+        await sql.query('UPDATE "OrganizationMember" SET role=$1 WHERE id=$2', [
+          'EVENT_MANAGER',
+          members.manager,
+        ]);
+      }
       await call(
         'manager',
         'POST',
@@ -2588,6 +2706,26 @@ export async function schedulingIntegration(t, context) {
       assert.ok(
         first.planningRequest.pending.some((item) => item.includes('每两支')),
       );
+      assert.equal(first.pendingQuestion.kind, 'ROUND_ROBIN');
+      assert.equal(
+        (await call('manager', 'GET', `agent/sessions/${session.id}`))
+          .pendingQuestion.planningRevision,
+        first.planningRequest.revision,
+      );
+      const interlude = await call('manager', 'POST', route, {
+        message: '你好',
+        eventId: event.id,
+      });
+      assert.equal(interlude.status, 'CHAT');
+      assert.equal(
+        interlude.planningRequest.revision,
+        first.planningRequest.revision,
+      );
+      assert.equal(
+        (await call('manager', 'GET', `agent/sessions/${session.id}`))
+          .pendingQuestion.kind,
+        'ROUND_ROBIN',
+      );
       await call(
         'manager',
         'POST',
@@ -2596,12 +2734,11 @@ export async function schedulingIntegration(t, context) {
         409,
       );
       const clarified = await call('manager', 'POST', route, {
-        message: '每队与其他队都交手一次',
+        message: '是的',
         eventId: event.id,
-        planningId: first.planningRequest.id,
-        planningRevision: first.planningRequest.revision,
       });
       assert.equal(clarified.status, 'PLAN');
+      assert.equal(clarified.pendingQuestion, null);
       assert.deepEqual(clarified.planningRequest.pending, []);
       assert.equal(
         clarified.planningRequest.conditions.find(

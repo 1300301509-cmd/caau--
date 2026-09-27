@@ -12,7 +12,7 @@ Nest `ai` 模块使用 LangGraph.js 编排并在 PostgreSQL `caau_agent` schema 
 - 使用实际业务图节点完成“鉴权与上下文 → 意图增量解析 → 赛事/场次定位 → 缺参等待 → 确定性预览 → 返回结果”，而不是用单一节点包装 service；
 - 服务重启后从同一 LangGraph thread 恢复缺参状态；恢复时重新检查当前用户、历史任务涉及的赛事权限、赛程 revision 和预览有效期。
 
-C1 在上述真实模型理解与纯预览后增加单场草稿确认。预览成功时签发一次性票据；只有当前 owner 显式确认、重新鉴权且赛程 revision 未变时，固定程序才调用现有单场调整用例。它不调用会整套重排的 `generate`，也没有 Agent 发布入口。预览过期或 revision 变化后标记为 `STALE` 并取消待确认票据，必须重新预览。
+C1 在上述真实模型理解与纯预览后增加单场草稿确认。有 `schedule.draft.adjust` 权限时才随预览签发一次性票据；只有当前 owner 显式确认、重新鉴权且赛程 revision 未变时，固定程序才调用现有单场调整用例。只有 `schedule.read` 权限的账号可看预览，但不获得确认票据。它不调用会整套重排的 `generate`，也没有 Agent 发布入口。预览过期或 revision 变化后标记为 `STALE` 并取消待确认票据，必须重新预览。
 
 ## 确认、取消与回执
 
@@ -39,6 +39,12 @@ LangGraph checkpoint 只保存结构化流程/资源/版本状态，不保存 Co
 `AgentMemory` 现保存本人明确确认的个人偏好（回答方式或一般排赛倾向），最多 30 条、每条 300 字。Web 与小程序对话设置可以添加、查看和删除；“请记住：回答……”只会提出建议，用户点击“保存这条记忆”才生效。新对话只继承本人未删除的偏好，不继承旧会话/任务。偏好可用于回答和方案讨论，不能自动变成赛事规则、排赛约束、执行权限或业务默认参数。账号撤销、跨账号访问和删除后再调用模型均受当前身份/状态约束。知识表与向量库仍未建设；未来资料检索必须有来源、版本及权限范围。技术决策见 [ADR-0028](../adr/0028-agent-three-level-memory.md)。
 
 ## API
+
+### CAAU-086 Skill 与工具目录（后端第一阶段）
+
+总部超级管理员可调用 `GET/POST /api/v1/observability/agent/skills` 列出和创建 `INTENT_ROUTING`、`TOOL_SELECTION` 指令草稿，`POST /api/v1/observability/agent/skills/:id/activate` 启用指定草稿版本；`GET /api/v1/observability/agent/skills/tools/catalog` 查看固定工具名、风险、权限和确认方式。草稿版本不生效，启用新版会退役旧版；要回退需以旧文案创建新版本。普通账号访问这些管理接口返回 403。当前只有后端 API，治理页面编辑入口待做。
+
+Skill 仅是自然语言指令，不能包含可执行工具代码或权限规则；模型的工具建议仍须通过固定注册表、参数 schema、当前会话及赛事授权、确定性校验。单场草稿写入继续只由原确认票据端点完成，文字“确定”不会调用写工具。有效规划待答问题在会话返回 `pendingQuestion`，关联需求单 revision 和有效期；对于单循环歧义，用户简短肯定才解释为回答该问题。开发库使用前须前向部署 `202609280001_agent_skill_runtime`，不接受 migration reset。
 
 - `GET /api/v1/agent/model-status`：仅总部超级管理员读取安全模型状态；
 - `POST /api/v1/agent/model-status/test`：仅总部超级管理员显式执行连接测试；
@@ -76,6 +82,8 @@ CAAU_DATABASE_INTEGRATION=test node --env-file=apps/api/.env --env-file=.local/d
 ```
 
 该脚本仅创建并清理本轮随机 `caau_qwen_plan_*` 合成库。默认模式仍核对 CAAU-063 日期→参赛时段→替换→取消→对阵偏好→独立确认，随后另一个独立需求单验证 CAAU-064 候选；指定 `CAAU_CANDIDATE_ONLY=1` 时只测两轮真实模型日期/球队时段→确认→纯程序候选，适合独立分层验收。两种模式都核对 0 正式赛程版本/票据/单场任务增长；供应商失败保持失败，不用模拟结果冒充。小程序编译/Node 替身不算微信开发者工具 `wx.request` 或真机验收。
+
+CAAU-087 分时段专项使用同一隔离 test 服务及随机临时库：`CAAU_DAYPART_ONLY=1 CAAU_DATABASE_INTEGRATION=test node --env-file=apps/api/.env --env-file=.local/db/test.env scripts/qwen-planning.manual.mjs`。它单独验证整套需求→原话“每两只队伍各交手一次，上午最多一场、下午两场、晚上一场”→补具体时刻和按全赛事统计→确认需求→五队十场候选；只核对结构、条件与 0 正式写入，不输出密钥或供应商正文。当前分时段条件存在未补时间/口径时不能确认；三个时段齐备时空档不排赛。真实模型偶发结构化输出失败按失败记录，重新发送须依照当前会话状态，不将失败轮次拼成一次通过。
 
 ## 整套候选赛程预览（CAAU-064）
 

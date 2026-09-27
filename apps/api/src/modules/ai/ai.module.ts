@@ -1,6 +1,8 @@
 import { UsageService } from '../governance/usage.service.js';
 import { Module, type DynamicModule } from '@nestjs/common';
 import { AiController } from './ai.controller.js';
+import { AgentSkillController } from './skill.controller.js';
+import { AgentSkillService } from './skill.service.js';
 import { AiService } from './ai.service.js';
 import { PlanningService } from './planning.service.js';
 import { CandidateService } from './candidate.service.js';
@@ -19,11 +21,12 @@ export class AiModule {
     return {
       module: AiModule,
       imports: [SchedulingModule],
-      controllers: [AiController],
+      controllers: [AiController, AgentSkillController],
       providers: [
         PlanningService,
         CandidateService,
         AgentMemoryService,
+        AgentSkillService,
         {
           provide: 'AGENT_MODEL',
           inject: [UsageService],
@@ -38,6 +41,7 @@ export class AiModule {
             SchedulingService,
             PlanningService,
             CandidateService,
+            AgentSkillService,
           ],
           useFactory: (
             auth: AuthorizationService,
@@ -45,6 +49,7 @@ export class AiModule {
             scheduling: SchedulingService,
             planning: PlanningService,
             candidates: CandidateService,
+            skills: AgentSkillService,
           ) =>
             new AiService(
               auth,
@@ -53,6 +58,7 @@ export class AiModule {
               databaseUrl,
               planning,
               candidates,
+              skills,
             ),
         },
       ],

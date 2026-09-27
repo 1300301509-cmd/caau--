@@ -10,12 +10,20 @@ import {
 } from '../dist/modules/ai/model-adapter.js';
 import { AiService, mergeAgentIntent } from '../dist/modules/ai/ai.service.js';
 import {
+  agentToolCatalog,
+  requireAgentTool,
+} from '../dist/modules/ai/tool-registry.js';
+import {
   beijingDay,
   resolveDateRange,
   queryPlanSchema,
   scheduleTools,
 } from '../dist/modules/ai/schedule-tools.js';
 import { calculateAdjustmentPreview } from '../dist/modules/scheduling/scheduling.algorithm.js';
+import {
+  auditCandidate,
+  calculateCandidate,
+} from '../dist/modules/ai/candidate.algorithm.js';
 import {
   periodDates,
   expandDays,
@@ -53,6 +61,24 @@ test('page event and match context cannot turn CHAT or PLAN into task continuati
       'CONTINUE',
     );
   }
+});
+
+test('editable skills cannot register or upgrade executable tools', () => {
+  const catalog = agentToolCatalog();
+  assert.equal(
+    catalog.find((tool) => tool.name === 'schedule.draft.adjust').confirmation,
+    'BOUND_TICKET_BUTTON',
+  );
+  assert.equal(
+    catalog.find((tool) => tool.name === 'schedule.adjust.preview').permission,
+    'schedule.read',
+  );
+  assert.equal(
+    requireAgentTool('schedule.list', 'READ').permission,
+    'schedule.read',
+  );
+  assert.throws(() => requireAgentTool('schedule.publish', 'DRAFT_WRITE'));
+  assert.throws(() => requireAgentTool('schedule.draft.adjust', 'READ'));
 });
 
 test('simulated model extracts the supported Chinese schedule adjustment intent', async () => {
@@ -224,6 +250,7 @@ test('planning routing, extraction and date expansion remain separate from execu
   assert.deepEqual((await model.planPlanning(request)).changes, [
     { operation: 'ADD', kind: 'DATE_RANGE', durationDays: 10 },
   ]);
+  assert.equal((await model.planPlanning(request)).goal, 'WHOLE_SCHEDULE');
   assert.equal(
     planningPending(
       [
@@ -282,6 +309,199 @@ test('planning routing, extraction and date expansion remain separate from execu
     0,
   );
   assert.equal(planningPending([], []).length, 1);
+});
+
+test('structured whole-schedule follow-up retains round robin and enforces daily period capacity', () => {
+  const sourceTurnIds = ['turn-2'];
+  const period = {
+    id: 'period',
+    kind: 'DATE_RANGE',
+    eventId: 'event',
+    priority: 'MUST',
+    confirmation: 'PENDING',
+    sourceTurnIds: ['turn-1'],
+    from: '2027-06-01',
+    to: '2027-06-10',
+    scheduleGoal: true,
+  };
+  const format = {
+    id: 'format',
+    kind: 'FORMAT',
+    eventId: 'event',
+    priority: 'MUST',
+    confirmation: 'PENDING',
+    sourceTurnIds,
+    format: 'ROUND_ROBIN',
+  };
+  const windows = [
+    ['MORNING', '09:00', '12:00', 1],
+    ['AFTERNOON', '13:00', '17:00', 2],
+    ['EVENING', '18:00', '21:00', 1],
+  ].map(([daypart, startTime, endTime, maxMatchesPerDay]) => ({
+    id: String(daypart),
+    kind: 'DAYPART_CAPACITY',
+    eventId: 'event',
+    priority: 'MUST',
+    confirmation: 'PENDING',
+    sourceTurnIds,
+    daypart,
+    startTime,
+    endTime,
+    maxMatchesPerDay,
+    capacityScope: 'EVENT',
+  }));
+  const proposal = {
+    goal: 'UPDATE_REQUIREMENTS',
+    changes: [
+      { operation: 'ADD', kind: 'FORMAT', format: 'ROUND_ROBIN' },
+      ...windows.map((window) => ({
+        operation: 'ADD',
+        kind: 'DAYPART_CAPACITY',
+        daypart: window.daypart,
+        maxMatchesPerDay: window.maxMatchesPerDay,
+      })),
+    ],
+  };
+  assert.equal(planningProposalSchema.safeParse(proposal).success, true);
+  assert.equal(planningPending([period, format, ...windows], []).length, 0);
+  const missingWindowDetails = planningPending(
+    [
+      period,
+      format,
+      ...windows.map(
+        ({
+          startTime: _startTime,
+          endTime: _endTime,
+          capacityScope: _capacityScope,
+          ...rest
+        }) => rest,
+      ),
+    ],
+    [],
+  );
+  assert.match(missingWindowDetails[0], /从几点到几点/);
+  assert.match(missingWindowDetails[1], /整个赛事合计/);
+  assert.equal(
+    missingWindowDetails.some((item) => item.includes('最多安排几场')),
+    false,
+  );
+  const teams = Array.from({ length: 5 }, (_, index) => ({
+    id: `team-${index}`,
+    name: `球队${index}`,
+    active: true,
+  }));
+  const config = {
+    teamIds: teams.map((item) => item.id),
+    venues: ['一号场'],
+    startDate: '2027-06-01',
+    endDate: '2027-06-10',
+    dailyStart: '09:00',
+    dailyEnd: '21:00',
+    durationMinutes: 60,
+    bufferMinutes: 0,
+    minRestMinutes: 0,
+  };
+  const result = calculateCandidate(
+    config,
+    teams,
+    [period, format, ...windows],
+    [],
+    [],
+  );
+  assert.equal(result.outcome, 'FOUND');
+  assert.equal(result.matches.length, 10);
+  assert.deepEqual(
+    auditCandidate(
+      config,
+      teams,
+      result.matches,
+      [period, format, ...windows],
+      [],
+    ),
+    [],
+  );
+  const byDaypart = new Map();
+  for (const match of result.matches) {
+    const local = new Date(
+      Date.parse(match.startAt) + 8 * 3600000,
+    ).toISOString();
+    const hour = Number(local.slice(11, 13));
+    const daypart = hour < 12 ? 'MORNING' : hour < 18 ? 'AFTERNOON' : 'EVENING';
+    const key = `${local.slice(0, 10)}:${daypart}`;
+    byDaypart.set(key, (byDaypart.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of byDaypart)
+    assert.ok(
+      count <= { MORNING: 1, AFTERNOON: 2, EVENING: 1 }[key.split(':')[1]],
+    );
+  const overbooked = result.matches.map((match, index) =>
+    index < 2
+      ? {
+          ...match,
+          startAt: `2027-06-01T0${index + 1}:00:00.000Z`,
+          venue: '一号场',
+        }
+      : match,
+  );
+  assert.ok(
+    auditCandidate(
+      config,
+      teams,
+      overbooked,
+      [period, format, ...windows],
+      [],
+    ).some((issue) => issue.code === 'DAYPART_CAPACITY'),
+  );
+  const twoVenues = {
+    ...config,
+    venues: ['一号场', '二号场'],
+  };
+  const splitVenue = overbooked.map((match, index) =>
+    index === 1 ? { ...match, venue: '二号场' } : match,
+  );
+  const venueWindows = windows.map((item) => ({
+    ...item,
+    capacityScope: 'VENUE',
+  }));
+  assert.ok(
+    auditCandidate(
+      twoVenues,
+      teams,
+      splitVenue,
+      [period, format, ...windows],
+      [],
+    ).some((issue) => issue.code === 'DAYPART_CAPACITY'),
+  );
+  assert.equal(
+    auditCandidate(
+      twoVenues,
+      teams,
+      splitVenue,
+      [period, format, ...venueWindows],
+      [],
+    ).some((issue) => issue.code === 'DAYPART_CAPACITY'),
+    false,
+  );
+  const inGap = result.matches.map((match, index) =>
+    index === 0 ? { ...match, startAt: '2027-06-01T04:00:00.000Z' } : match,
+  );
+  assert.ok(
+    auditCandidate(config, teams, inGap, [period, format, ...windows], []).some(
+      (issue) => issue.code === 'DAYPART_CAPACITY',
+    ),
+  );
+  const crossingMorningEnd = result.matches.map((match, index) =>
+    index === 0 ? { ...match, startAt: '2027-06-01T03:30:00.000Z' } : match,
+  );
+  assert.ok(
+    auditCandidate(
+      config,
+      teams,
+      crossingMorningEnd,
+      [period, format, windows[0]],
+      [],
+    ).some((issue) => issue.code === 'DAYPART_CAPACITY'),
+  );
 });
 
 test('read-only registry validates tools and resolves Beijing relative dates across week and year', async () => {
@@ -356,6 +576,65 @@ test('Qwen schema and prompt distinguish source match from target time', () => {
   assert.match(prompt, /sourceWeekday=6, sourceOrdinal=2/);
   assert.match(prompt, /只返回本轮/);
   assert.match(prompt, /不得选择赛事或比赛，不得执行任何修改/);
+});
+
+test('active Skill instructions reach proposal models without changing tool schemas', async () => {
+  const model = createAgentModel({
+    CAAU_QWEN_API_KEY: 'synthetic-test-only',
+    CAAU_QWEN_BASE_URL: 'https://dashscope.example.test/compatible/v1',
+  });
+  const seen = [];
+  model.routeModel = {
+    invoke: async (messages) => {
+      seen.push(messages);
+      return { parsed: { kind: 'QUERY' }, raw: {} };
+    },
+  };
+  model.queryModel = {
+    invoke: async (messages) => {
+      seen.push(messages);
+      return { parsed: { tool: 'schedule.list' }, raw: {} };
+    },
+  };
+  model.model = {
+    invoke: async (messages) => {
+      seen.push(messages);
+      return { parsed: { targetHour: 10 }, raw: {} };
+    },
+  };
+  const context = {
+    history: [],
+    skills: {
+      INTENT_ROUTING: {
+        id: 'intent',
+        version: 2,
+        instructions: '先识别查询目标',
+      },
+      TOOL_SELECTION: { id: 'tool', version: 3, instructions: '先选只读工具' },
+    },
+  };
+  assert.equal(await model.route('查赛程', context), 'QUERY');
+  assert.equal(
+    (await model.planQuery('查赛程', context)).tool,
+    'schedule.list',
+  );
+  assert.equal(
+    (
+      await model.parse(
+        '上午十点',
+        {},
+        context.skills.TOOL_SELECTION.instructions,
+      )
+    ).targetHour,
+    10,
+  );
+  assert.match(JSON.stringify(seen[0]), /意图理解 Skill v2.*先识别查询目标/);
+  assert.match(JSON.stringify(seen[1]), /工具选择 Skill v3.*先选只读工具/);
+  assert.match(JSON.stringify(seen[2]), /工具选择 Skill.*先选只读工具/);
+  assert.equal(
+    queryPlanSchema.safeParse({ tool: 'schedule.publish' }).success,
+    false,
+  );
 });
 
 test('Qwen adapter preserves full replies and logs only safe per-phase metadata', async () => {

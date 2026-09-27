@@ -132,6 +132,7 @@ export async function authorizationIntegration(t) {
                   '202609270003_governance_delivery',
                   '202609270004_governance_acknowledgement',
                   '202609270005_agent_memory',
+                  '202609280001_agent_skill_runtime',
                 ],
               ],
             )
@@ -990,7 +991,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          28, // Existing 23, four governance migrations and agent memory.
+          29, // Existing 23, four governance, agent memory and skill runtime.
         );
       },
     );

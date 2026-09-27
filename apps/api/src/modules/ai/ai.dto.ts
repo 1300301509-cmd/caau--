@@ -194,8 +194,21 @@ export class AgentTurnViewDto {
 
 export class AgentPlanningConditionDto {
   @ApiProperty() id!: string;
-  @ApiProperty({ enum: ['DATE_RANGE', 'TEAM_WINDOW', 'MATCHUP', 'FORMAT'] })
-  kind!: 'DATE_RANGE' | 'TEAM_WINDOW' | 'MATCHUP' | 'FORMAT';
+  @ApiProperty({
+    enum: [
+      'DATE_RANGE',
+      'TEAM_WINDOW',
+      'MATCHUP',
+      'FORMAT',
+      'DAYPART_CAPACITY',
+    ],
+  })
+  kind!:
+    | 'DATE_RANGE'
+    | 'TEAM_WINDOW'
+    | 'MATCHUP'
+    | 'FORMAT'
+    | 'DAYPART_CAPACITY';
   @ApiProperty() eventId!: string;
   @ApiProperty({ enum: ['MUST', 'PREFER'] }) priority!: 'MUST' | 'PREFER';
   @ApiProperty({ enum: ['PENDING', 'CONFIRMED'] }) confirmation!:
@@ -209,6 +222,11 @@ export class AgentPlanningConditionDto {
   @ApiPropertyOptional({ enum: ['USER', 'EVENT_PROFILE', 'EVENT_SCHEDULE'] })
   dateSource?: 'USER' | 'EVENT_PROFILE' | 'EVENT_SCHEDULE';
   @ApiPropertyOptional({ enum: ['ROUND_ROBIN'] }) format?: 'ROUND_ROBIN';
+  @ApiPropertyOptional({ enum: ['MORNING', 'AFTERNOON', 'EVENING'] })
+  daypart?: 'MORNING' | 'AFTERNOON' | 'EVENING';
+  @ApiPropertyOptional() maxMatchesPerDay?: number;
+  @ApiPropertyOptional({ enum: ['EVENT', 'VENUE'] })
+  capacityScope?: 'EVENT' | 'VENUE';
   @ApiPropertyOptional() teamId?: string;
   @ApiPropertyOptional() teamLabel?: string;
   @ApiPropertyOptional() opponentId?: string;
@@ -308,6 +326,14 @@ export class AgentScheduleCandidateViewDto {
   @ApiProperty() createdAt!: string;
 }
 
+export class AgentPendingQuestionDto {
+  @ApiProperty() kind!: string;
+  @ApiProperty() question!: string;
+  @ApiProperty() planningId!: string;
+  @ApiProperty() planningRevision!: number;
+  @ApiProperty() expiresAt!: string;
+}
+
 export class AgentSessionViewDto {
   @ApiProperty() id!: string;
   @ApiProperty() summary!: string;
@@ -323,6 +349,8 @@ export class AgentSessionViewDto {
   task!: AgentTaskViewDto | null;
   @ApiPropertyOptional({ type: AgentPlanningRequestViewDto, nullable: true })
   planningRequest!: AgentPlanningRequestViewDto | null;
+  @ApiPropertyOptional({ type: AgentPendingQuestionDto, nullable: true })
+  pendingQuestion!: AgentPendingQuestionDto | null;
   @ApiPropertyOptional({ type: AgentExecutionReceiptDto, nullable: true })
   lastExecution!: AgentExecutionReceiptDto | null;
 }
@@ -366,4 +394,6 @@ export class AgentReplyDto {
   task!: AgentTaskViewDto | null;
   @ApiPropertyOptional({ type: AgentPlanningRequestViewDto, nullable: true })
   planningRequest!: AgentPlanningRequestViewDto | null;
+  @ApiPropertyOptional({ type: AgentPendingQuestionDto, nullable: true })
+  pendingQuestion?: AgentPendingQuestionDto | null;
 }

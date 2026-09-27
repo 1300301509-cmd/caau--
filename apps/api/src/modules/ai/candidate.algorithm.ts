@@ -37,6 +37,69 @@ const minuteOf = (slot: Slot) => {
   const time = new Date(slot.time + 8 * 3600000).toISOString().slice(11, 16);
   return mins(time);
 };
+const capacityConditions = (conditions: PlanningCondition[]) =>
+  conditions.filter(
+    (item) => item.kind === 'DAYPART_CAPACITY' && item.priority === 'MUST',
+  );
+const completeDayparts = (conditions: PlanningCondition[]) =>
+  new Set(capacityConditions(conditions).map((item) => item.daypart)).size ===
+  3;
+function inDaypart(
+  slot: Slot,
+  config: ScheduleConfigDto,
+  condition: PlanningCondition,
+) {
+  const start = minuteOf(slot);
+  return (
+    !!condition.startTime &&
+    !!condition.endTime &&
+    start >= mins(condition.startTime) &&
+    start + config.durationMinutes <= mins(condition.endTime)
+  );
+}
+function capacityAllowed(
+  slot: Slot,
+  config: ScheduleConfigDto,
+  conditions: PlanningCondition[],
+  used: ScheduleMatchDto[],
+) {
+  const capacities = capacityConditions(conditions);
+  // A complete three-part daily plan cannot spill matches into gaps between
+  // its windows. A partial limit constrains its named window only.
+  if (
+    completeDayparts(conditions) &&
+    !capacities.some((item) => inDaypart(slot, config, item))
+  )
+    return false;
+  return capacities.every((condition) => {
+    if (
+      condition.startTime &&
+      condition.endTime &&
+      minuteOf(slot) < mins(condition.endTime) &&
+      minuteOf(slot) + config.durationMinutes > mins(condition.startTime) &&
+      !inDaypart(slot, config, condition)
+    )
+      return false;
+    if (!inDaypart(slot, config, condition)) return true;
+    if (condition.maxMatchesPerDay === undefined || !condition.capacityScope)
+      return false;
+    const day = dayOf(slot);
+    const count = used.filter((match) => {
+      if (!match.startAt) return false;
+      const other = {
+        time: Date.parse(match.startAt),
+        startAt: match.startAt,
+        venue: match.venue,
+      };
+      return (
+        dayOf(other) === day &&
+        (condition.capacityScope === 'EVENT' || match.venue === slot.venue) &&
+        inDaypart(other, config, condition)
+      );
+    }).length;
+    return count < condition.maxMatchesPerDay;
+  });
+}
 function windowContains(
   slot: Slot,
   config: ScheduleConfigDto,
@@ -167,6 +230,21 @@ export function auditCandidate(
         issue('HARD_WINDOW', '场次违反必须满足的球队时段。', [match.id]);
     }
   }
+  const capacityMatches: ScheduleMatchDto[] = [];
+  for (const match of matches.filter((item) => item.startAt)) {
+    const slot = {
+      time: Date.parse(match.startAt),
+      startAt: match.startAt,
+      venue: match.venue,
+    };
+    if (!capacityAllowed(slot, config, conditions, capacityMatches))
+      issue(
+        'DAYPART_CAPACITY',
+        '场次超出每日分时段场数上限，或落在完整分时段计划之外。',
+        [match.id],
+      );
+    capacityMatches.push(match);
+  }
   for (let i = 0; i < matches.length; i++)
     for (const other of matches.slice(i + 1)) {
       const match = matches[i]!;
@@ -225,7 +303,9 @@ export function calculateCandidate(
       match.order = before.order;
     }
   }
-  const available = scheduleSlots(config);
+  const available = scheduleSlots(config).filter((slot) =>
+    capacityAllowed(slot, config, conditions, []),
+  );
   const empty = (
     outcome: Outcome,
     issues: ScheduleIssueDto[],
@@ -299,6 +379,7 @@ export function calculateCandidate(
   const deadline = Date.now() + 1500;
   const fits = (match: ScheduleMatchDto, slot: Slot) => {
     if (!hardAllowed(match, slot, config, conditions)) return false;
+    if (!capacityAllowed(slot, config, conditions, used)) return false;
     const rest = config.minRestMinutes * 60000;
     const end = slot.time + duration(config);
     return used.every((other) => {
