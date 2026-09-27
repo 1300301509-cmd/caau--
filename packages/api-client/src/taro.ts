@@ -40,7 +40,7 @@ export async function streamAgentMessageTaro(
     body: AgentStreamInput;
     token: string;
     onDelta: (text: string) => void;
-    signal?: AbortSignal;
+    onRequestTask?: (task: { abort(): void }) => void;
   },
   request: TaroChunkRequest,
 ): Promise<AgentStreamReply> {
@@ -62,9 +62,6 @@ export async function streamAgentMessageTaro(
     dataType: 'text',
     timeout: 95000,
   });
-  const cancel = () => task.abort();
-  options.signal?.addEventListener('abort', cancel, { once: true });
-  if (options.signal?.aborted) task.abort();
   task.onChunkReceived(({ data }) => {
     received = true;
     try {
@@ -74,6 +71,7 @@ export async function streamAgentMessageTaro(
       task.abort();
     }
   });
+  options.onRequestTask?.(task);
   try {
     let response: { statusCode: number; data: unknown };
     try {
@@ -92,9 +90,7 @@ export async function streamAgentMessageTaro(
     }
     return decoder.finish();
   } catch (error) {
-    if (error instanceof ApiError || options.signal?.aborted) throw error;
+    if (error instanceof ApiError) throw error;
     throw new AgentStreamInterruptedError();
-  } finally {
-    options.signal?.removeEventListener('abort', cancel);
   }
 }

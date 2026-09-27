@@ -205,7 +205,7 @@ export function AgentPage() {
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const lock = useRef(false);
-  const activeStream = useRef<AbortController | null>(null);
+  const activeStream = useRef<{ abort(): void } | null>(null);
   const serial = useRef(0);
   const alive = useRef(true);
   const event = useRef(eventId);
@@ -483,8 +483,8 @@ export function AgentPage() {
   async function send(candidate?: Candidate) {
     const message = input.trim() || (candidate ? lastMessage : '');
     if (!current || !message || lock.current) return;
-    const controller = new AbortController();
-    activeStream.current = controller;
+    const requestControl = { abort: () => {} };
+    activeStream.current = requestControl;
     setStreamingUser(message);
     setStreamingText('');
     await operate(async (token, valid) => {
@@ -521,7 +521,10 @@ export function AgentPage() {
         (text) => {
           if (valid()) setStreamingText((old) => old + text);
         },
-        controller.signal,
+        (task) => {
+          requestControl.abort = () => task.abort();
+          if (activeStream.current !== requestControl) task.abort();
+        },
       );
       if (!valid()) return;
       const latest = await client.request('getAgentSession', {
@@ -542,7 +545,7 @@ export function AgentPage() {
       if (next.status === 'STALE')
         setError('预览已过期或版本已变化，请刷新赛程后重新预览。');
     });
-    if (activeStream.current === controller) activeStream.current = null;
+    if (activeStream.current === requestControl) activeStream.current = null;
     setStreamingUser('');
     setStreamingText('');
   }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  AgentStreamInterruptedError,
   ApiError,
   createApiClient,
   createAgentStreamDecoder,
@@ -156,6 +157,40 @@ test('fetch and Taro stream transports deliver deltas and the same final reply',
   );
   assert.deepEqual(mobileDeltas, ['你', '好']);
   assert.deepEqual(mobile, final);
+});
+
+test('Taro stream can cancel its native request task without AbortController', async () => {
+  const originalAbortController = globalThis.AbortController;
+  globalThis.AbortController = undefined;
+  let aborted = 0;
+  try {
+    const response = streamAgentMessageTaro(
+      {
+        baseUrl: 'http://localhost',
+        sessionId: '00000000-0000-4000-8000-000000000001',
+        body: { message: '你好' },
+        token: 'synthetic-token',
+        onDelta: () => {},
+        onRequestTask: (task) => task.abort(),
+      },
+      () => {
+        let rejectRequest;
+        const task = new Promise((_, reject) => {
+          rejectRequest = reject;
+        });
+        task.onChunkReceived = () => {};
+        task.abort = () => {
+          aborted++;
+          rejectRequest(new Error('request:fail abort'));
+        };
+        return task;
+      },
+    );
+    await assert.rejects(response, AgentStreamInterruptedError);
+    assert.equal(aborted, 1);
+  } finally {
+    globalThis.AbortController = originalAbortController;
+  }
 });
 
 test('known 503 has a typed stable code; unknown errors never echo server bodies', async () => {

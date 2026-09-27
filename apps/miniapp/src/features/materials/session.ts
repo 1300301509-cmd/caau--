@@ -24,7 +24,7 @@ export function streamAgentMessage(
   body: AgentStreamInput,
   token: string,
   onDelta: (text: string) => void,
-  signal?: AbortSignal,
+  onRequestTask?: (task: { abort(): void }) => void,
 ) {
   return streamAgentMessageTaro(
     {
@@ -33,7 +33,7 @@ export function streamAgentMessage(
       body,
       token,
       onDelta,
-      signal,
+      onRequestTask,
     },
     (options) => Taro.request<unknown>(options),
   );
