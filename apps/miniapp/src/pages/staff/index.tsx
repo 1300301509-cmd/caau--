@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { withAgentEntry } from '../../features/agent/AgentEntry';
 import { Button, Input, Text, Textarea, View } from '@tarojs/components';
-import Taro, { useDidShow, useRouter } from '@tarojs/taro';
+import Taro, { useDidHide, useDidShow, useRouter } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
 import {
   clearSession,
@@ -19,6 +19,7 @@ import {
   type Profile,
   type Staff,
 } from '../../features/staff/model';
+import { useVisibleAutoRefresh } from '../../features/refresh/useVisibleAutoRefresh';
 import './index.css';
 
 type S = components['schemas'];
@@ -56,7 +57,10 @@ function StaffPage() {
   const [loaded, setLoaded] = useState(false);
   const lock = useRef(false);
   const alive = useRef(true);
+  const visible = useRef(false);
   const generation = useRef(0);
+  const actionVersion = useRef(0);
+  const readVersion = useRef(0);
   // An uncertain create must retry exactly the same id and body.
   const pendingCreate = useRef<{ id: string; profile: Profile }>();
   const [uncertain, setUncertain] = useState(false);
@@ -80,6 +84,13 @@ function StaffPage() {
       unsubscribe();
     };
   }, []);
+  useDidShow(() => {
+    visible.current = true;
+  });
+  useDidHide(() => {
+    visible.current = false;
+    readVersion.current += 1;
+  });
   useEffect(() => {
     if (editor || matchEditor)
       void Taro.enableAlertBeforeUnload({
@@ -94,11 +105,13 @@ function StaffPage() {
   async function run(
     action: (token: string, valid: () => boolean) => Promise<void>,
   ) {
-    if (lock.current) return;
+    if (lock.current || !visible.current) return;
     if (!session.token) {
       void Taro.reLaunch({ url: '/pages/login/index' });
       return;
     }
+    actionVersion.current += 1;
+    readVersion.current += 1;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -144,7 +157,7 @@ function StaffPage() {
       setError('请先返回首页选择赛事');
       return;
     }
-    await run(async (token, valid) => {
+    const work = async (token: string, valid: () => boolean) => {
       const people = await client.request('listEventStaff', {
         token,
         path: { eventId },
@@ -157,11 +170,43 @@ function StaffPage() {
       setRows(people);
       setSituation(next);
       setLoaded(true);
-    });
+      setError('');
+    };
+    if (!loaded) {
+      await run(work);
+      return;
+    }
+    if (lock.current) return;
+    if (!session.token) {
+      void Taro.reLaunch({ url: '/pages/login/index' });
+      return;
+    }
+    const token = session.token;
+    const epoch = generation.current;
+    const action = actionVersion.current;
+    const request = ++readVersion.current;
+    const valid = () =>
+      alive.current &&
+      visible.current &&
+      !lock.current &&
+      token === session.token &&
+      epoch === generation.current &&
+      action === actionVersion.current &&
+      request === readVersion.current;
+    try {
+      await work(token, valid);
+    } catch (cause) {
+      if (!valid()) return;
+      if (cause instanceof ApiError && cause.status === 401) clearSession();
+      else if (cause instanceof ApiError && cause.status === 403) {
+        setRows([]);
+        setSituation(undefined);
+        setLoaded(false);
+        setError('当前身份没有此赛事的人员管理权限，请返回首页重新选择赛事。');
+      } else setError('人员数据暂时无法自动更新，请检查网络后重试。');
+    }
   }
-  useDidShow(() => {
-    if (!editor && !matchEditor) void refresh();
-  });
+  useVisibleAutoRefresh(refresh, !editor && !matchEditor && !history);
 
   function changeProfile(field: keyof Profile, value: string | string[]) {
     if (!editor || busy || uncertain) return;
@@ -341,6 +386,11 @@ function StaffPage() {
       {error && (
         <View className="staff-error" role="alert">
           {error}
+          {!editor && !matchEditor && (
+            <Button disabled={busy} onClick={() => void refresh()}>
+              重新加载
+            </Button>
+          )}
         </View>
       )}
       {busy && <Text className="staff-hint">正在处理，请稍候…</Text>}
@@ -596,9 +646,6 @@ function StaffPage() {
             </Button>
           </View>
           <View className="staff-actions">
-            <Button disabled={busy} onClick={() => void refresh()}>
-              刷新
-            </Button>
             {tab === 'people' && (
               <Button
                 className="staff-primary"

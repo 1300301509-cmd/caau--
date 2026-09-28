@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { withAgentEntry } from '../../features/agent/AgentEntry';
 import { Button, Text, View } from '@tarojs/components';
-import Taro, { useDidShow, useRouter } from '@tarojs/taro';
+import Taro, { useDidHide, useDidShow, useRouter } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
 import {
   clearSession,
   client,
   session,
 } from '../../features/materials/session';
+import { useVisibleAutoRefresh } from '../../features/refresh/useVisibleAutoRefresh';
 
 type S = components['schemas'];
 type EventProfile = {
@@ -31,32 +32,60 @@ function EventInfo() {
   const [event, setEvent] = useState<S['EventViewDto']>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-
+  const inflight = useRef(0);
+  const visible = useRef(false);
+  const generation = useRef(0);
   useDidShow(() => {
+    visible.current = true;
+  });
+  useDidHide(() => {
+    visible.current = false;
+    generation.current += 1;
+  });
+
+  function load() {
+    if (
+      !visible.current ||
+      (inflight.current !== 0 && inflight.current === generation.current)
+    )
+      return;
     const token = session.token;
     if (!token) {
       void Taro.reLaunch({ url: '/pages/login/index' });
       return;
     }
-    setLoading(true);
-    setError('');
-    void client
+    const request = ++generation.current;
+    inflight.current = request;
+    const valid = () =>
+      visible.current &&
+      request === generation.current &&
+      token === session.token;
+    if (!event) setLoading(true);
+    return client
       .request('getEvent', { token, path: { id } })
       .then((result) => {
-        if (token === session.token) setEvent(result);
+        if (valid()) {
+          setEvent(result);
+          setError('');
+        }
       })
       .catch((cause) => {
-        if (token !== session.token) return;
-        setEvent(undefined);
+        if (!valid()) return;
         if (cause instanceof ApiError && cause.status === 401) {
+          setEvent(undefined);
           clearSession();
           void Taro.reLaunch({ url: '/pages/login/index' });
-        } else if (cause instanceof ApiError && cause.status === 403)
+        } else if (cause instanceof ApiError && cause.status === 403) {
+          setEvent(undefined);
           setError('赛事基本信息查看权限已撤销。');
-        else setError('赛事基本信息暂时无法读取，请稍后重试。');
+        } else setError('赛事基本信息暂时无法读取，请稍后重试。');
       })
-      .finally(() => token === session.token && setLoading(false));
-  });
+      .finally(() => {
+        if (inflight.current === request) inflight.current = 0;
+        if (valid()) setLoading(false);
+      });
+  }
+  useVisibleAutoRefresh(load);
 
   const profile = (event?.profile ?? {}) as EventProfile;
   const area = profile.location?.administrativeArea;
@@ -80,7 +109,12 @@ function EventInfo() {
           <Text>正在核对查看权限…</Text>
         </View>
       )}
-      {error && <Text className="error">{error}</Text>}
+      {error && (
+        <View className="error" role="alert">
+          <Text>{error}</Text>
+          <Button onClick={() => void load()}>重新加载</Button>
+        </View>
+      )}
       {event && (
         <View className="card hosting-readonly-form">
           <Text className="subtitle">{event.name}</Text>

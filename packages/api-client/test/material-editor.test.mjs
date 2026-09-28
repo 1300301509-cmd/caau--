@@ -195,3 +195,203 @@ test('same identity recovery preserves input and checks latest revision without 
   assert.equal(editor.token, 'queued');
   assert.equal(editor.entry('m').text, 'unsaved input');
 });
+
+test('silent sync preserves unsaved material input and errors while detecting a newer draft', async () => {
+  let revision = 1;
+  const calls = [];
+  const editor = new MaterialEditor(
+    {
+      request: async (op) => {
+        calls.push(op);
+        if (op === 'getMaterialTask') return { id: 'task' };
+        if (op === 'getTaskExecution') return { state: 'EDITING' };
+        if (op === 'getMaterialDraft')
+          return {
+            revision,
+            entries: [{ materialId: 'm', text: 'server', fileIds: [] }],
+          };
+        if (op === 'listSubmissionVersions') return [{ version: revision }];
+        if (op === 'getUploadCapabilities') return { formats: ['txt'] };
+        if (op === 'getWorkspaceIdentity') return { id: 'actor' };
+      },
+    },
+    'token',
+    'task',
+    async () => '',
+    () => {},
+  );
+  await editor.load();
+  editor.edit('m', { text: 'my unsaved input' });
+  editor.fieldErrors.m = 'Keep this error';
+  editor.notice = 'Keep this notice';
+  editor.error = true;
+  revision = 2;
+  assert.equal(await editor.sync(), 'ok');
+  assert.equal(editor.entry('m').text, 'my unsaved input');
+  assert.equal(editor.draft.revision, 1);
+  assert.equal(editor.latest.revision, 2);
+  assert.equal(editor.versions[0].version, 2);
+  assert.equal(editor.fieldErrors.m, 'Keep this error');
+  assert.equal(editor.notice, 'Keep this notice');
+  assert.equal(editor.error, true);
+  assert.equal(editor.busy, '');
+  assert.ok(!calls.includes('saveMaterialDraft'));
+});
+
+test('silent sync discards an old response after the user starts editing', async () => {
+  let release;
+  let reading;
+  let draftCalls = 0;
+  const editor = new MaterialEditor(
+    {
+      request: async (op) => {
+        if (op === 'getMaterialTask') return { id: 'task' };
+        if (op === 'getTaskExecution') return { state: 'EDITING' };
+        if (op === 'getMaterialDraft') {
+          draftCalls++;
+          if (draftCalls === 2) {
+            reading();
+            await new Promise((resolve) => (release = resolve));
+          }
+          return {
+            revision: draftCalls,
+            entries: [{ materialId: 'm', text: 'remote', fileIds: [] }],
+          };
+        }
+        if (op === 'listSubmissionVersions') return [];
+        if (op === 'getUploadCapabilities') return { formats: ['txt'] };
+        if (op === 'getWorkspaceIdentity') return { id: 'actor' };
+      },
+    },
+    'token',
+    'task',
+    async () => '',
+    () => {},
+  );
+  await editor.load();
+  const started = new Promise((resolve) => (reading = resolve));
+  const pending = editor.sync();
+  await started;
+  editor.edit('m', { text: 'typed while syncing' });
+  release();
+  await pending;
+  assert.equal(editor.entry('m').text, 'typed while syncing');
+  assert.equal(editor.draft.revision, 1);
+  assert.equal(editor.latest, undefined);
+});
+
+test('later silent sync wins when older response arrives last', async () => {
+  let release;
+  let started;
+  let revision = 1;
+  let draftCalls = 0;
+  const editor = new MaterialEditor(
+    {
+      request: async (op) => {
+        if (op === 'getMaterialTask') return { id: 'task' };
+        if (op === 'getTaskExecution') return { state: 'EDITING' };
+        if (op === 'getMaterialDraft') {
+          draftCalls++;
+          const value = revision;
+          if (draftCalls === 2) {
+            started();
+            await new Promise((resolve) => (release = resolve));
+          }
+          return {
+            revision: value,
+            entries: [
+              { materialId: 'm', text: `server ${value}`, fileIds: [] },
+            ],
+          };
+        }
+        if (op === 'listSubmissionVersions') return [];
+        if (op === 'getUploadCapabilities') return { formats: ['txt'] };
+        if (op === 'getWorkspaceIdentity') return { id: 'actor' };
+      },
+    },
+    'token',
+    'task',
+    async () => '',
+    () => {},
+  );
+  await editor.load();
+  const firstStarted = new Promise((resolve) => (started = resolve));
+  const first = editor.sync();
+  await firstStarted;
+  revision = 3;
+  await editor.sync();
+  release();
+  await first;
+  assert.equal(editor.draft.revision, 3);
+  assert.equal(editor.entry('m').text, 'server 3');
+});
+
+test('silent sync removes cached protected content after authorization is revoked', async () => {
+  let revoked = false;
+  const editor = new MaterialEditor(
+    {
+      request: async (op) => {
+        if (revoked && op === 'getMaterialTask') throw new ApiError(403);
+        if (op === 'getMaterialTask')
+          return { id: 'task', title: 'Private task' };
+        if (op === 'getTaskExecution') return { state: 'EDITING' };
+        if (op === 'getMaterialDraft')
+          return {
+            revision: 1,
+            entries: [{ materialId: 'm', text: 'Private text', fileIds: [] }],
+          };
+        if (op === 'listSubmissionVersions') return [{ version: 1 }];
+        if (op === 'getUploadCapabilities') return { formats: ['txt'] };
+        if (op === 'getWorkspaceIdentity') return { id: 'actor' };
+      },
+    },
+    'token',
+    'task',
+    async () => '',
+    () => {},
+  );
+  await editor.load();
+  editor.edit('m', { text: 'Private unsaved text' });
+  revoked = true;
+  assert.equal(await editor.sync(), 403);
+  assert.equal(editor.task, undefined);
+  assert.equal(editor.draft, undefined);
+  assert.equal(editor.execution, undefined);
+  assert.deepEqual(editor.versions, []);
+  assert.deepEqual(editor.entries, []);
+  assert.equal(editor.pending, undefined);
+  assert.equal(editor.denied, true);
+  assert.equal(editor.error, true);
+});
+
+test('temporary silent sync failure leaves current editor state and notice intact', async () => {
+  let offline = false;
+  const editor = new MaterialEditor(
+    {
+      request: async (op) => {
+        if (offline) throw new Error('Network unavailable');
+        if (op === 'getMaterialTask') return { id: 'task' };
+        if (op === 'getTaskExecution') return { state: 'EDITING' };
+        if (op === 'getMaterialDraft')
+          return {
+            revision: 1,
+            entries: [{ materialId: 'm', text: 'saved', fileIds: [] }],
+          };
+        if (op === 'listSubmissionVersions') return [];
+        if (op === 'getUploadCapabilities') return { formats: ['txt'] };
+        if (op === 'getWorkspaceIdentity') return { id: 'actor' };
+      },
+    },
+    'token',
+    'task',
+    async () => '',
+    () => {},
+  );
+  await editor.load();
+  editor.notice = 'Earlier upload message';
+  offline = true;
+  assert.equal(await editor.sync(), 'unavailable');
+  assert.equal(editor.entry('m').text, 'saved');
+  assert.equal(editor.notice, 'Earlier upload message');
+  assert.equal(editor.denied, false);
+});

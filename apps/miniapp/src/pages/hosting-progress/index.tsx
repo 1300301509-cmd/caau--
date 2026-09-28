@@ -147,18 +147,9 @@ function HostingProgress() {
         <View>
           <Text className="workflow-sync-title">办理动态</Text>
           <Text className="workflow-sync-time">
-            {updated ? `最近更新 ${updated}` : '正在读取进度…'}
+            {updated ? `自动同步 · 最近更新 ${updated}` : '正在读取进度…'}
           </Text>
         </View>
-        <Button
-          className="workflow-refresh"
-          onClick={() => {
-            clearTimeout(timer.current);
-            void refresh();
-          }}
-        >
-          刷新
-        </Button>
       </View>
       {error && <Text className="error">{error}</Text>}
       {!rows.length && updated && (

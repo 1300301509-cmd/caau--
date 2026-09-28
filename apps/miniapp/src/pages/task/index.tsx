@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { withAgentEntry } from '../../features/agent/AgentEntry';
 import { Button, Text, View } from '@tarojs/components';
-import Taro, { useDidShow, useRouter } from '@tarojs/taro';
+import Taro, { useDidHide, useDidShow, useRouter } from '@tarojs/taro';
 import { ApiError, workflowError } from '@caau/api-client';
 import { IndividualTaskPage } from '../../features/individuals/IndividualTaskPage';
 import { LegacyTaskPage } from '../../features/materials/LegacyTaskPage';
@@ -15,32 +15,80 @@ function TaskPage() {
   const id = useRouter().params.id ?? '';
   const [individual, setIndividual] = useState<boolean>();
   const [error, setError] = useState('');
+  const current = useRef<{
+    id: string;
+    token: string;
+    epoch: number;
+    individual: boolean;
+  }>();
+  const requestVersion = useRef(0);
+  const routeId = useRef(id);
+  const visible = useRef(false);
+  routeId.current = id;
   async function load() {
     if (!session.token || !id) {
+      current.current = undefined;
       setIndividual(undefined);
       return;
     }
     const token = session.token;
+    const epoch = session.epoch;
+    const version = ++requestVersion.current;
+    const sameTask =
+      current.current?.id === id &&
+      current.current.token === token &&
+      current.current.epoch === epoch;
     setError('');
-    setIndividual(undefined);
+    if (!sameTask) setIndividual(undefined);
     try {
       const task = await client.request('getMaterialTask', {
         token,
         path: { id },
       });
-      if (token === session.token) setIndividual(task.individualChannel);
+      if (
+        !visible.current ||
+        version !== requestVersion.current ||
+        token !== session.token ||
+        epoch !== session.epoch ||
+        id !== routeId.current
+      )
+        return;
+      current.current = {
+        id,
+        token,
+        epoch,
+        individual: task.individualChannel,
+      };
+      if (!sameTask || individual !== task.individualChannel)
+        setIndividual(task.individualChannel);
     } catch (cause) {
-      if (token !== session.token) return;
-      if (cause instanceof ApiError && cause.status === 401) clearSession();
+      if (
+        !visible.current ||
+        version !== requestVersion.current ||
+        token !== session.token ||
+        epoch !== session.epoch ||
+        id !== routeId.current
+      )
+        return;
+      if (cause instanceof ApiError && [401, 403].includes(cause.status)) {
+        current.current = undefined;
+        setIndividual(undefined);
+        if (cause.status === 401) clearSession();
+      }
       setError(workflowError(cause));
     }
   }
   useDidShow(() => {
+    visible.current = true;
     if (!session.token) {
       void Taro.reLaunch({ url: '/pages/login/index' });
       return;
     }
     void load();
+  });
+  useDidHide(() => {
+    visible.current = false;
+    requestVersion.current += 1;
   });
   if (individual === true) return <IndividualTaskPage />;
   if (individual === false) return <LegacyTaskPage />;

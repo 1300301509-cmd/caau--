@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Text, View, Picker } from '@tarojs/components';
-import Taro, { useDidShow } from '@tarojs/taro';
+import Taro from '@tarojs/taro';
 import { ApiError, sha256 } from '@caau/api-client';
 import { client, newKey, readBytes, session } from '../materials/session';
-import { Action, Field, Shell, confirm, saved, useCompetition } from './shared';
+import {
+  Action,
+  Field,
+  Shell,
+  confirm,
+  saved,
+  useCompetition,
+  useVisibleAutoRefresh,
+} from './shared';
 import { supplyStatuses, supplyPhotoExtension, type S } from './model';
 type Item = S['EventSupplyItemViewDto'];
 type Status = keyof typeof supplyStatuses;
@@ -74,14 +82,13 @@ export default function SuppliesPage() {
     if (valid()) {
       setItems(list);
       setReady(true);
+      ctx.setError('');
     }
   }
   async function load() {
-    await ctx.run(read);
+    await (ready ? ctx.read : ctx.run)(read);
   }
-  useDidShow(() => {
-    if (!edit && !uploading) void load();
-  });
+  useVisibleAutoRefresh(load, !edit && !uploading);
   async function open(row?: Item) {
     await ctx.run(async (_token, valid) => {
       const id = row?.id ?? (await newKey());
@@ -301,7 +308,11 @@ export default function SuppliesPage() {
     });
   }
   return (
-    <Shell title="物料管理" ctx={ctx}>
+    <Shell
+      title="物料管理"
+      ctx={ctx}
+      retry={!edit && !uploading ? () => void load() : undefined}
+    >
       {uploading && (
         <View className="card">
           <Text className="subtitle">
@@ -433,12 +444,6 @@ export default function SuppliesPage() {
       ) : (
         <View>
           <View className="competition-row">
-            <Action
-              disabled={ctx.busy || uploading}
-              onClick={() => void load()}
-            >
-              刷新
-            </Action>
             <Action
               primary
               disabled={ctx.busy || !ready || uploading}

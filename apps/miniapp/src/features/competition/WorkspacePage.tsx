@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Button, Image, Picker, Text, View } from '@tarojs/components';
-import Taro, { useDidShow } from '@tarojs/taro';
+import Taro from '@tarojs/taro';
 import { client, session } from '../materials/session';
-import { useCompetition } from './shared';
+import { useCompetition, useVisibleAutoRefresh } from './shared';
 import { bj, upcomingMatches, type S } from './model';
 import teamsIcon from '../../assets/competition/teams.svg';
 import scheduleIcon from '../../assets/competition/schedule.svg';
@@ -57,8 +57,7 @@ export default function CompetitionHub() {
   const { eventId } = ctx;
   const event = data?.events.find((e) => e.id === eventId);
   function load() {
-    return ctx.run(async (token, valid) => {
-      setData(undefined);
+    return (data ? ctx.read : ctx.run)(async (token, valid) => {
       const events = await client.request('listCompetitionEvents', { token });
       if (!valid()) return;
       const resolvedEventId =
@@ -82,7 +81,7 @@ export default function CompetitionHub() {
         client.request('listEventStaff', { token, path: { eventId } }),
         client.request('listEventSupplies', { token, path: { eventId } }),
       ]);
-      if (valid())
+      if (valid()) {
         setData({
           events,
           schedule,
@@ -90,11 +89,11 @@ export default function CompetitionHub() {
           staff: staff.filter((s) => s.active).length,
           supplies,
         });
+        ctx.setError('');
+      }
     });
   }
-  useDidShow(() => {
-    if (session.token) void load();
-  });
+  useVisibleAutoRefresh(load, !!session.token);
   const go = (page: string) =>
     void Taro.navigateTo({
       url: `/pages/${page}/index?event=${encodeURIComponent(eventId)}`,
@@ -106,13 +105,6 @@ export default function CompetitionHub() {
     <View className="match-workspace">
       <View className="workspace-heading">
         <Text className="workspace-title">我的比赛</Text>
-        <Button
-          className="workspace-refresh"
-          disabled={ctx.busy}
-          onClick={() => void load()}
-        >
-          {ctx.busy ? '更新中' : '刷新'}
-        </Button>
       </View>
       <View className="event-banner">
         <Text className="event-banner-label">当前赛事</Text>

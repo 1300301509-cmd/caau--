@@ -6,7 +6,8 @@ import {
   executionStatus,
   workflowError,
 } from '@caau/api-client';
-import { client, newKey, readBytes, session } from './session';
+import { clearSession, client, newKey, readBytes, session } from './session';
+import { useVisibleAutoRefresh } from '../refresh/useVisibleAutoRefresh';
 export function LegacyTaskPage() {
   const router = useRouter();
   const [, update] = useReducer((x) => x + 1, 0);
@@ -22,10 +23,30 @@ export function LegacyTaskPage() {
   );
   const [reading, setReading] = useState(false),
     [fileError, setFileError] = useState('');
+  const [syncError, setSyncError] = useState('');
   const lock = useRef(false);
   useEffect(() => {
     void editor.load();
   }, [editor]);
+  useVisibleAutoRefresh(
+    () => {
+      if (lock.current || reading || editor.busy || editor.denied) return;
+      if (!editor.task) return editor.load();
+      return editor.sync().then((status) => {
+        if (status === 'unavailable')
+          setSyncError('自动同步暂不可用，稍后会重试。');
+        else if (status === 'ok' || status === 401 || status === 403)
+          setSyncError('');
+        if (status === 401) {
+          clearSession();
+          void Taro.reLaunch({ url: '/pages/login/index' });
+        }
+      });
+    },
+    true,
+    20_000,
+    true,
+  );
   useEffect(() => {
     void Promise.resolve()
       .then(() =>
@@ -140,9 +161,11 @@ export function LegacyTaskPage() {
             已逾期，仍可保存草稿；正式提交需要总部延期。
           </Text>
         )}
-        <Button disabled={disabled} onClick={() => void editor.load()}>
-          核对最新状态（保留输入）
-        </Button>
+        {editor.error && (
+          <Button disabled={disabled} onClick={() => void editor.load()}>
+            重新核对最新状态
+          </Button>
+        )}
         {(editor.busy || reading) && (
           <Text className="result">
             {reading ? '正在读取文件' : editor.busy}…
@@ -153,6 +176,7 @@ export function LegacyTaskPage() {
             {editor.notice}
           </Text>
         )}
+        {syncError && <Text className="warning">{syncError}</Text>}
         {fileError && <Text className="error">{fileError}</Text>}
       </View>
       {editor.latest && (

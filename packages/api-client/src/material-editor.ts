@@ -46,6 +46,8 @@ export class MaterialEditor {
   uploadFailures: Record<string, string> = {};
   fieldErrors: Record<string, string> = {};
   pending?: S['SubmitDto'];
+  private stateVersion = 0;
+  private syncVersion = 0;
   constructor(
     readonly client: ReturnType<typeof createApiClient>,
     public token: string,
@@ -55,6 +57,7 @@ export class MaterialEditor {
   ) {}
   private async perform(label: string, work: () => Promise<void>) {
     if (this.busy) return;
+    this.stateVersion++;
     this.busy = label;
     this.notice = '';
     this.error = false;
@@ -72,16 +75,19 @@ export class MaterialEditor {
     }
   }
   async refreshFileInfo(draft: S['DraftViewDto']) {
+    this.fileInfo = await this.readFileInfo(draft, this.token);
+  }
+  private async readFileInfo(draft: S['DraftViewDto'], token: string) {
     const ids = [...new Set(draft.entries.flatMap((e) => e.fileIds))];
     const rows = await Promise.all(
       ids.map((id) =>
         this.client.request('getPrivateFileInfo', {
-          token: this.token,
+          token,
           path: { id },
         }),
       ),
     );
-    this.fileInfo = Object.fromEntries(rows.map((row) => [row.id, row]));
+    return Object.fromEntries(rows.map((row) => [row.id, row]));
   }
   async resume(token: string) {
     while (this.busy) await new Promise((resolve) => setTimeout(resolve, 20));
@@ -101,38 +107,105 @@ export class MaterialEditor {
   }
   async load() {
     await this.perform('读取中', async () => {
-      const path = { id: this.id },
-        token = this.token;
-      const [task, execution, draft, versions, capabilities] =
-        await Promise.all([
-          this.client.request('getMaterialTask', { token, path }),
-          this.client.request('getTaskExecution', { token, path }),
-          this.client.request('getMaterialDraft', { token, path }),
-          this.client.request('listSubmissionVersions', { token, path }),
-          this.client.request('getUploadCapabilities', { token }),
-        ]);
-      const actor = await this.client.request('getWorkspaceIdentity', {
-        token,
-      });
-      if (this.principalId && this.principalId !== actor.id)
-        throw new Error('Identity mismatch');
-      this.principalId = actor.id;
-      this.task = task;
-      this.execution = execution;
-      this.versions = versions;
-      this.capabilities = capabilities;
-      this.denied = false;
-      if (this.dirty || this.pending) {
-        if (draft.revision !== this.draft?.revision) this.latest = draft;
-      } else {
-        this.draft = draft;
-        this.entries = draft.entries.map((e) => ({
-          ...e,
-          fileIds: [...e.fileIds],
-        }));
-      }
-      await this.refreshFileInfo(draft);
+      this.applySnapshot(await this.readSnapshot(this.token));
     });
+  }
+  private async readSnapshot(token: string) {
+    const path = { id: this.id };
+    const [task, execution, draft, versions, capabilities] = await Promise.all([
+      this.client.request('getMaterialTask', { token, path }),
+      this.client.request('getTaskExecution', { token, path }),
+      this.client.request('getMaterialDraft', { token, path }),
+      this.client.request('listSubmissionVersions', { token, path }),
+      this.client.request('getUploadCapabilities', { token }),
+    ]);
+    const actor = await this.client.request('getWorkspaceIdentity', { token });
+    if (this.principalId && this.principalId !== actor.id)
+      throw new Error('Identity mismatch');
+    const fileInfo = await this.readFileInfo(draft, token);
+    return { task, execution, draft, versions, capabilities, actor, fileInfo };
+  }
+  private applySnapshot(
+    snapshot: Awaited<ReturnType<typeof this.readSnapshot>>,
+  ) {
+    const { task, execution, draft, versions, capabilities, actor, fileInfo } =
+      snapshot;
+    if (this.principalId && this.principalId !== actor.id)
+      throw new Error('Identity mismatch');
+    this.principalId = actor.id;
+    this.task = task;
+    this.execution = execution;
+    this.versions = versions;
+    this.capabilities = capabilities;
+    this.fileInfo = fileInfo;
+    this.denied = false;
+    if (this.dirty || this.pending) {
+      if (draft.revision !== this.draft?.revision) this.latest = draft;
+    } else {
+      this.draft = draft;
+      this.entries = draft.entries.map((e) => ({
+        ...e,
+        fileIds: [...e.fileIds],
+      }));
+    }
+  }
+  private clearProtectedState() {
+    this.task = undefined;
+    this.execution = undefined;
+    this.draft = undefined;
+    this.latest = undefined;
+    this.versions = [];
+    this.entries = [];
+    this.capabilities = undefined;
+    this.fileInfo = {};
+    this.principalId = undefined;
+    this.pending = undefined;
+    this.dirty = false;
+    this.uploadFailures = {};
+    this.fieldErrors = {};
+    this.denied = true;
+  }
+  /** Refresh server facts without locking inputs or clearing local notices. */
+  async sync() {
+    if (this.busy || this.denied) return;
+    const token = this.token;
+    const version = this.stateVersion;
+    const syncVersion = ++this.syncVersion;
+    try {
+      const snapshot = await this.readSnapshot(token);
+      if (
+        this.busy ||
+        this.token !== token ||
+        this.stateVersion !== version ||
+        this.syncVersion !== syncVersion
+      )
+        return;
+      this.applySnapshot(snapshot);
+      this.changed();
+      return 'ok';
+    } catch (error) {
+      if (
+        this.busy ||
+        this.token !== token ||
+        this.stateVersion !== version ||
+        this.syncVersion !== syncVersion
+      )
+        return;
+      if (
+        (error instanceof ApiError && [401, 403].includes(error.status)) ||
+        (error instanceof Error && error.message === 'Identity mismatch')
+      ) {
+        this.clearProtectedState();
+        this.error = true;
+        this.notice =
+          error instanceof ApiError
+            ? workflowError(error)
+            : '身份已变化，请重新进入任务。';
+        this.changed();
+        return error instanceof ApiError ? error.status : 403;
+      }
+      return 'unavailable';
+    }
   }
   entry(id: string) {
     return (
@@ -145,6 +218,7 @@ export class MaterialEditor {
   }
   edit(id: string, change: Partial<S['EntryDto']>) {
     if (this.busy || this.pending || this.denied) return;
+    this.stateVersion++;
     const updated = { ...this.entry(id), ...change };
     this.entries = [
       ...this.entries.filter((e) => e.materialId !== id),
@@ -156,6 +230,7 @@ export class MaterialEditor {
   }
   acceptLatestBase() {
     if (!this.latest || this.busy) return;
+    this.stateVersion++;
     this.draft = this.latest;
     this.latest = undefined;
     this.notice = '已保留当前输入，请再次保存；不会自动覆盖服务器。';

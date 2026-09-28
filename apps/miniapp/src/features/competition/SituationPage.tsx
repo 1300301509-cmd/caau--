@@ -1,8 +1,16 @@
 import { useState } from 'react';
 import { Picker, Text, View } from '@tarojs/components';
-import Taro, { useDidShow, useRouter } from '@tarojs/taro';
+import Taro, { useRouter } from '@tarojs/taro';
 import { client, newKey } from '../materials/session';
-import { Action, Field, Shell, confirm, saved, useCompetition } from './shared';
+import {
+  Action,
+  Field,
+  Shell,
+  confirm,
+  saved,
+  useCompetition,
+  useVisibleAutoRefresh,
+} from './shared';
 import { bj, participantRoles, type S } from './model';
 type Team = S['EventTeamRosterViewDto'];
 type Member = S['EventParticipantDto'];
@@ -18,19 +26,18 @@ export default function SituationPage() {
     setEdit(undefined);
   }, !!edit);
   async function load() {
-    await ctx.run(async (token, valid) => {
+    await (data ? ctx.read : ctx.run)(async (token, valid) => {
       const next = await client.request('getEventSituation', {
         token,
         path: { eventId: ctx.eventId },
       });
       if (valid()) {
         setData(next);
+        ctx.setError('');
       }
     });
   }
-  useDidShow(() => {
-    if (!edit) void load();
-  });
+  useVisibleAutoRefresh(load, !edit);
   const match = data?.matches.find((m) => m.id === matchId);
   function update(id: string, key: keyof Member, value: string) {
     if (edit)
@@ -136,7 +143,11 @@ export default function SituationPage() {
     </View>
   );
   return (
-    <Shell title="赛事情况" ctx={ctx}>
+    <Shell
+      title="赛事情况"
+      ctx={ctx}
+      retry={!edit ? () => void load() : undefined}
+    >
       {edit ? (
         <View>
           <Text className="subtitle">{edit.teamName} · 本赛事参赛名单</Text>
@@ -263,9 +274,6 @@ export default function SituationPage() {
                 : '候选赛程'
               : '暂无赛程'}
           </Text>
-          <Action disabled={ctx.busy} onClick={() => void load()}>
-            刷新比赛
-          </Action>
           <Picker
             mode="date"
             value={date || bj(Date.now()).slice(0, 10)}

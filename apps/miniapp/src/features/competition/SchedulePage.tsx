@@ -1,8 +1,15 @@
 import { useRef, useState } from 'react';
 import { Button, Picker, Text, View } from '@tarojs/components';
-import { useDidShow } from '@tarojs/taro';
 import { client, newKey } from '../materials/session';
-import { Action, Field, Shell, confirm, saved, useCompetition } from './shared';
+import {
+  Action,
+  Field,
+  Shell,
+  confirm,
+  saved,
+  useCompetition,
+  useVisibleAutoRefresh,
+} from './shared';
 import { bj, inWeek, monday, shift, scheduleDay, type S } from './model';
 type Schedule = S['ScheduleViewDto'];
 type Generate = S['GenerateScheduleDto'];
@@ -61,7 +68,7 @@ export default function SchedulePage() {
     saved();
   }
   async function load() {
-    await ctx.run(async (token, valid) => {
+    await (data ? ctx.read : ctx.run)(async (token, valid) => {
       const [s, t] = await Promise.all([
         client.request('getEventSchedule', {
           token,
@@ -75,14 +82,13 @@ export default function SchedulePage() {
       if (valid()) {
         setData(s);
         setTeams(t);
+        ctx.setError('');
         const first = s.matches.find((m) => m.startAt);
-        if (first) setWeek(monday(bj(first.startAt).slice(0, 10)));
+        if (!data && first) setWeek(monday(bj(first.startAt).slice(0, 10)));
       }
     });
   }
-  useDidShow(() => {
-    if (!generate && !adjust && !frozen) void load();
-  });
+  useVisibleAutoRefresh(load, !generate && !adjust && !frozen);
   async function send(kind: Pending['kind']) {
     await ctx.run(async (token, valid) => {
       if (!pending.current) {
@@ -236,7 +242,11 @@ export default function SchedulePage() {
     </View>
   );
   return (
-    <Shell title="赛程编排" ctx={ctx}>
+    <Shell
+      title="赛程编排"
+      ctx={ctx}
+      retry={!generate && !adjust && !frozen ? () => void load() : undefined}
+    >
       <Text className="competition-note">
         比赛时间均为北京时间；处理全部冲突后可发布赛程。
       </Text>
@@ -395,9 +405,6 @@ export default function SchedulePage() {
       ) : (
         <View>
           <View className="competition-row">
-            <Action disabled={ctx.busy || frozen} onClick={() => void load()}>
-              刷新
-            </Action>
             <Action
               disabled={ctx.busy || !data || frozen}
               onClick={() => {

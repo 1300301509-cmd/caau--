@@ -7,7 +7,7 @@ import {
   Textarea,
   View,
 } from '@tarojs/components';
-import Taro, { useDidShow, useRouter } from '@tarojs/taro';
+import Taro, { useDidHide, useDidShow, useRouter } from '@tarojs/taro';
 import { AgentStreamInterruptedError, ApiError } from '@caau/api-client';
 import {
   clearSession,
@@ -279,12 +279,33 @@ function sessionEventId(session: AgentSession, fallback = '') {
   );
 }
 
+function replyBasisFor(session?: AgentSession) {
+  if (!session) return '';
+  const task = session.task;
+  const planning = session.planningRequest;
+  const team = session.teamAction;
+  return JSON.stringify([
+    session.id,
+    session.turns.at(-1)?.id,
+    session.currentEventId,
+    task,
+    planning?.id,
+    planning?.revision,
+    planning?.status,
+    team?.id,
+    team?.revision,
+    team?.state,
+    session.lastExecution?.result.commandId,
+  ]);
+}
+
 let volatile:
   | {
       token: string;
       epoch: number;
       current?: AgentSession;
       reply?: Reply;
+      replyBasis?: string;
       receipt?: Receipt;
       input: string;
       lastMessage: string;
@@ -302,6 +323,7 @@ export function AgentPage() {
     cached?.current,
   );
   const [reply, setReply] = useState<Reply | undefined>(cached?.reply);
+  const replyBasis = useRef(cached?.replyBasis);
   const [receipt, setReceipt] = useState<Receipt | undefined>(cached?.receipt);
   const [input, setInput] = useState(cached?.input ?? '');
   const [lastMessage, setLastMessage] = useState(cached?.lastMessage ?? '');
@@ -336,7 +358,15 @@ export function AgentPage() {
   const activeStream = useRef<{ abort(): void } | null>(null);
   const serial = useRef(0);
   const alive = useRef(true);
+  const foreground = useRef(false);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout>>();
+  const refreshCycle = useRef(0);
+  const backgroundRefresh = useRef<() => Promise<void>>(async () => {});
+  const inputRef = useRef(input);
+  const currentIdRef = useRef(current?.id);
   const event = useRef(eventId);
+  inputRef.current = input;
+  currentIdRef.current = current?.id;
   event.current = eventId;
   useEffect(() => {
     if (login.token)
@@ -345,6 +375,7 @@ export function AgentPage() {
         epoch: login.epoch,
         current,
         reply,
+        replyBasis: replyBasis.current,
         receipt,
         input,
         lastMessage,
@@ -388,6 +419,7 @@ export function AgentPage() {
     activeStream.current = null;
     setCurrent(undefined);
     setReply(undefined);
+    replyBasis.current = undefined;
     setReceipt(undefined);
     setInput('');
     setLastMessage('');
@@ -410,6 +442,7 @@ export function AgentPage() {
     const stop = subscribeSession(() => reset());
     return () => {
       alive.current = false;
+      stopAutoRefresh();
       stop();
     };
   }, []);
@@ -511,9 +544,94 @@ export function AgentPage() {
         ?.content ?? '',
     );
   }
+  backgroundRefresh.current = async () => {
+    if (
+      !login.token ||
+      !current?.id ||
+      lock.current ||
+      activeStream.current ||
+      inputRef.current.length > 0
+    )
+      return;
+    const token = login.token;
+    const epoch = login.epoch;
+    const selected = eventId;
+    const sessionId = current.id;
+    const operation = serial.current;
+    const cycle = refreshCycle.current;
+    const valid = () =>
+      foreground.current &&
+      refreshCycle.current === cycle &&
+      serial.current === operation &&
+      currentIdRef.current === sessionId &&
+      !lock.current &&
+      !activeStream.current &&
+      inputRef.current.length === 0 &&
+      authorized(token, epoch, selected);
+    try {
+      const list = await client.request('listAgentSessions', { token });
+      if (!valid()) return;
+      const latest =
+        list.find((item) => item.id === sessionId) ??
+        (await client.request('getAgentSession', {
+          token,
+          path: { sessionId },
+        }));
+      if (!valid()) return;
+      if (JSON.stringify(list) !== JSON.stringify(sessions)) setSessions(list);
+      if (JSON.stringify(latest) !== JSON.stringify(current)) {
+        setCurrent(latest);
+        // Keep the local response and receipt; persisted task data is read from
+        // this snapshot. A reply's choices are only used while its action basis
+        // still matches the server's latest session.
+        setSelectedEvent(sessionEventId(latest, pageEventId));
+        setLastMessage(
+          [...latest.turns].reverse().find((turn) => turn.role === 'USER')
+            ?.content ?? '',
+        );
+      }
+      const scheduleEventId = sessionEventId(latest, pageEventId);
+      if (scheduleEventId && scheduleEventId === selected) {
+        const next = await client.request('getEventSchedule', {
+          token,
+          path: { eventId: scheduleEventId },
+        });
+        if (valid()) setSchedule(next);
+      }
+    } catch (cause) {
+      if (!valid()) return;
+      if (cause instanceof ApiError && cause.status === 401) clearSession();
+      else if (cause instanceof ApiError && cause.status === 403) {
+        reset();
+        setError('当前账号已无权读取该赛事或任务，请返回首页重新选择。');
+      }
+      // Transient read failures leave the visible conversation and input intact.
+    }
+  };
+  function stopAutoRefresh() {
+    foreground.current = false;
+    refreshCycle.current += 1;
+    clearTimeout(refreshTimer.current);
+  }
+  function startAutoRefresh() {
+    stopAutoRefresh();
+    foreground.current = true;
+    const cycle = refreshCycle.current;
+    const tick = async () => {
+      if (!foreground.current || refreshCycle.current !== cycle) return;
+      try {
+        await backgroundRefresh.current();
+      } finally {
+        if (foreground.current && refreshCycle.current === cycle)
+          refreshTimer.current = setTimeout(tick, 20_000);
+      }
+    };
+    refreshTimer.current = setTimeout(tick, 20_000);
+  }
   useDidShow(() => {
     void Taro.setNavigationBarTitle({ title: 'CAAU 智能助手' });
     void operate(restore);
+    startAutoRefresh();
     if (login.token) {
       const token = login.token,
         epoch = login.epoch;
@@ -529,6 +647,7 @@ export function AgentPage() {
         });
     }
   });
+  useDidHide(stopAutoRefresh);
   useEffect(() => {
     void onSaved();
   }, [eventId, login.token, login.epoch]);
@@ -617,27 +736,25 @@ export function AgentPage() {
     setStreamingUser(message);
     setStreamingText('');
     await operate(async (token, valid) => {
-      const active = reply ? reply.task : current.task;
+      const active = current.task;
       const next = await streamAgentMessage(
         current.id,
         {
           message,
-          ...(reply?.status === 'NEED_EVENT' && candidate
+          ...(activeReply?.status === 'NEED_EVENT' && candidate
             ? { eventId: candidate.id }
             : eventId
               ? { eventId }
               : {}),
-          ...(candidate && reply?.status === 'NEED_TEAM'
+          ...(candidate && activeReply?.status === 'NEED_TEAM'
             ? { teamId: candidate.id }
-            : candidate && reply?.status !== 'NEED_EVENT'
+            : candidate && activeReply?.status !== 'NEED_EVENT'
               ? { matchId: candidate.id }
               : {}),
-          ...((reply?.planningRequest ?? current.planningRequest)
+          ...(current.planningRequest
             ? {
-                planningId: (reply?.planningRequest ?? current.planningRequest)!
-                  .id,
-                planningRevision: (reply?.planningRequest ??
-                  current.planningRequest)!.revision,
+                planningId: current.planningRequest.id,
+                planningRevision: current.planningRequest.revision,
               }
             : {}),
           ...(active && !forceNew
@@ -661,6 +778,7 @@ export function AgentPage() {
         path: { sessionId: current.id },
       });
       if (!valid()) return;
+      replyBasis.current = replyBasisFor(latest);
       setReply(next);
       setCurrent(latest);
       if (next.execution) {
@@ -686,7 +804,7 @@ export function AgentPage() {
     setStreamingText('');
   }
   async function saveSuggestedMemory() {
-    const suggested = reply?.suggestedMemory;
+    const suggested = activeReply?.suggestedMemory;
     if (!suggested) return;
     await operate(async (token, valid) => {
       try {
@@ -703,12 +821,21 @@ export function AgentPage() {
       }
     });
   }
-  const task = forceNew ? undefined : reply ? reply.task : current?.task;
-  const planning = reply?.planningRequest ?? current?.planningRequest;
-  const teamAction = reply?.teamAction ?? current?.teamAction;
+  const activeReply =
+    reply && replyBasis.current === replyBasisFor(current) ? reply : undefined;
+  const task = forceNew ? undefined : current?.task;
+  const planning = current?.planningRequest;
+  const teamAction = current?.teamAction;
   const preview = task?.preview;
   const ticket = task?.confirmation;
-  const execution = receipt ?? current?.lastExecution?.result;
+  const persistedExecution = current?.lastExecution?.result;
+  const localReceipt = receipt?.eventId === eventId ? receipt : undefined;
+  const execution =
+    localReceipt &&
+    (!persistedExecution ||
+      localReceipt.revision >= persistedExecution.revision)
+      ? localReceipt
+      : persistedExecution;
   const expired = !!ticket && Date.parse(ticket.expiresAt) <= Date.now();
   const staleRevision =
     !!ticket &&
@@ -1142,27 +1269,29 @@ export function AgentPage() {
                       .join('、')}
                   </Text>
                 )}
-                {task?.step === 'LOCATE_EVENT' && !reply?.candidates.length && (
-                  <Text className="competition-line">
-                    请描述赛事或从有权赛事中明确选择；候选项刷新后须重新发送描述。
-                  </Text>
-                )}
-                {task?.step === 'LOCATE_MATCH' && !reply?.candidates.length && (
-                  <Text className="competition-line">
-                    请重新发送上次描述以恢复候选场次。
-                  </Text>
-                )}
-                {!!reply?.candidates.length && (
+                {task?.step === 'LOCATE_EVENT' &&
+                  !activeReply?.candidates.length && (
+                    <Text className="competition-line">
+                      请描述赛事或从有权赛事中明确选择；候选项刷新后须重新发送描述。
+                    </Text>
+                  )}
+                {task?.step === 'LOCATE_MATCH' &&
+                  !activeReply?.candidates.length && (
+                    <Text className="competition-line">
+                      请重新发送上次描述以恢复候选场次。
+                    </Text>
+                  )}
+                {!!activeReply?.candidates.length && (
                   <View>
                     <Text className="competition-line">
-                      {reply.message} ·{' '}
-                      {reply.status === 'NEED_EVENT'
+                      {activeReply.message} ·{' '}
+                      {activeReply.status === 'NEED_EVENT'
                         ? '请选择赛事'
-                        : reply.status === 'NEED_TEAM'
+                        : activeReply.status === 'NEED_TEAM'
                           ? '请选择赛事参赛球队'
                           : '请选择比赛'}
                     </Text>
-                    {reply.candidates.map((choice) => (
+                    {activeReply.candidates.map((choice) => (
                       <Action
                         key={choice.id}
                         disabled={busy}
@@ -1174,20 +1303,20 @@ export function AgentPage() {
                     ))}
                   </View>
                 )}
-                {reply?.message &&
-                  !reply.candidates.length &&
+                {activeReply?.message &&
+                  !activeReply.candidates.length &&
                   !preview &&
-                  reply.message !==
+                  activeReply.message !==
                     [...(current?.turns ?? [])]
                       .reverse()
                       .find((turn) => turn.role === 'ASSISTANT')?.content && (
                     <Text
-                      className={`competition-line${['QUERY', 'PLAN', 'NEED_TEAM'].includes(reply.status) ? ' agent-query-answer' : ''}`}
+                      className={`competition-line${['QUERY', 'PLAN', 'NEED_TEAM'].includes(activeReply.status) ? ' agent-query-answer' : ''}`}
                     >
-                      {reply.message}
+                      {activeReply.message}
                     </Text>
                   )}
-                {reply?.suggestedMemory && (
+                {activeReply?.suggestedMemory && (
                   <Action
                     disabled={busy}
                     onClick={() => void saveSuggestedMemory()}
@@ -1323,7 +1452,10 @@ export function AgentPage() {
                         ? '核对预览后回复“确认执行”，或继续修改条件'
                         : '请随时提出问题，我会帮你一起解决'
                     }
-                    onInput={(e) => setInput(e.detail.value)}
+                    onInput={(e) => {
+                      inputRef.current = e.detail.value;
+                      setInput(e.detail.value);
+                    }}
                   />
                   <Button
                     className="agent-mobile-send"

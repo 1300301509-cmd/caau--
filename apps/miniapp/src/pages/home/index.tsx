@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Image, ScrollView, Text, View } from '@tarojs/components';
 import Taro, { useDidHide, useDidShow } from '@tarojs/taro';
 import { ApiError, type components } from '@caau/api-client';
@@ -23,6 +23,7 @@ type S = components['schemas'];
 type Event = S['CompetitionEventViewDto'];
 type Material = S['HostingApplicationListItemDto'];
 type ReadState = 'loading' | 'ready' | 'unavailable' | 'not-authorized';
+const AUTO_REFRESH_MS = 15_000;
 type EventProfile = {
   startDate?: string;
   endDate?: string;
@@ -72,8 +73,11 @@ function Home() {
   const [materialsState, setMaterialsState] = useState<ReadState>('loading');
   const [suppliesCount, setSuppliesCount] = useState(0);
   const [suppliesState, setSuppliesState] = useState<ReadState>('loading');
+  const [syncWarning, setSyncWarning] = useState(false);
   const pageEpoch = useRef(0);
   const eventEpoch = useRef(0);
+  const active = useRef(false);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout>>();
   const currentEvent =
     events.find((event) => event.id === selectedEventId) ?? events[0];
   const materialNeeds = materials.filter(
@@ -104,12 +108,15 @@ function Home() {
     eventId: string,
     token: string,
     epoch: number,
+    quiet = false,
   ) {
     const request = ++eventEpoch.current;
-    setEventProfile(undefined);
-    setEventProfileState(eventId ? 'loading' : 'ready');
-    setSuppliesCount(0);
-    setSuppliesState(eventId ? 'loading' : 'ready');
+    if (!quiet) {
+      setEventProfile(undefined);
+      setEventProfileState(eventId ? 'loading' : 'ready');
+      setSuppliesCount(0);
+      setSuppliesState(eventId ? 'loading' : 'ready');
+    }
     if (!eventId) return;
     const [detail, supplies] = await Promise.allSettled([
       client.request('getEvent', { token, path: { id: eventId } }),
@@ -125,13 +132,19 @@ function Home() {
       setEventProfile((detail.value.profile ?? {}) as EventProfile);
       setEventProfileState('ready');
     } else if (handleUnauthorized(detail.reason)) return;
-    else setEventProfileState('unavailable');
+    else {
+      if (detail.reason instanceof ApiError && detail.reason.status === 403)
+        setEventProfile(undefined);
+      setEventProfileState('unavailable');
+    }
     if (supplies.status === 'fulfilled') {
       setSuppliesCount(
         supplies.value.filter((item) => item.status !== 'READY').length,
       );
       setSuppliesState('ready');
     } else if (!handleUnauthorized(supplies.reason)) {
+      if (supplies.reason instanceof ApiError && supplies.reason.status === 403)
+        setSuppliesCount(0);
       setSuppliesState(
         supplies.reason instanceof ApiError && supplies.reason.status === 403
           ? 'not-authorized'
@@ -139,50 +152,90 @@ function Home() {
       );
     }
   }
-  async function loadHome() {
+  async function loadHome(quiet = false) {
     const token = session.token;
-    if (!token) return;
+    if (!token || !active.current) return;
+    clearTimeout(refreshTimer.current);
     const epoch = ++pageEpoch.current;
     ++eventEpoch.current;
-    setEventStatus('loading');
-    setEvents([]);
-    setEventProfile(undefined);
-    setEventProfileState('loading');
-    setSuppliesCount(0);
-    setSuppliesState('loading');
-    setMaterials([]);
-    setMaterialsState('loading');
-    setEventExpanded(false);
-    const [eventResult, materialResult] = await Promise.allSettled([
-      client.request('listCompetitionEvents', { token }),
-      client.request('HostingController_listMaterials', { token }),
-    ]);
-    if (isStale(token, epoch)) return;
-    if (eventResult.status === 'fulfilled') {
-      const eventRows = eventResult.value;
-      session.eventId = resolveEventId(eventRows, session.eventId);
-      setSelectedEventId(session.eventId);
-      setEvents(eventRows);
-      setEventStatus('ready');
-      void loadEventSummary(session.eventId, token, epoch);
-    } else if (!handleUnauthorized(eventResult.reason)) {
+    if (!quiet) {
+      setEventStatus('loading');
       setEvents([]);
-      setEventStatus('error');
       setEventProfile(undefined);
-      setEventProfileState('unavailable');
-      setSuppliesState('unavailable');
-    }
-    if (materialResult.status === 'fulfilled') {
-      setMaterials(materialResult.value);
-      setMaterialsState('ready');
-    } else if (!handleUnauthorized(materialResult.reason)) {
+      setEventProfileState('loading');
+      setSuppliesCount(0);
+      setSuppliesState('loading');
       setMaterials([]);
-      setMaterialsState(
-        materialResult.reason instanceof ApiError &&
-          materialResult.reason.status === 403
-          ? 'not-authorized'
-          : 'unavailable',
-      );
+      setMaterialsState('loading');
+      setEventExpanded(false);
+    }
+    try {
+      const [eventResult, materialResult] = await Promise.allSettled([
+        client.request('listCompetitionEvents', { token }),
+        client.request('HostingController_listMaterials', { token }),
+      ]);
+      if (isStale(token, epoch) || !active.current) return;
+      if (eventResult.status === 'fulfilled') {
+        const eventRows = eventResult.value;
+        const previousEventId = session.eventId;
+        session.eventId = resolveEventId(eventRows, session.eventId);
+        setSelectedEventId(session.eventId);
+        setEvents(eventRows);
+        setEventStatus('ready');
+        setSyncWarning(false);
+        void loadEventSummary(
+          session.eventId,
+          token,
+          epoch,
+          quiet && previousEventId === session.eventId,
+        );
+      } else if (!handleUnauthorized(eventResult.reason)) {
+        if (
+          quiet &&
+          !(
+            eventResult.reason instanceof ApiError &&
+            eventResult.reason.status === 403
+          )
+        )
+          setSyncWarning(true);
+        else {
+          setEvents([]);
+          setEventStatus('error');
+          setEventProfile(undefined);
+          setEventProfileState('unavailable');
+          setSuppliesCount(0);
+          setSuppliesState('unavailable');
+        }
+      }
+      if (isStale(token, epoch)) return;
+      if (materialResult.status === 'fulfilled') {
+        setMaterials(materialResult.value);
+        setMaterialsState('ready');
+      } else if (!handleUnauthorized(materialResult.reason)) {
+        if (
+          quiet &&
+          !(
+            materialResult.reason instanceof ApiError &&
+            materialResult.reason.status === 403
+          )
+        )
+          setSyncWarning(true);
+        else {
+          setMaterials([]);
+          setMaterialsState(
+            materialResult.reason instanceof ApiError &&
+              materialResult.reason.status === 403
+              ? 'not-authorized'
+              : 'unavailable',
+          );
+        }
+      }
+    } finally {
+      if (active.current && !isStale(token, epoch))
+        refreshTimer.current = setTimeout(
+          () => void loadHome(true),
+          AUTO_REFRESH_MS,
+        );
     }
   }
 
@@ -191,13 +244,25 @@ function Home() {
       void Taro.reLaunch({ url: '/pages/login/index' });
       return;
     }
+    active.current = true;
     void loadHome();
   });
   useDidHide(() => {
+    active.current = false;
+    clearTimeout(refreshTimer.current);
     ++pageEpoch.current;
     ++eventEpoch.current;
     setEventExpanded(false);
   });
+  useEffect(
+    () => () => {
+      active.current = false;
+      clearTimeout(refreshTimer.current);
+      ++pageEpoch.current;
+      ++eventEpoch.current;
+    },
+    [],
+  );
   if (!session.token) return <View className="home-v2" />;
 
   return (
@@ -243,6 +308,11 @@ function Home() {
       </View>
 
       <View className="home-v2-body">
+        {syncWarning && (
+          <Text className="home-v2-pending-empty">
+            自动同步暂不可用，恢复连接后会再次核对。
+          </Text>
+        )}
         <View className="home-v2-event-card">
           <View className="home-v2-event-pattern" />
           <View className="home-v2-event-copy">

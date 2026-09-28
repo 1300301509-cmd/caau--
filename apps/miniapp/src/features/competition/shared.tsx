@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Input, Text, Textarea, View } from '@tarojs/components';
-import Taro, { useDidShow, useRouter } from '@tarojs/taro';
+import Taro, { useDidHide, useDidShow, useRouter } from '@tarojs/taro';
 import { ApiError } from '@caau/api-client';
 import { clearSession, session, subscribeSession } from '../materials/session';
 import './competition.css';
+export { useVisibleAutoRefresh } from '../refresh/useVisibleAutoRefresh';
 
 export function useCompetition(clear: () => void, editing = false) {
   const eventId = useRouter().params.event ?? '';
@@ -11,6 +12,11 @@ export function useCompetition(clear: () => void, editing = false) {
   const [error, setError] = useState('');
   const lock = useRef(false);
   const live = useRef(true);
+  const visible = useRef(false);
+  const actionVersion = useRef(0);
+  const readVersion = useRef(0);
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
   const clearRef = useRef(clear);
   clearRef.current = clear;
   useEffect(() => {
@@ -25,7 +31,12 @@ export function useCompetition(clear: () => void, editing = false) {
     };
   }, []);
   useDidShow(() => {
+    visible.current = true;
     if (!session.token) void Taro.reLaunch({ url: '/pages/login/index' });
+  });
+  useDidHide(() => {
+    visible.current = false;
+    readVersion.current += 1;
   });
   useEffect(() => {
     if (editing)
@@ -45,6 +56,8 @@ export function useCompetition(clear: () => void, editing = false) {
       clearSession();
       return;
     }
+    actionVersion.current += 1;
+    readVersion.current += 1;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -85,16 +98,51 @@ export function useCompetition(clear: () => void, editing = false) {
       if (live.current) setBusy(false);
     }
   }
-  return { eventId, busy, error, setError, run };
+  async function read(
+    work: (token: string, valid: () => boolean) => Promise<void>,
+  ) {
+    if (lock.current || editingRef.current || !visible.current || !eventId)
+      return;
+    if (!session.token) {
+      clearSession();
+      return;
+    }
+    const token = session.token;
+    const epoch = session.epoch;
+    const action = actionVersion.current;
+    const request = ++readVersion.current;
+    const valid = () =>
+      live.current &&
+      visible.current &&
+      !lock.current &&
+      !editingRef.current &&
+      token === session.token &&
+      epoch === session.epoch &&
+      action === actionVersion.current &&
+      request === readVersion.current;
+    try {
+      await work(token, valid);
+    } catch (e) {
+      if (!valid()) return;
+      if (e instanceof ApiError && e.status === 401) clearSession();
+      else if (e instanceof ApiError && e.status === 403) {
+        clearRef.current();
+        setError('当前身份没有此赛事的操作权限，请返回首页。');
+      } else setError('暂时无法自动更新，请检查网络后重试。');
+    }
+  }
+  return { eventId, busy, error, setError, run, read };
 }
 export type CompetitionContext = ReturnType<typeof useCompetition>;
 export function Shell({
   title,
   ctx,
+  retry,
   children,
 }: {
   title: string;
   ctx: CompetitionContext;
+  retry?: () => void;
   children: ReactNode;
 }) {
   return (
@@ -106,6 +154,11 @@ export function Shell({
       {ctx.error && (
         <View className="competition-error" role="alert">
           {ctx.error}
+          {retry && (
+            <Button disabled={ctx.busy} onClick={retry}>
+              重新加载
+            </Button>
+          )}
         </View>
       )}
       {ctx.busy && (

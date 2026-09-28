@@ -1,9 +1,17 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Text, View, Picker } from '@tarojs/components';
-import { useDidShow } from '@tarojs/taro';
+import { useDidHide, useDidShow } from '@tarojs/taro';
 import { ApiError } from '@caau/api-client';
-import { client, newKey } from '../materials/session';
-import { Action, Field, Shell, confirm, saved, useCompetition } from './shared';
+import { clearSession, client, newKey, session } from '../materials/session';
+import {
+  Action,
+  Field,
+  Shell,
+  confirm,
+  saved,
+  useCompetition,
+  useVisibleAutoRefresh,
+} from './shared';
 import { emptyTeam, teamFields, teamError, type S } from './model';
 type Team = S['TeamViewDto'];
 type Editor = {
@@ -24,7 +32,16 @@ export default function TeamsPage() {
     [editor, setEditor] = useState<Editor>();
   const pending = useRef<S['CreateTeamDto']>();
   const [frozen, setFrozen] = useState(false);
+  const visible = useRef(false);
+  const readVersion = useRef(0);
+  const editing = useRef(false);
+  const acting = useRef(false);
+  const busy = useRef(false);
+  const hasList = useRef(false);
+  editing.current = !!editor;
+  hasList.current = ready;
   const ctx = useCompetition(() => {
+    readVersion.current += 1;
     setTeams([]);
     setMasters([]);
     setOrgs([]);
@@ -33,29 +50,103 @@ export default function TeamsPage() {
     pending.current = undefined;
     setFrozen(false);
   }, !!editor);
+  busy.current = ctx.busy;
+  const readLists = (token: string) =>
+    Promise.all([
+      client.request('listEventTeams', {
+        token,
+        path: { eventId: ctx.eventId },
+      }),
+      client.request('listTeams', { token }),
+      client.request('listTeamOrganizations', { token }),
+    ]);
+  function applyLists([eventTeams, allTeams, organizations]: Awaited<
+    ReturnType<typeof readLists>
+  >) {
+    setTeams(eventTeams);
+    setMasters(allTeams);
+    setOrgs(organizations);
+    setReady(true);
+  }
   async function load() {
-    await ctx.run(async (token, valid) => {
-      const [a, b, c] = await Promise.all([
-        client.request('listEventTeams', {
-          token,
-          path: { eventId: ctx.eventId },
-        }),
-        client.request('listTeams', { token }),
-        client.request('listTeamOrganizations', { token }),
-      ]);
+    if (!visible.current || editing.current || acting.current || busy.current)
+      return;
+    const token = session.token;
+    if (!token || !ctx.eventId) return;
+    const epoch = session.epoch;
+    const version = ++readVersion.current;
+    const valid = () =>
+      visible.current &&
+      !editing.current &&
+      !acting.current &&
+      !busy.current &&
+      token === session.token &&
+      epoch === session.epoch &&
+      version === readVersion.current;
+    try {
+      const lists = await readLists(token);
       if (valid()) {
-        setTeams(a);
-        setMasters(b);
-        setOrgs(c);
-        setReady(true);
+        applyLists(lists);
+        ctx.setError('');
       }
-    });
+    } catch (error) {
+      if (!valid()) return;
+      if (error instanceof ApiError && error.status === 401) {
+        clearSession();
+      } else if (error instanceof ApiError && error.status === 403) {
+        setTeams([]);
+        setMasters([]);
+        setOrgs([]);
+        setReady(false);
+        ctx.setError('当前身份没有此赛事的操作权限，请返回首页。');
+      } else {
+        ctx.setError(
+          hasList.current
+            ? '球队列表暂时无法自动更新，稍后会重试。'
+            : '球队列表加载失败，正在自动重试。',
+        );
+      }
+    }
   }
   useDidShow(() => {
-    if (!editor) void load();
+    visible.current = true;
   });
+  useDidHide(() => {
+    visible.current = false;
+    readVersion.current += 1;
+  });
+  useEffect(
+    () => () => {
+      visible.current = false;
+      readVersion.current += 1;
+    },
+    [],
+  );
+  useVisibleAutoRefresh(load, !editor);
+  async function runAction(work: Parameters<typeof ctx.run>[0]) {
+    readVersion.current += 1;
+    acting.current = true;
+    try {
+      await ctx.run(work);
+    } finally {
+      acting.current = false;
+    }
+  }
+  async function refreshAfterWrite(token: string, valid: () => boolean) {
+    try {
+      const lists = await readLists(token);
+      if (valid()) applyLists(lists);
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 401 || error.status === 403)
+      )
+        throw error;
+      if (valid()) ctx.setError('球队已保存，列表暂时未更新，页面会自动重试。');
+    }
+  }
   async function edit(row?: Team) {
-    await ctx.run(async (_token, valid) => {
+    await runAction(async (_token, valid) => {
       const id = row?.id ?? (await newKey());
       if (valid()) {
         pending.current = undefined;
@@ -77,7 +168,7 @@ export default function TeamsPage() {
       ctx.setError(problem);
       return;
     }
-    await ctx.run(async (token, valid) => {
+    await runAction(async (token, valid) => {
       if (editor.row) {
         const body = {
           profile: editor.profile,
@@ -120,29 +211,12 @@ export default function TeamsPage() {
         pending.current = undefined;
         setFrozen(false);
         saved();
-        try {
-          const [a, b] = await Promise.all([
-            client.request('listEventTeams', {
-              token,
-              path: { eventId: ctx.eventId },
-            }),
-            client.request('listTeams', { token }),
-          ]);
-          if (valid()) {
-            setTeams(a);
-            setMasters(b);
-          }
-        } catch (e) {
-          if (e instanceof ApiError && (e.status === 401 || e.status === 403))
-            throw e;
-          if (valid())
-            ctx.setError('球队已保存，但列表刷新失败，请点击刷新核对。');
-        }
+        await refreshAfterWrite(token, valid);
       }
     });
   }
   async function toggle(row: Team) {
-    await ctx.run(async (token, valid) => {
+    await runAction(async (token, valid) => {
       let warning = '此操作保留档案及历史，不修改其他赛事资料。';
       if (mode === 'event' && row.active) {
         const schedule = await client.request('getEventSchedule', {
@@ -188,11 +262,12 @@ export default function TeamsPage() {
           setMasters((v) => v.map((t) => (t.id === next.id ? next : t)));
         else setTeams((v) => v.map((t) => (t.id === next.id ? next : t)));
         saved();
+        await refreshAfterWrite(token, valid);
       }
     });
   }
   async function add(row: Team) {
-    await ctx.run(async (token, valid) => {
+    await runAction(async (token, valid) => {
       const next = await client.request('addEventTeam', {
         token,
         path: { eventId: ctx.eventId },
@@ -201,6 +276,7 @@ export default function TeamsPage() {
       if (valid()) {
         setTeams((v) => [...v.filter((t) => t.id !== next.id), next]);
         saved();
+        await refreshAfterWrite(token, valid);
       }
     });
   }
@@ -209,14 +285,13 @@ export default function TeamsPage() {
       await confirm(
         '退出编辑',
         frozen
-          ? '新增结果尚未确认，请刷新核对后再新增，避免重复。'
+          ? '新增结果尚未确认，返回列表后会自动核对，避免重复新增。'
           : '放弃本次未保存的输入？',
       )
     ) {
       setEditor(undefined);
       pending.current = undefined;
       setFrozen(false);
-      void load();
     }
   }
   const list = (mode === 'event' ? teams : masters)
@@ -318,15 +393,13 @@ export default function TeamsPage() {
                 onClick={() => {
                   setMode(v);
                   setInactive(false);
+                  void load();
                 }}
               >
                 {label}
               </Action>
             ))}
           </View>
-          <Action disabled={ctx.busy} onClick={() => void load()}>
-            刷新列表
-          </Action>
           {mode !== 'add' && (
             <Action
               primary
