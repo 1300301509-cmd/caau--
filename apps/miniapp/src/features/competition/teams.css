@@ -408,16 +408,22 @@
 }
 
 .teams-page .teams-card-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 1;
   min-width: 0;
   min-height: 70px;
-  padding: 7px 12px;
+  padding: 0 12px;
   border: 2px solid #1a5e51;
   border-radius: 42px;
   background: #fff;
   color: #185a4d;
   font-size: 22px;
   font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .teams-page .teams-card-actions .teams-card-primary {
