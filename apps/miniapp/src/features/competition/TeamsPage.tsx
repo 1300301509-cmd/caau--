@@ -441,6 +441,7 @@ export default function TeamsPage() {
   const source = mode === 'master' ? masters : teams;
   const activeCount = source.filter((team) => team.active).length;
   const inactiveCount = source.length - activeCount;
+  const hasActiveDivision = divisions.some((group) => group.active);
   const modeTitle = {
     event: '本赛事球队',
     master: '球队档案',
@@ -756,32 +757,43 @@ export default function TeamsPage() {
                 )}
                 {(mode === 'event' || mode === 'master') && ready && (
                   <View className="teams-list-toolbar">
-                    <Text>{mode === 'master' ? '球队档案' : '球队列表'}</Text>
+                    <View className="teams-list-label">
+                      <Text>{mode === 'master' ? '球队档案' : '球队列表'}</Text>
+                      {mode === 'event' && !hasActiveDivision && (
+                        <Text className="teams-list-hint">
+                          先设置组别，再添加参赛球队
+                        </Text>
+                      )}
+                    </View>
                     <Button
                       className="teams-inline-add"
                       ariaLabel={
-                        mode === 'master' ? '录入球队档案' : '添加球队'
+                        mode === 'master'
+                          ? '录入球队档案'
+                          : hasActiveDivision
+                            ? '添加球队'
+                            : '管理竞赛组别'
                       }
                       disabled={ctx.busy}
                       onClick={() =>
-                        mode === 'master' ? void edit() : setAddOpen(true)
+                        mode === 'master'
+                          ? void edit()
+                          : hasActiveDivision
+                            ? setAddOpen(true)
+                            : openMode('division')
                       }
                     >
-                      <Image src={plusIcon} mode="aspectFit" />
-                      {mode === 'master' ? '录入档案' : '添加球队'}
+                      {mode === 'master' || hasActiveDivision ? (
+                        <Image src={plusIcon} mode="aspectFit" />
+                      ) : null}
+                      {mode === 'master'
+                        ? '录入档案'
+                        : hasActiveDivision
+                          ? '添加球队'
+                          : '管理组别'}
                     </Button>
                   </View>
                 )}
-                {mode === 'event' &&
-                  ready &&
-                  !divisions.some((group) => group.active) && (
-                    <View className="teams-guidance">
-                      <Text>先建立竞赛组别，才能录入本赛事球队。</Text>
-                      <Button onClick={() => openMode('division')}>
-                        去管理 ›
-                      </Button>
-                    </View>
-                  )}
                 <View className="teams-card-list">
                   {list.map((row) => (
                     <View className="teams-card" key={row.id}>

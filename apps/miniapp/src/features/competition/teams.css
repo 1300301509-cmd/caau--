@@ -168,6 +168,9 @@
 }
 
 .teams-page .teams-filter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   min-height: 70px;
   padding: 0 20px;
@@ -176,6 +179,7 @@
   color: #245249;
   font-size: 23px;
   font-weight: 650;
+  white-space: nowrap;
   box-shadow: 0 5px 14px rgba(24, 71, 56, 0.035);
 }
 
@@ -185,6 +189,9 @@
 }
 
 .teams-page .teams-manage-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   min-height: 70px;
   margin-left: auto;
@@ -192,17 +199,33 @@
   background: transparent;
   color: #4b6b61;
   font-size: 21px;
+  white-space: nowrap;
 }
 
 .teams-page .teams-list-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 74px;
+  min-height: 84px;
   margin-bottom: 12px;
   color: #314f45;
   font-size: 26px;
   font-weight: 700;
+}
+
+.teams-page .teams-list-label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+
+.teams-page .teams-list-hint {
+  color: #93602f;
+  font-size: 20px;
+  font-weight: 450;
+  line-height: 1.4;
 }
 
 .teams-page .teams-inline-add {
@@ -210,6 +233,7 @@
   align-items: center;
   justify-content: center;
   min-height: 70px;
+  margin-left: 16px;
   padding: 0 24px;
   gap: 8px;
   border-radius: 40px;
@@ -624,7 +648,6 @@
 }
 
 .teams-page .teams-add-context,
-.teams-page .teams-guidance,
 .teams-page .teams-division-card,
 .teams-page .teams-empty {
   box-sizing: border-box;
@@ -642,30 +665,6 @@
   display: block;
   margin: 12px 0 0;
   color: #1b5c4e;
-}
-
-.teams-page .teams-guidance {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  padding: 12px 17px;
-  gap: 10px;
-  border-color: #f1dfca;
-  background: #fffbf5;
-  color: #835628;
-  font-size: 21px;
-  line-height: 1.4;
-}
-
-.teams-page .teams-guidance button {
-  flex: 0 0 auto;
-  min-height: 64px;
-  padding: 0 8px;
-  background: transparent;
-  color: #77501c;
-  font-size: 21px;
-  font-weight: 700;
 }
 
 .teams-page .teams-division-card {
