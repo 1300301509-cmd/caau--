@@ -43,9 +43,9 @@ function headerTop() {
   try {
     const status = Taro.getWindowInfo().statusBarHeight ?? 24;
     const menu = Taro.getMenuButtonBoundingClientRect();
-    return Math.max(status + 54, menu.bottom + 16);
+    return Math.max(status + 28, menu.bottom + 8);
   } catch {
-    return 78;
+    return 64;
   }
 }
 
@@ -754,13 +754,31 @@ export default function TeamsPage() {
                     </Button>
                   </View>
                 )}
+                {(mode === 'event' || mode === 'master') && ready && (
+                  <View className="teams-list-toolbar">
+                    <Text>{mode === 'master' ? '球队档案' : '球队列表'}</Text>
+                    <Button
+                      className="teams-inline-add"
+                      ariaLabel={
+                        mode === 'master' ? '录入球队档案' : '添加球队'
+                      }
+                      disabled={ctx.busy}
+                      onClick={() =>
+                        mode === 'master' ? void edit() : setAddOpen(true)
+                      }
+                    >
+                      <Image src={plusIcon} mode="aspectFit" />
+                      {mode === 'master' ? '录入档案' : '添加球队'}
+                    </Button>
+                  </View>
+                )}
                 {mode === 'event' &&
                   ready &&
                   !divisions.some((group) => group.active) && (
                     <View className="teams-guidance">
                       <Text>先建立竞赛组别，才能录入本赛事球队。</Text>
                       <Button onClick={() => openMode('division')}>
-                        管理组别
+                        去管理 ›
                       </Button>
                     </View>
                   )}
@@ -777,23 +795,6 @@ export default function TeamsPage() {
                           <Text className="teams-card-name">
                             {row.profile.name}
                           </Text>
-                          {mode !== 'add' && (
-                            <Text
-                              className={
-                                row.active
-                                  ? 'teams-status'
-                                  : 'teams-status teams-status-inactive'
-                              }
-                            >
-                              {row.active
-                                ? mode === 'master'
-                                  ? '在用'
-                                  : '参赛中'
-                                : mode === 'master'
-                                  ? '已归档'
-                                  : '已退出'}
-                            </Text>
-                          )}
                           {mode !== 'add' && row.canEdit && (
                             <Button
                               className="teams-card-more"
@@ -825,39 +826,58 @@ export default function TeamsPage() {
                           <Image src={phoneIcon} mode="aspectFit" />
                           <Text>{maskPhone(row.profile.contactPhone)}</Text>
                         </View>
-                        {mode === 'event' && (
-                          <Text className="teams-card-division">
-                            {row.divisionId
-                              ? (divisions.find(
-                                  (group) => group.id === row.divisionId,
-                                )?.name ?? '组别暂不可见')
-                              : '待归组'}
-                          </Text>
+                        {mode !== 'add' && (
+                          <View className="teams-card-tags">
+                            <Text
+                              className={
+                                row.active
+                                  ? 'teams-status'
+                                  : 'teams-status teams-status-inactive'
+                              }
+                            >
+                              {row.active
+                                ? mode === 'master'
+                                  ? '在用'
+                                  : '参赛中'
+                                : mode === 'master'
+                                  ? '已归档'
+                                  : '已退出'}
+                            </Text>
+                            {mode === 'event' && (
+                              <Text className="teams-card-division">
+                                {row.divisionId
+                                  ? (divisions.find(
+                                      (group) => group.id === row.divisionId,
+                                    )?.name ?? '组别暂不可见')
+                                  : '待归组'}
+                              </Text>
+                            )}
+                          </View>
                         )}
-                        <View className="teams-card-actions">
-                          <Button onClick={() => setDetailTeam(row)}>
-                            查看资料
+                      </View>
+                      <View className="teams-card-actions">
+                        <Button onClick={() => setDetailTeam(row)}>
+                          查看资料
+                        </Button>
+                        {mode === 'add' ? (
+                          <Button
+                            className="teams-card-primary"
+                            disabled={ctx.busy || !addDivisionId}
+                            onClick={() => void add(row)}
+                          >
+                            加入赛事
                           </Button>
-                          {mode === 'add' ? (
-                            <Button
-                              className="teams-card-primary"
-                              disabled={ctx.busy || !addDivisionId}
-                              onClick={() => void add(row)}
-                            >
-                              加入赛事
-                            </Button>
-                          ) : row.canEdit ? (
-                            <Button
-                              className="teams-card-primary"
-                              disabled={ctx.busy}
-                              onClick={() => void edit(row)}
-                            >
-                              编辑
-                            </Button>
-                          ) : (
-                            <Text className="teams-read-only">仅可查看</Text>
-                          )}
-                        </View>
+                        ) : row.canEdit ? (
+                          <Button
+                            className="teams-card-primary"
+                            disabled={ctx.busy}
+                            onClick={() => void edit(row)}
+                          >
+                            编辑
+                          </Button>
+                        ) : (
+                          <Text className="teams-read-only">仅可查看</Text>
+                        )}
                       </View>
                     </View>
                   ))}
@@ -881,19 +901,6 @@ export default function TeamsPage() {
                   </Text>
                 )}
               </View>
-            )}
-            {(mode === 'event' || mode === 'master') && ready && (
-              <Button
-                className="teams-floating-add"
-                ariaLabel={mode === 'master' ? '录入球队档案' : '添加球队'}
-                disabled={ctx.busy}
-                onClick={() =>
-                  mode === 'master' ? void edit() : setAddOpen(true)
-                }
-              >
-                <Image src={plusIcon} mode="aspectFit" />
-                {mode === 'master' ? '录入档案' : '添加球队'}
-              </Button>
             )}
           </View>
         )}

@@ -50,11 +50,11 @@
   align-items: center;
   box-sizing: border-box;
   max-width: 1080px;
-  min-height: 224px;
+  min-height: 176px;
   margin: 0 auto;
-  padding-right: 64px;
-  padding-bottom: 30px;
-  padding-left: 48px;
+  padding-right: 46px;
+  padding-bottom: 16px;
+  padding-left: 36px;
   gap: 12px;
 }
 
@@ -62,8 +62,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 72px;
-  width: 72px;
+  flex: 0 0 64px;
+  width: 64px;
   min-height: 88px;
   padding: 0;
   background: transparent;
@@ -104,15 +104,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 108px;
-  width: 108px;
-  height: 108px;
+  flex: 0 0 90px;
+  width: 90px;
+  height: 90px;
   overflow: hidden;
 }
 
 .teams-page .teams-header-logo image {
-  width: 108px;
-  height: 108px;
+  width: 90px;
+  height: 90px;
   mix-blend-mode: multiply;
 }
 
@@ -128,7 +128,7 @@
   box-sizing: border-box;
   max-width: 1080px;
   margin: 0 auto;
-  padding: 0 64px;
+  padding: 0 42px;
 }
 
 .teams-page .teams-search {
@@ -162,19 +162,19 @@
 .teams-page .teams-filters {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  margin: 18px 0 20px;
-  gap: 10px;
+  flex-wrap: nowrap;
+  margin: 16px 0 12px;
+  gap: 8px;
 }
 
 .teams-page .teams-filter {
   flex: 0 0 auto;
-  min-height: 88px;
-  padding: 0 26px;
+  min-height: 70px;
+  padding: 0 20px;
   border-radius: 40px;
   background: rgba(255, 255, 255, 0.78);
   color: #245249;
-  font-size: 24px;
+  font-size: 23px;
   font-weight: 650;
   box-shadow: 0 5px 14px rgba(24, 71, 56, 0.035);
 }
@@ -186,26 +186,58 @@
 
 .teams-page .teams-manage-link {
   flex: 0 0 auto;
-  min-height: 88px;
+  min-height: 70px;
   margin-left: auto;
-  padding: 0 8px;
+  padding: 0 3px;
   background: transparent;
   color: #4b6b61;
-  font-size: 22px;
+  font-size: 21px;
+}
+
+.teams-page .teams-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 74px;
+  margin-bottom: 12px;
+  color: #314f45;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.teams-page .teams-inline-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70px;
+  padding: 0 24px;
+  gap: 8px;
+  border-radius: 40px;
+  background: #105649;
+  color: #fff;
+  font-size: 23px;
+  font-weight: 700;
+}
+
+.teams-page .teams-inline-add image {
+  width: 27px;
+  height: 27px;
 }
 
 .teams-page .teams-card-list {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .teams-page .teams-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
   box-sizing: border-box;
   min-width: 0;
-  padding: 27px 22px 26px;
-  gap: 22px;
+  padding: 23px 24px 20px;
+  column-gap: 18px;
+  row-gap: 16px;
   border: 1px solid rgba(221, 231, 224, 0.74);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.97);
@@ -216,17 +248,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 98px;
   box-sizing: border-box;
-  width: 98px;
-  height: 98px;
+  width: 82px;
+  height: 82px;
   overflow: hidden;
   border: 5px solid rgba(255, 255, 255, 0.86);
   border-radius: 50%;
   background: linear-gradient(145deg, #195c50, #083e37);
   box-shadow: 0 6px 13px rgba(12, 57, 47, 0.15);
   color: #fff;
-  font-size: 30px;
+  font-size: 25px;
   font-weight: 750;
   line-height: 1;
 }
@@ -244,36 +275,30 @@
 }
 
 .teams-page .teams-card-body {
-  flex: 1;
+  grid-column: 2;
   min-width: 0;
 }
 
 .teams-page .teams-card-heading {
   position: relative;
-  display: flex;
-  align-items: flex-start;
   min-width: 0;
-  min-height: 48px;
-  padding-right: 72px;
-  gap: 8px;
+  min-height: 36px;
+  padding-right: 56px;
 }
 
 .teams-page .teams-card-name {
   display: block;
-  flex: 1;
   min-width: 0;
   color: #202d29;
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 750;
   line-height: 1.35;
   word-break: break-word;
 }
 
 .teams-page .teams-status {
-  display: block;
-  flex: 0 0 auto;
-  margin-top: 2px;
-  padding: 5px 13px;
+  display: inline-block;
+  padding: 3px 11px;
   border-radius: 30px;
   background: #e7f3ea;
   color: #18724a;
@@ -289,8 +314,8 @@
 
 .teams-page .teams-card-more {
   position: absolute;
-  top: -20px;
-  right: -14px;
+  top: -24px;
+  right: -17px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -309,7 +334,7 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  margin-top: 3px;
+  margin-top: 2px;
   gap: 7px;
   color: #5b6965;
   font-size: 23px;
@@ -333,8 +358,7 @@
 .teams-page .teams-card-division {
   display: inline-block;
   max-width: 100%;
-  margin-top: 11px;
-  padding: 5px 12px;
+  padding: 3px 11px;
   border-radius: 20px;
   background: #eef4f0;
   color: #3b6356;
@@ -342,23 +366,31 @@
   line-height: 1.35;
 }
 
+.teams-page .teams-card-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  gap: 7px;
+}
+
 .teams-page .teams-card-actions {
   display: flex;
   align-items: center;
-  margin-top: 13px;
+  grid-column: 1 / -1;
   gap: 12px;
 }
 
 .teams-page .teams-card-actions button {
   flex: 1;
   min-width: 0;
-  min-height: 88px;
+  min-height: 70px;
   padding: 7px 12px;
   border: 2px solid #1a5e51;
   border-radius: 42px;
   background: #fff;
   color: #185a4d;
-  font-size: 23px;
+  font-size: 22px;
   font-weight: 650;
 }
 
@@ -373,30 +405,6 @@
   color: var(--teams-muted);
   font-size: 22px;
   text-align: center;
-}
-
-.teams-page .teams-floating-add {
-  position: fixed;
-  right: 48px;
-  bottom: calc(36px + env(safe-area-inset-bottom));
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 90px;
-  padding: 0 29px;
-  gap: 11px;
-  border-radius: 48px;
-  background: linear-gradient(100deg, #0b5449, #0a473e);
-  box-shadow: 0 12px 26px rgba(3, 53, 44, 0.23);
-  color: #fff;
-  font-size: 26px;
-  font-weight: 700;
-}
-
-.teams-page .teams-floating-add image {
-  width: 31px;
-  height: 31px;
 }
 
 .teams-page .teams-sheet-backdrop {
@@ -640,16 +648,24 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
-  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px 17px;
+  gap: 10px;
+  border-color: #f1dfca;
+  background: #fffbf5;
   color: #835628;
-  font-size: 24px;
+  font-size: 21px;
+  line-height: 1.4;
 }
 
 .teams-page .teams-guidance button {
   flex: 0 0 auto;
-  min-height: 88px;
-  font-size: 23px;
+  min-height: 64px;
+  padding: 0 8px;
+  background: transparent;
+  color: #77501c;
+  font-size: 21px;
+  font-weight: 700;
 }
 
 .teams-page .teams-division-card {
