@@ -224,11 +224,14 @@
       },
       "AddEventTeamDto": {
         "properties": {
+          "divisionId": {
+            "type": "string"
+          },
           "teamId": {
             "type": "string"
           }
         },
-        "required": ["teamId"],
+        "required": ["teamId", "divisionId"],
         "type": "object"
       },
       "AdjustScheduleMatchDto": {
@@ -697,6 +700,9 @@
       },
       "AgentPlanningConditionDto": {
         "properties": {
+          "allDivisions": {
+            "type": "boolean"
+          },
           "availability": {
             "enum": ["AVAILABLE", "ONLY", "BLOCK"],
             "type": "string"
@@ -722,6 +728,18 @@
           "daypart": {
             "enum": ["MORNING", "AFTERNOON", "EVENING"],
             "type": "string"
+          },
+          "divisionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "divisionLabels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "durationDays": {
             "type": "number"
@@ -1265,6 +1283,9 @@
       },
       "AgentTaskParametersDto": {
         "properties": {
+          "sourceDivisionName": {
+            "type": "string"
+          },
           "sourceMatchId": {
             "type": "string"
           },
@@ -1365,6 +1386,13 @@
       },
       "AgentTeamActionViewDto": {
         "properties": {
+          "divisionId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "divisionName": {
+            "type": "string"
+          },
           "eventId": {
             "type": "string"
           },
@@ -1408,6 +1436,7 @@
           "id",
           "eventId",
           "eventName",
+          "divisionName",
           "revision",
           "state",
           "mode",
@@ -1899,6 +1928,18 @@
         ],
         "type": "object"
       },
+      "CreateEventDivisionDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
       "CreateEventMaterialsDto": {
         "properties": {
           "eventId": {
@@ -2080,6 +2121,10 @@
       },
       "CreateTeamDto": {
         "properties": {
+          "divisionId": {
+            "description": "Required when eventId is supplied",
+            "type": "string"
+          },
           "eventId": {
             "type": "string"
           },
@@ -2266,6 +2311,37 @@
           }
         },
         "required": ["materialId", "text", "fileIds"],
+        "type": "object"
+      },
+      "EventDivisionViewDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "eventId",
+          "name",
+          "active",
+          "revision",
+          "updatedAt"
+        ],
         "type": "object"
       },
       "EventInputDto": {
@@ -4901,6 +4977,13 @@
           "awaySourceMatchId": {
             "type": "string"
           },
+          "divisionId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "divisionLabel": {
+            "type": "string"
+          },
           "homeEventTeamId": {
             "type": "string"
           },
@@ -4928,6 +5011,8 @@
         },
         "required": [
           "id",
+          "divisionId",
+          "divisionLabel",
           "round",
           "order",
           "homeEventTeamId",
@@ -5245,6 +5330,10 @@
           "canEdit": {
             "type": "boolean"
           },
+          "divisionId": {
+            "nullable": true,
+            "type": "string"
+          },
           "eventId": {
             "type": "string"
           },
@@ -5275,6 +5364,7 @@
           "teamId",
           "organizationId",
           "eventId",
+          "divisionId",
           "profile",
           "active",
           "revision",
@@ -5396,6 +5486,21 @@
         ],
         "type": "object"
       },
+      "UpdateEventDivisionDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["expectedRevision", "name", "active"],
+        "type": "object"
+      },
       "UpdateEventStaffDto": {
         "properties": {
           "active": {
@@ -5436,6 +5541,25 @@
           }
         },
         "required": ["expectedRevision", "name", "quantity", "notes", "status"],
+        "type": "object"
+      },
+      "UpdateEventTeamDto": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "divisionId": {
+            "description": "Assign or change this event participation to an active division",
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "number"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/TeamProfileDto"
+          }
+        },
+        "required": ["expectedRevision", "active", "profile"],
         "type": "object"
       },
       "UpdateTeamDto": {
@@ -8693,6 +8817,146 @@
         "tags": ["Materials"]
       }
     },
+    "/api/v1/events/{eventId}/divisions": {
+      "get": {
+        "operationId": "listEventDivisions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventDivisionViewDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "listEventDivisions",
+        "tags": ["Teams"]
+      },
+      "post": {
+        "operationId": "createEventDivision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventDivisionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventDivisionViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "createEventDivision",
+        "tags": ["Teams"]
+      }
+    },
+    "/api/v1/events/{eventId}/divisions/{id}": {
+      "put": {
+        "operationId": "updateEventDivision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEventDivisionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventDivisionViewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "updateEventDivision",
+        "tags": ["Teams"]
+      }
+    },
     "/api/v1/events/{eventId}/matches/{matchId}/staff": {
       "put": {
         "operationId": "replaceEventMatchStaff",
@@ -9629,7 +9893,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateTeamDto"
+                "$ref": "#/components/schemas/UpdateEventTeamDto"
               }
             }
           },

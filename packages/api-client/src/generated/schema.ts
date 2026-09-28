@@ -987,6 +987,41 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/events/{eventId}/divisions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listEventDivisions */
+    get: operations['listEventDivisions'];
+    put?: never;
+    /** createEventDivision */
+    post: operations['createEventDivision'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/events/{eventId}/divisions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** updateEventDivision */
+    put: operations['updateEventDivision'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/events/{eventId}/matches/{matchId}/staff': {
     parameters: {
       query?: never;
@@ -2527,6 +2562,7 @@ export interface components {
       active: boolean;
     };
     AddEventTeamDto: {
+      divisionId: string;
       teamId: string;
     };
     AdjustScheduleMatchDto: {
@@ -2668,6 +2704,7 @@ export interface components {
       question: string;
     };
     AgentPlanningConditionDto: {
+      allDivisions?: boolean;
       /** @enum {string} */
       availability?: 'AVAILABLE' | 'ONLY' | 'BLOCK';
       /** @enum {string} */
@@ -2679,6 +2716,8 @@ export interface components {
       dates?: string[];
       /** @enum {string} */
       daypart?: 'MORNING' | 'AFTERNOON' | 'EVENING';
+      divisionIds?: string[];
+      divisionLabels?: string[];
       durationDays?: number;
       endTime?: string;
       eventId: string;
@@ -2836,6 +2875,7 @@ export interface components {
       version: number;
     };
     AgentTaskParametersDto: {
+      sourceDivisionName?: string;
       sourceMatchId?: string;
       sourceOrdinal?: number;
       sourceWeekday?: number;
@@ -2871,6 +2911,8 @@ export interface components {
         | 'CANCELLED';
     };
     AgentTeamActionViewDto: {
+      divisionId?: string | null;
+      divisionName: string;
       eventId: string;
       eventName: string;
       id: string;
@@ -3026,6 +3068,10 @@ export interface components {
       memberships: components['schemas']['AccountMembershipInputDto'][];
       temporaryPassword: string;
     };
+    CreateEventDivisionDto: {
+      id: string;
+      name: string;
+    };
     CreateEventMaterialsDto: {
       /** Format: uuid */
       eventId: string;
@@ -3091,6 +3137,8 @@ export interface components {
       title: string;
     };
     CreateTeamDto: {
+      /** @description Required when eventId is supplied */
+      divisionId?: string;
       eventId?: string;
       id: string;
       organizationId: string;
@@ -3146,6 +3194,14 @@ export interface components {
       /** Format: uuid */
       materialId: string;
       text: string;
+    };
+    EventDivisionViewDto: {
+      active: boolean;
+      eventId: string;
+      id: string;
+      name: string;
+      revision: number;
+      updatedAt: string;
     };
     EventInputDto: {
       description: string;
@@ -3975,6 +4031,8 @@ export interface components {
       awayEventTeamId: string;
       awayLabel: string;
       awaySourceMatchId: string;
+      divisionId: string | null;
+      divisionLabel: string;
       homeEventTeamId: string;
       homeLabel: string;
       homeSourceMatchId: string;
@@ -4070,6 +4128,7 @@ export interface components {
       active: boolean;
       bound: boolean;
       canEdit: boolean;
+      divisionId: string | null;
       eventId: string;
       id: string;
       organizationId: string;
@@ -4115,6 +4174,11 @@ export interface components {
       /** Format: uuid */
       reviewerMemberId: string;
     };
+    UpdateEventDivisionDto: {
+      active: boolean;
+      expectedRevision: number;
+      name: string;
+    };
     UpdateEventStaffDto: {
       active: boolean;
       expectedRevision: number;
@@ -4127,6 +4191,13 @@ export interface components {
       quantity: number;
       /** @enum {string} */
       status: 'TO_PREPARE' | 'PREPARING' | 'READY' | 'SHORTAGE';
+    };
+    UpdateEventTeamDto: {
+      active: boolean;
+      /** @description Assign or change this event participation to an active division */
+      divisionId?: string;
+      expectedRevision: number;
+      profile: components['schemas']['TeamProfileDto'];
     };
     UpdateTeamDto: {
       active: boolean;
@@ -6844,6 +6915,78 @@ export interface operations {
       };
     };
   };
+  listEventDivisions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventDivisionViewDto'][];
+        };
+      };
+    };
+  };
+  createEventDivision: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateEventDivisionDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventDivisionViewDto'];
+        };
+      };
+    };
+  };
+  updateEventDivision: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateEventDivisionDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EventDivisionViewDto'];
+        };
+      };
+    };
+  };
   replaceEventMatchStaff: {
     parameters: {
       query?: never;
@@ -7346,7 +7489,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': components['schemas']['UpdateTeamDto'];
+        'application/json': components['schemas']['UpdateEventTeamDto'];
       };
     };
     responses: {

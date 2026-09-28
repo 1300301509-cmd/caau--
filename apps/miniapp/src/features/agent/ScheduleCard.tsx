@@ -66,6 +66,7 @@ const assistantSkills = [
 
 const teamFieldNames: Record<string, string> = {
   eventId: '赛事',
+  divisionId: '参赛组别',
   organizationId: '所属机构',
   name: '球队名称',
   contactName: '负责人',
@@ -98,7 +99,9 @@ function TeamActionCard({
         </Text>
         <Text className="agent-team-status">{status}</Text>
       </View>
-      <Text className="agent-team-event">赛事：{action.eventName}</Text>
+      <Text className="agent-team-event">
+        赛事：{action.eventName} · 组别：{action.divisionName || '待补'}
+      </Text>
       {action.profiles.map((profile, index) => (
         <View className="agent-team-profile" key={`${action.id}-${index}`}>
           <Text className="agent-team-name">
@@ -181,7 +184,7 @@ function PlanningCard({
         <View className="agent-planning-condition" key={item.id}>
           <Text>
             {item.kind === 'DATE_RANGE'
-              ? `赛事日期 ${item.from ?? '待明确'} 至 ${item.to ?? '待明确'}${item.durationDays ? `（共 ${item.durationDays} 天）` : ''}${item.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : item.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
+              ? `赛事日期 ${item.from ?? '待明确'} 至 ${item.to ?? '待明确'}${item.durationDays ? `（共 ${item.durationDays} 天）` : ''}；组别：${item.divisionLabels?.join('、') || '待明确'}${item.allDivisions ? '（全部组别）' : ''}${item.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : item.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
               : item.kind === 'FORMAT'
                 ? '单循环：每两支参赛球队各交手一次'
                 : item.kind === 'DAYPART_CAPACITY'
@@ -215,7 +218,7 @@ function PlanningCard({
       )}
       {planning.status === 'STALE' && (
         <Text className="competition-error">
-          参赛记录已停用，原确认失效；请移除条件后重新确认。
+          参赛记录或组别已变化，原确认失效；请修订条件后重新确认。
         </Text>
       )}
       {planning.pending.map((pending) => (

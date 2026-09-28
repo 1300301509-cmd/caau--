@@ -109,6 +109,10 @@ async function main() {
       name: 'Studio 合成测试赛（2027年6月5—6日）',
       description: '独立工作台调试数据',
     });
+    const division = await api(token, 'POST', `events/${event.id}/divisions`, {
+      id: randomUUID(),
+      name: 'U12 男子组',
+    });
     const organization = (
       await sql.query('SELECT id FROM "Organization" WHERE name=$1', [
         'CAAU 总部（本地测试）',
@@ -119,6 +123,7 @@ async function main() {
         id: randomUUID(),
         organizationId: organization.id,
         eventId: event.id,
+        divisionId: division.id,
         profile: {
           name: `Studio 测试队 ${index}`,
           contactName: `测试联系人 ${index}`,

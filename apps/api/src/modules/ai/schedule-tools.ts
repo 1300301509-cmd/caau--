@@ -24,6 +24,7 @@ export const queryPlanSchema = z.object({
     ])
     .optional(),
   teamName: z.string().max(120).optional(),
+  divisionName: z.string().max(120).optional(),
   teamId: uuid.optional(),
   matchId: uuid.optional(),
   ordinal: z.number().int().min(1).max(1000).optional(),
@@ -33,6 +34,7 @@ export type DateRange = { from: string; to: string } | null;
 export type QueryArguments = {
   range: DateRange;
   teamId?: string;
+  divisionId?: string;
   matchId?: string;
   ordinal?: number;
 };
@@ -148,10 +150,18 @@ const matchTeams = (match: ScheduleMatchDto) =>
     { id: match.homeEventTeamId, label: match.homeLabel },
     { id: match.awayEventTeamId, label: match.awayLabel },
   ].filter((team) => !!team.id);
-export function resolveTeam(view: ScheduleViewDto, name?: string, id?: string) {
+export function resolveTeam(
+  view: ScheduleViewDto,
+  name?: string,
+  id?: string,
+  divisionId?: string,
+) {
   if (!name && !id) return { teamId: undefined, choices: [] as string[] };
   const teams = new Map(
-    view.matches.flatMap(matchTeams).map((team) => [team.id, team]),
+    view.matches
+      .filter((match) => !divisionId || match.divisionId === divisionId)
+      .flatMap(matchTeams)
+      .map((team) => [team.id, team]),
   );
   const normalized = name?.trim().toLocaleLowerCase();
   const choices = [...teams.values()].filter((team) =>
@@ -177,6 +187,7 @@ export const scheduleTools = {
       dateTo: true,
       relative: true,
       teamName: true,
+      divisionName: true,
       teamId: true,
     }),
     execute(view: ScheduleViewDto, args: QueryArguments): QueryToolResult {
@@ -184,6 +195,7 @@ export const scheduleTools = {
         .filter(
           (match) =>
             within(match, args.range) &&
+            (!args.divisionId || match.divisionId === args.divisionId) &&
             (!args.teamId ||
               match.homeEventTeamId === args.teamId ||
               match.awayEventTeamId === args.teamId),
@@ -214,12 +226,14 @@ export const scheduleTools = {
       dateTo: true,
       relative: true,
       teamName: true,
+      divisionName: true,
       teamId: true,
     }),
     execute(view: ScheduleViewDto, args: QueryArguments): QueryToolResult {
       const matches = view.matches.filter(
         (match) =>
           within(match, args.range) &&
+          (!args.divisionId || match.divisionId === args.divisionId) &&
           (!args.teamId ||
             match.homeEventTeamId === args.teamId ||
             match.awayEventTeamId === args.teamId) &&

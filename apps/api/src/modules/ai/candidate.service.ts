@@ -19,7 +19,10 @@ import {
   type Actor,
 } from '../authorization/policy.js';
 import { SchedulingService } from '../scheduling/scheduling.service.js';
-import { validateConfig } from '../scheduling/scheduling.algorithm.js';
+import {
+  validateConfig,
+  validateSchedule,
+} from '../scheduling/scheduling.algorithm.js';
 import type {
   ScheduleConfigDto,
   ScheduleMatchDto,
@@ -62,6 +65,13 @@ const participantSnapshot = (
     revision: number;
     updatedAt: Date;
     profile: Prisma.JsonValue;
+    divisionId: string | null;
+    division: {
+      name: string;
+      active: boolean;
+      revision: number;
+      updatedAt: Date;
+    } | null;
   }[],
 ) =>
   rows.map((row) => ({
@@ -70,6 +80,11 @@ const participantSnapshot = (
     active: row.active,
     revision: row.revision,
     updatedAt: row.updatedAt.toISOString(),
+    divisionId: row.divisionId,
+    divisionActive: row.division?.active ?? false,
+    divisionName: row.division?.name ?? '',
+    divisionRevision: row.division?.revision ?? 0,
+    divisionUpdatedAt: row.division?.updatedAt.toISOString() ?? '',
     name:
       typeof row.profile === 'object' &&
       row.profile &&
@@ -162,6 +177,11 @@ export class CandidateService {
     });
     const rows = await tx.eventTeam.findMany({
       where: { eventId: plan.eventId },
+      include: {
+        division: {
+          select: { name: true, active: true, revision: true, updatedAt: true },
+        },
+      },
       orderBy: { id: 'asc' },
     });
     const staff = baseline
@@ -208,6 +228,16 @@ export class CandidateService {
           !(row.fixedMatchIds as string[]).includes(match.id),
       );
     const current = row.matches as unknown as ScheduleMatchDto[];
+    const selectedDivisionIds = (view.conditions as PlanningCondition[]).find(
+      (condition) => condition.kind === 'DATE_RANGE',
+    )?.divisionIds;
+    const singleScope =
+      !!selectedDivisionIds?.length &&
+      teams.some(
+        (team) =>
+          team.active &&
+          (!team.divisionId || !selectedDivisionIds.includes(team.divisionId)),
+      );
     const canSave =
       !stale &&
       row.outcome === 'FOUND' &&
@@ -247,7 +277,9 @@ export class CandidateService {
       status: stale ? 'STALE' : (row.outcome as CandidateView['status']),
       warning: stale
         ? '需求确认、参赛记录或基础赛程已变化；此候选不可沿用，请重新核对并生成。'
-        : '候选预览，尚未保存；不产生正式赛程版本或执行许可。',
+        : singleScope
+          ? '仅重排选定组别；其他组现有场次原样固定。候选仍是一份全赛事预览，尚未保存或发布。'
+          : '候选预览，尚未保存；不产生正式赛程版本或执行许可。',
       format: 'ROUND_ROBIN',
       config: row.config as unknown as ScheduleConfigDto,
       configSource: row.configSource,
@@ -736,6 +768,36 @@ export class CandidateService {
           throw new ConflictException(
             'Confirmed MUST date range and candidate configuration differ; clarify before calculation',
           );
+        if (!period.divisionIds?.length)
+          throw new ConflictException(
+            'Confirm competition divisions before calculating a schedule',
+          );
+        const activeTeams = teams.filter((team) => team.active);
+        if (
+          activeTeams.some((team) => !team.divisionId || !team.divisionActive)
+        )
+          throw new ConflictException(
+            'Some event participants have no active competition division; assign them before scheduling',
+          );
+        const selectedDivisionIds = new Set(period.divisionIds);
+        const partialScope = activeTeams.some(
+          (team) => !selectedDivisionIds.has(team.divisionId!),
+        );
+        const groupSizes = new Map<string, number>();
+        for (const team of activeTeams)
+          groupSizes.set(
+            team.divisionId!,
+            (groupSizes.get(team.divisionId!) ?? 0) + 1,
+          );
+        if (
+          !activeTeams.some((team) =>
+            selectedDivisionIds.has(team.divisionId!),
+          ) ||
+          [...groupSizes.values()].some((size) => size < 2)
+        )
+          throw new ConflictException(
+            'Each scheduled competition division needs at least two active teams',
+          );
         if (planningIssues(conditions).length)
           throw new ConflictException(
             'Requirements contain conflicting conditions',
@@ -771,10 +833,7 @@ export class CandidateService {
         if (
           !same(
             [...config.teamIds].sort(),
-            teams
-              .filter((team) => team.active)
-              .map((team) => team.id)
-              .sort(),
+            activeTeams.map((team) => team.id).sort(),
           )
         )
           throw new ConflictException(
@@ -782,8 +841,80 @@ export class CandidateService {
           );
         const before = (baseline?.matches ??
           []) as unknown as ScheduleMatchDto[];
+        let preservedMatches: ScheduleMatchDto[] = [];
+        if (partialScope) {
+          if (
+            !baseline ||
+            baseline.format !== 'ROUND_ROBIN' ||
+            baseline.status !== 'DRAFT'
+          )
+            throw new ConflictException(
+              'Scheduling one division requires an existing round-robin DRAFT for the other divisions; choose all divisions first',
+            );
+          if (!same(baseline.config, config))
+            throw new ConflictException(
+              'Scheduling one division cannot change the event-wide dates, venues or timing; use the current schedule configuration or choose all divisions',
+            );
+          const byId = new Map(teams.map((team) => [team.id, team]));
+          const byMatchId = new Map(before.map((match) => [match.id, match]));
+          const invalidBaselineGroup =
+            validateSchedule(config, before, teams).some((issue) =>
+              [
+                'DIVISION_UNASSIGNED',
+                'DIVISION_UNAVAILABLE',
+                'DIVISION_MISMATCH',
+              ].includes(issue.code),
+            ) ||
+            before.some(
+              (match) =>
+                !match.divisionId ||
+                [match.homeEventTeamId, match.awayEventTeamId]
+                  .filter(Boolean)
+                  .some(
+                    (id) =>
+                      !config.teamIds.includes(id) ||
+                      byId.get(id)?.divisionId !== match.divisionId,
+                  ) ||
+                [match.homeSourceMatchId, match.awaySourceMatchId]
+                  .filter(Boolean)
+                  .some(
+                    (id) => byMatchId.get(id)?.divisionId !== match.divisionId,
+                  ),
+            );
+          if (invalidBaselineGroup)
+            throw new ConflictException(
+              'Existing schedule has legacy, unknown or cross-division matches; first rebuild all divisions before scheduling one division',
+            );
+          preservedMatches = before.filter(
+            (match) => !selectedDivisionIds.has(match.divisionId!),
+          );
+          const preservedTeamIds = activeTeams
+            .filter((team) => !selectedDivisionIds.has(team.divisionId!))
+            .map((team) => team.id);
+          const preservedIssues = auditCandidate(
+            { ...config, teamIds: preservedTeamIds },
+            teams,
+            preservedMatches,
+            [],
+            [],
+          );
+          if (preservedIssues.length)
+            throw new ConflictException(
+              `Other divisions' existing matches must be complete and conflict-free before a one-division preview (${preservedIssues[0]!.code}); choose all divisions to rebuild`,
+            );
+        }
+        const effectiveFixedMatchIds = [
+          ...new Set([
+            ...fixedMatchIds,
+            ...preservedMatches.map((match) => match.id),
+          ]),
+        ];
+        if (effectiveFixedMatchIds.length > 66)
+          throw new ConflictException(
+            "The fixed matches exceed this version's 66-match calculation limit; reduce the scope or use another scheduling workflow",
+          );
         if (
-          fixedMatchIds.some(
+          effectiveFixedMatchIds.some(
             (id) => !before.some((match) => match.id === id && match.startAt),
           )
         )
@@ -800,7 +931,9 @@ export class CandidateService {
         );
         for (const assignment of staffSnapshot.filter((item) => item.assigned))
           protectedIds.add(assignment.matchId);
-        if ([...protectedIds].some((id) => !fixedMatchIds.includes(id)))
+        if (
+          [...protectedIds].some((id) => !effectiveFixedMatchIds.includes(id))
+        )
           throw new ConflictException(
             'Started/past or staffed matches must be fixed explicitly; cannot rearrange protected matches',
           );
@@ -809,7 +942,13 @@ export class CandidateService {
           teams,
           conditions,
           before,
-          fixedMatchIds,
+          effectiveFixedMatchIds,
+          partialScope
+            ? {
+                targetDivisionIds: [...selectedDivisionIds],
+                preservedMatches,
+              }
+            : undefined,
         );
         // A second authority check after bounded computation, before storing any preview.
         const updated = await this.context(tx, actor, plan.id);
@@ -836,7 +975,7 @@ export class CandidateService {
             configSource: body.configSource as string,
             teamSnapshot: json(teams),
             baselineSnapshot: json(baselineSnapshot),
-            fixedMatchIds: json(fixedMatchIds),
+            fixedMatchIds: json(effectiveFixedMatchIds),
             matches: json(result.matches),
             issues: json(result.issues),
             preferences: json(result.preferences),

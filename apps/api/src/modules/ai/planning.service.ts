@@ -105,12 +105,49 @@ export class PlanningService {
     const participants = teamIds.length
       ? await tx.eventTeam.findMany({
           where: { eventId: row.eventId, id: { in: teamIds } },
-          select: { id: true, active: true },
+          select: { id: true, active: true, divisionId: true },
         })
       : [];
     if (participants.length !== teamIds.length) deny();
     const issues = planningIssues(conditions);
     const period = conditions.find((item) => item.kind === 'DATE_RANGE');
+    if (period?.scheduleGoal) {
+      const divisions = await tx.eventDivision.findMany({
+        where: { eventId: row.eventId },
+        select: { id: true, name: true, active: true, revision: true },
+      });
+      const selected = divisions.filter((division) =>
+        period.divisionIds?.includes(division.id),
+      );
+      if (
+        period.divisionIds?.length &&
+        (selected.length !== period.divisionIds.length ||
+          selected.some(
+            (division) =>
+              !division.active ||
+              period.divisionRevisions?.[division.id] !== division.revision,
+          ))
+      )
+        issues.push('竞赛组别已变化或停用，请重新选择并确认排程范围。');
+      if (
+        period.allDivisions &&
+        (divisions.filter((division) => division.active).length !==
+          selected.length ||
+          divisions.some(
+            (division) =>
+              division.active && !period.divisionIds?.includes(division.id),
+          ))
+      )
+        issues.push('当前赛事的组别清单已变化，请重新确认全部组别范围。');
+      if (
+        participants.some(
+          (participant) =>
+            !participant.divisionId ||
+            !period.divisionIds?.includes(participant.divisionId),
+        )
+      )
+        issues.push('已有球队条件不属于本次选定组别，请修订排程要求。');
+    }
     if (period?.scheduleGoal) {
       const currentProfile = await tx.eventProfileVersion.findFirst({
         where: { eventId: row.eventId },
@@ -161,7 +198,8 @@ export class PlanningService {
       eventName: event.name,
       revision: row.revision,
       status:
-        (inactive.length || issues.length) && row.status === 'CONFIRMED'
+        (inactive.length || issues.length || pending.length) &&
+        row.status === 'CONFIRMED'
           ? 'STALE'
           : (row.status as 'COLLECTING' | 'CONFIRMED'),
       confirmedRevision: row.confirmedRevision,
@@ -329,12 +367,78 @@ export class PlanningService {
       throw new ConflictException(
         'Planning request changed; refresh before editing',
       );
+    const divisions = await tx.eventDivision.findMany({
+      where: { eventId: chosenId, active: true },
+      select: { id: true, name: true, revision: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+    if (proposal.allDivisions && proposal.divisionName)
+      return {
+        status: 'CLARIFY',
+        message: '请明确选择一个竞赛组别，或者明确选择全部组别。',
+        candidates: divisions.map((division) => ({
+          id: division.id,
+          label: division.name,
+        })),
+        planning: row ? await this.view(tx, actor, row) : null,
+      };
+    const previousScope = row
+      ? conditionsOf(row).find((condition) => condition.kind === 'DATE_RANGE')
+      : undefined;
+    const namedDivisions = proposal.divisionName
+      ? divisions.filter(
+          (division) =>
+            division.name === proposal.divisionName ||
+            division.name.includes(proposal.divisionName!) ||
+            proposal.divisionName!.includes(division.name),
+        )
+      : [];
+    if (proposal.divisionName && namedDivisions.length !== 1)
+      return {
+        status: 'CLARIFY',
+        message: '未能唯一确定所说的竞赛组别，请从当前赛事的组别中选择。',
+        candidates: divisions.map((division) => ({
+          id: division.id,
+          label: division.name,
+        })),
+        planning: row ? await this.view(tx, actor, row) : null,
+      };
+    const selectedDivisions = proposal.allDivisions
+      ? divisions
+      : namedDivisions.length
+        ? namedDivisions
+        : previousScope?.divisionIds?.length
+          ? divisions.filter((division) =>
+              previousScope.divisionIds?.includes(division.id),
+            )
+          : divisions.length === 1
+            ? divisions
+            : [];
+    const allDivisions = proposal.allDivisions
+      ? true
+      : namedDivisions.length
+        ? false
+        : (previousScope?.allDivisions ?? false);
+    const scope = {
+      divisionIds: selectedDivisions.map((division) => division.id),
+      divisionLabels: selectedDivisions.map((division) => division.name),
+      divisionRevisions: Object.fromEntries(
+        selectedDivisions.map((division) => [division.id, division.revision]),
+      ),
+      allDivisions,
+    };
     const teams = (
       await tx.eventTeam.findMany({
         where: { eventId: chosenId, active: true },
-        select: { id: true, profile: true },
+        select: { id: true, profile: true, divisionId: true },
       })
-    ).map((team) => ({ id: team.id, name: nameOf(team.profile) }));
+    )
+      .filter(
+        (team) =>
+          !selectedDivisions.length ||
+          (team.divisionId && scope.divisionIds.includes(team.divisionId)),
+      )
+      .map((team) => ({ id: team.id, name: nameOf(team.profile) }));
     if (
       context.teamId &&
       !teams.some((team) => team.id === context.teamId) &&
@@ -434,6 +538,7 @@ export class PlanningService {
           kind: 'DATE_RANGE',
           eventId: chosenId,
           priority: 'MUST',
+          ...scope,
           ...(start ? { from: start } : {}),
           ...(end ? { to: end } : {}),
           ...(days ? { durationDays: days } : {}),
@@ -443,6 +548,19 @@ export class PlanningService {
         }),
       );
     }
+    if (!wholeRequest && (proposal.allDivisions || proposal.divisionName))
+      conditions = conditions.map((condition) =>
+        condition.kind === 'DATE_RANGE'
+          ? {
+              ...condition,
+              ...scope,
+              sourceTurnIds: uniqueIds([
+                ...condition.sourceTurnIds,
+                sourceTurnId,
+              ]),
+            }
+          : condition,
+      );
     if (
       wholeRequest &&
       changes.some(
@@ -592,6 +710,7 @@ export class PlanningService {
             kind: 'DATE_RANGE',
             eventId: chosenId,
             priority: 'MUST',
+            ...scope,
             from,
             to,
             ...(previousPeriod?.scheduleGoal ? { scheduleGoal: true } : {}),

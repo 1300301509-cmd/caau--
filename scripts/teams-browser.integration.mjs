@@ -61,7 +61,15 @@ export async function teamsBrowserTest({ config, tokens, eventId }) {
     await expect(page.getByRole('button', { name: '录入球队' })).toBeEnabled({
       timeout: 15000,
     });
+    await expect(
+      page.getByRole('button', { name: 'U12 男子组' }),
+    ).toBeVisible();
     await page.getByRole('button', { name: '录入球队' }).click();
+    await page.getByRole('combobox', { name: '竞赛组别' }).click();
+    await page
+      .locator('.ant-select-dropdown:visible .ant-select-item-option')
+      .filter({ hasText: 'U12 男子组' })
+      .click();
     await page.getByLabel('球队名称', { exact: true }).fill('合成浏览器球队');
     await page.getByLabel('球队负责人', { exact: true }).fill('合成领队');
     await page.getByLabel('联系方式', { exact: true }).fill('13800001111');
@@ -72,6 +80,9 @@ export async function teamsBrowserTest({ config, tokens, eventId }) {
     await expect(
       page.getByRole('row').filter({ hasText: '合成浏览器球队' }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('row').filter({ hasText: '合成浏览器球队' }),
+    ).toContainText('U12 男子组');
     await page.getByRole('tab', { name: '球队档案', exact: true }).click();
     await page
       .getByRole('row')

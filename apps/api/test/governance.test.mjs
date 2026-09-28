@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   billingPeriods,
   estimateMicros,
+  UsageService,
 } from '../dist/modules/governance/usage.service.js';
 import {
   redact,
@@ -43,4 +44,48 @@ test('governance: Beijing day and month boundaries, integer currency and credent
     'INVALID',
     'FAILED',
   ]);
+});
+
+test('governance: usage transaction retries nested serialization conflicts without retrying other errors', async () => {
+  const service = new UsageService({});
+  const conflicts = [
+    { code: 'P2034' },
+    { meta: { driverAdapterError: { cause: { originalCode: '40001' } } } },
+    { cause: { originalCode: '40P01', kind: 'TransactionWriteConflict' } },
+  ];
+  let attempts = 0;
+  service.db = {
+    client: {
+      $transaction: async (work, options) => {
+        assert.equal(options.isolationLevel, 'Serializable');
+        attempts += 1;
+        if (conflicts.length) throw conflicts.shift();
+        return work({});
+      },
+    },
+  };
+  assert.equal(await service.transaction(async () => 'settled'), 'settled');
+  assert.equal(attempts, 4);
+
+  const unrelated = new Error('other database failure');
+  service.db.client.$transaction = async () => {
+    attempts += 1;
+    throw unrelated;
+  };
+  await assert.rejects(
+    service.transaction(async () => 'unused'),
+    (error) => error === unrelated,
+  );
+  assert.equal(attempts, 5);
+
+  const exhausted = { cause: { originalCode: '40001' } };
+  service.db.client.$transaction = async () => {
+    attempts += 1;
+    throw exhausted;
+  };
+  await assert.rejects(
+    service.transaction(async () => 'unused'),
+    (error) => error === exhausted,
+  );
+  assert.equal(attempts, 11);
 });

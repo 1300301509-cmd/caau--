@@ -373,6 +373,10 @@ export async function hostingIntegration(t, context) {
       );
       const eventId = source.approvedEventId;
       assert.ok(eventId);
+      const division = await call('a', 'POST', `events/${eventId}/divisions`, {
+        id: randomUUID(),
+        name: 'U12男子组',
+      });
       const conversation = await call('a', 'POST', 'agent/sessions', {
         currentEventId: eventId,
       });
@@ -391,6 +395,7 @@ export async function hostingIntegration(t, context) {
       });
       assert.equal(collecting.status, 'TEAM');
       assert.equal(collecting.teamAction.state, 'COLLECTING');
+      assert.equal(collecting.teamAction.divisionId, division.id);
       assert.deepEqual(collecting.teamAction.missing, [
         '球队名称',
         '负责人',
@@ -407,6 +412,7 @@ export async function hostingIntegration(t, context) {
       assert.equal(preview.status, 'TEAM');
       assert.equal(preview.teamAction.id, collecting.teamAction.id);
       assert.equal(preview.teamAction.state, 'PREVIEW_READY');
+      assert.equal(preview.teamAction.divisionName, 'U12男子组');
       assert.deepEqual(preview.teamAction.missing, []);
       assert.equal(preview.teamAction.profiles[0].name, '内测青云队');
       const teamId = preview.teamAction.teamIds[0];

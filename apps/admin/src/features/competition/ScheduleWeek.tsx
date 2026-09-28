@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Empty, Input, Space, Tag } from 'antd';
+import { Button, Empty, Input, Select, Space, Tag } from 'antd';
 import type { components } from '@caau/api-client';
 import { beijingDateTime, inWeek, mondayOf, shiftDate } from './schedule-week';
 
@@ -9,10 +9,12 @@ const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '�
 
 export function ScheduleWeek({
   schedule,
+  divisions,
   disabled,
   onEdit,
 }: {
   schedule: Schedule;
+  divisions: { id: string; name: string }[];
   disabled: boolean;
   onEdit: (match: Match) => void;
 }) {
@@ -24,15 +26,43 @@ export function ScheduleWeek({
     ? beijingDateTime(first.startAt).slice(0, 10)
     : schedule.config.startDate || today;
   const [selected, setSelected] = useState('');
+  const [selectedDivision, setSelectedDivision] = useState('ALL');
+  const divisionName = (id: string | null, label = '') =>
+    id
+      ? label ||
+        divisions.find((division) => division.id === id)?.name ||
+        '历史组别'
+      : '待归组（历史）';
+  const divisionOptions = [
+    { value: 'ALL', label: '全部组别' },
+    ...Array.from(
+      new Set(schedule.matches.map((match) => match.divisionId ?? 'LEGACY')),
+    ).map((id) => ({
+      value: id,
+      label:
+        id === 'LEGACY'
+          ? '待归组（历史）'
+          : divisionName(
+              id,
+              schedule.matches.find((match) => match.divisionId === id)
+                ?.divisionLabel,
+            ),
+    })),
+  ];
+  const visibleMatches = schedule.matches.filter(
+    (match) =>
+      selectedDivision === 'ALL' ||
+      (match.divisionId ?? 'LEGACY') === selectedDivision,
+  );
   const monday = selected || mondayOf(initialDate);
   const days = weekdays.map((label, i) => ({
     label,
     date: shiftDate(monday, i),
   }));
-  const matches = schedule.matches
+  const matches = visibleMatches
     .filter((m) => inWeek(m.startAt, monday))
     .sort((a, b) => a.startAt.localeCompare(b.startAt) || a.order - b.order);
-  const pending = schedule.matches.filter((m) => !m.startAt);
+  const pending = visibleMatches.filter((m) => !m.startAt);
   const startHour = Math.min(
     Number(schedule.config.dailyStart.slice(0, 2)),
     ...matches.map((m) => Number(beijingDateTime(m.startAt).slice(11, 13))),
@@ -65,7 +95,8 @@ export function ScheduleWeek({
         aria-label={`调整 第${match.round}轮 ${match.homeLabel} vs ${match.awayLabel}`}
       >
         <span className="schedule-card-meta">
-          第{match.round}轮{issues.length > 0 && <span> · 有冲突</span>}
+          {divisionName(match.divisionId, match.divisionLabel)} · 第
+          {match.round}轮{issues.length > 0 && <span> · 有冲突</span>}
         </span>
         <strong>
           {match.homeLabel}
@@ -94,6 +125,13 @@ export function ScheduleWeek({
           <p>北京时间 · 本周 {matches.length} 场 · 按开始时间排列</p>
         </div>
         <Space wrap>
+          <Select
+            aria-label="筛选竞赛组别"
+            value={selectedDivision}
+            options={divisionOptions}
+            onChange={setSelectedDivision}
+            style={{ minWidth: 144 }}
+          />
           <Button onClick={() => setSelected(shiftDate(monday, -7))}>
             上一周
           </Button>

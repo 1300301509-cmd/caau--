@@ -72,6 +72,7 @@ export class AgentCandidateDto {
 }
 
 export class AgentTaskParametersDto {
+  @ApiPropertyOptional() sourceDivisionName?: string;
   @ApiPropertyOptional() sourceWeekday?: number;
   @ApiPropertyOptional() sourceOrdinal?: number;
   @ApiPropertyOptional() sourceMatchId?: string;
@@ -221,6 +222,9 @@ export class AgentPlanningConditionDto {
   @ApiPropertyOptional() scheduleGoal?: boolean;
   @ApiPropertyOptional({ enum: ['USER', 'EVENT_PROFILE', 'EVENT_SCHEDULE'] })
   dateSource?: 'USER' | 'EVENT_PROFILE' | 'EVENT_SCHEDULE';
+  @ApiPropertyOptional({ type: [String] }) divisionIds?: string[];
+  @ApiPropertyOptional({ type: [String] }) divisionLabels?: string[];
+  @ApiPropertyOptional() allDivisions?: boolean;
   @ApiPropertyOptional({ enum: ['ROUND_ROBIN'] }) format?: 'ROUND_ROBIN';
   @ApiPropertyOptional({ enum: ['MORNING', 'AFTERNOON', 'EVENING'] })
   daypart?: 'MORNING' | 'AFTERNOON' | 'EVENING';
@@ -393,6 +397,10 @@ export class AgentTeamActionViewDto {
   @ApiProperty() id!: string;
   @ApiProperty() eventId!: string;
   @ApiProperty() eventName!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) divisionId!:
+    | string
+    | null;
+  @ApiProperty() divisionName!: string;
   @ApiProperty() revision!: number;
   @ApiProperty({
     enum: ['COLLECTING', 'PREVIEW_READY', 'EXECUTED', 'CANCELLED'],

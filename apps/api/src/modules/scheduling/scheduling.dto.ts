@@ -14,6 +14,8 @@ export class ScheduleConfigDto {
 
 export class ScheduleMatchDto {
   @ApiProperty() id!: string;
+  @ApiProperty({ type: String, nullable: true }) divisionId!: string | null;
+  @ApiProperty() divisionLabel!: string;
   @ApiProperty() round!: number;
   @ApiProperty() order!: number;
   @ApiProperty() homeEventTeamId!: string;

@@ -6,7 +6,14 @@ import {
 } from '../dist/modules/ai/candidate.algorithm.js';
 
 const ids = ['a', 'b', 'c', 'd'];
-const teams = ids.map((id) => ({ id, name: id, active: true }));
+const teams = ids.map((id) => ({
+  id,
+  name: id,
+  active: true,
+  divisionId: 'division-u12-men',
+  divisionName: 'U12 男子组',
+  divisionActive: true,
+}));
 const config = {
   teamIds: ids,
   venues: ['北场', '南场'],
@@ -199,4 +206,98 @@ test('fixed match remains unchanged; invalid hard/fixed collisions fail closed',
     [fixed.id],
   );
   assert.equal(impossible.outcome, 'PROVEN_CONFLICT');
+});
+
+test('candidate pairs teams only within each division and audits shared venue conflicts', () => {
+  const divided = teams.map((team, index) => ({
+    ...team,
+    divisionId: index < 2 ? 'division-u12-men' : 'division-u14-women',
+    divisionName: index < 2 ? 'U12 男子组' : 'U14 女子组',
+  }));
+  const result = calculateCandidate(config, divided, [], [], []);
+  assert.equal(result.outcome, 'FOUND');
+  assert.equal(result.matches.length, 2);
+  assert.equal(
+    new Set(result.matches.map((match) => match.divisionId)).size,
+    2,
+  );
+  assert.ok(
+    result.matches.every((match) => {
+      const home = divided.find((team) => team.id === match.homeEventTeamId);
+      const away = divided.find((team) => team.id === match.awayEventTeamId);
+      return (
+        home.divisionId === away.divisionId &&
+        home.divisionId === match.divisionId
+      );
+    }),
+  );
+  assert.deepEqual(auditCandidate(config, divided, result.matches, [], []), []);
+
+  const crossDivision = result.matches.map((match) => ({ ...match }));
+  crossDivision[0].awayEventTeamId = divided[2].id;
+  assert.ok(
+    auditCandidate(config, divided, crossDivision, [], []).some(
+      (issue) => issue.code === 'DIVISION_MISMATCH',
+    ),
+  );
+
+  const sharedVenue = result.matches.map((match) => ({ ...match }));
+  sharedVenue[1].startAt = sharedVenue[0].startAt;
+  sharedVenue[1].venue = sharedVenue[0].venue;
+  assert.ok(
+    auditCandidate(config, divided, sharedVenue, [], []).some((issue) =>
+      ['VENUE_OVERLAP', 'VENUE_BUFFER'].includes(issue.code),
+    ),
+  );
+});
+
+test('one-division candidate keeps every other division match unchanged and audits the combined event', () => {
+  const divided = teams.map((team, index) => ({
+    ...team,
+    divisionId: index < 2 ? 'division-u12-men' : 'division-u14-women',
+    divisionName: index < 2 ? 'U12 男子组' : 'U14 女子组',
+  }));
+  const original = calculateCandidate(config, divided, [], [], []);
+  assert.equal(original.outcome, 'FOUND');
+  const preserved = original.matches.filter(
+    (match) => match.divisionId === 'division-u14-women',
+  );
+  assert.equal(preserved.length, 1);
+  const fixedIds = preserved.map((match) => match.id);
+  const rules = [window('later', 'a', 'ONLY', ['2027-06-03'])];
+  const revised = calculateCandidate(
+    config,
+    divided,
+    rules,
+    original.matches,
+    fixedIds,
+    {
+      targetDivisionIds: ['division-u12-men'],
+      preservedMatches: preserved,
+    },
+  );
+  assert.equal(revised.outcome, 'FOUND');
+  assert.equal(revised.matches.length, 2);
+  assert.deepEqual(
+    revised.matches.find((match) => match.id === preserved[0].id),
+    preserved[0],
+  );
+  assert.ok(
+    revised.matches
+      .find((match) => match.divisionId === 'division-u12-men')
+      .startAt.startsWith('2027-06-03'),
+  );
+  assert.deepEqual(
+    auditCandidate(config, divided, revised.matches, rules, preserved),
+    [],
+  );
+
+  const altered = revised.matches.map((match) => ({ ...match }));
+  altered.find((match) => match.id === preserved[0].id).divisionLabel =
+    '伪造组别';
+  assert.ok(
+    auditCandidate(config, divided, altered, rules, preserved).some(
+      (issue) => issue.code === 'FIXED_MATCH',
+    ),
+  );
 });

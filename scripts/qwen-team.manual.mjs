@@ -139,6 +139,16 @@ async function main() {
       name: 'CAAU Qwen team acceptance event',
       description: 'Disposable synthetic event',
     });
+    const division = await request(
+      superToken,
+      'POST',
+      `events/${event.id}/divisions`,
+      { id: randomUUID(), name: 'U12 男子组' },
+    );
+    await request(superToken, 'POST', `events/${event.id}/divisions`, {
+      id: randomUUID(),
+      name: 'U14 女子组',
+    });
     const applicationId = randomUUID();
     const submissionId = randomUUID();
     await sql.query(
@@ -187,17 +197,19 @@ async function main() {
     assert.equal(collecting.status, 'TEAM');
     assert.equal(collecting.teamAction?.state, 'COLLECTING');
     assert.ok(collecting.teamAction.missing.includes('球队名称'));
+    assert.ok(collecting.teamAction.missing.includes('参赛组别'));
     assert.deepEqual(await teamCount(), baseline);
 
     stage = 'Qwen merges team details into preview';
     const preview = await send(
-      '球队叫内测青云队，负责人张测试，联系电话13800000000，省份北京市，城市北京市',
+      '加入 U12 男子组。球队叫内测青云队，负责人张测试，联系电话13800000000，省份北京市，城市北京市',
     );
     assert.equal(preview.status, 'TEAM');
     assert.equal(preview.teamAction?.id, collecting.teamAction.id);
     assert.equal(preview.teamAction.state, 'PREVIEW_READY');
     assert.deepEqual(preview.teamAction.missing, []);
     assert.equal(preview.teamAction.profiles[0].name, '内测青云队');
+    assert.equal(preview.teamAction.divisionId, division.id);
     assert.deepEqual(await teamCount(), baseline);
 
     stage = 'Qwen routes explicit confirmation to one write';
@@ -210,6 +222,7 @@ async function main() {
     const eventTeams = await request(token, 'GET', `events/${event.id}/teams`);
     assert.equal(eventTeams.length, 1);
     assert.equal(eventTeams[0].profile.name, '内测青云队');
+    assert.equal(eventTeams[0].divisionId, division.id);
 
     stage = 'Qwen replays original result without duplicate';
     const replay = await send('重试刚才添加这支球队的操作，不要新增另一支');
@@ -225,7 +238,9 @@ async function main() {
     );
 
     stage = 'Qwen routes explicit synthetic three-team batch';
-    const testPreview = await send('我在做测试，请随机生成3支球队');
+    const testPreview = await send(
+      '我在做测试，请在 U12 男子组随机生成3支球队',
+    );
     assert.equal(testPreview.status, 'TEAM');
     assert.equal(testPreview.teamAction?.state, 'PREVIEW_READY');
     assert.equal(testPreview.teamAction.mode, 'TEST');

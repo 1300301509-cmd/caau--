@@ -22,6 +22,7 @@ import {
   beijingDay,
   resolveDateRange,
   queryPlanSchema,
+  resolveTeam,
   scheduleTools,
 } from '../dist/modules/ai/schedule-tools.js';
 import { calculateAdjustmentPreview } from '../dist/modules/scheduling/scheduling.algorithm.js';
@@ -407,6 +408,14 @@ test('Qwen keeps team creation separate from an active scheduling requirement', 
 });
 
 test('team proposal accepts explicit test generation without fabricated real profile', async () => {
+  assert.equal(
+    teamProposalSchema.parse({
+      action: 'START',
+      mode: 'REAL',
+      divisionName: 'U12 男子组',
+    }).divisionName,
+    'U12 男子组',
+  );
   assert.deepEqual(
     teamProposalSchema.parse({ action: 'START', mode: 'TEST', count: 3 }),
     { action: 'START', mode: 'TEST', count: 3 },
@@ -570,8 +579,8 @@ test('planning routing, extraction and date expansion remain separate from execu
         },
       ],
       [],
-    ).length,
-    1,
+    ).some((item) => item.includes('竞赛组别')),
+    true,
   );
   const missingStart = planningPending(
     [{ kind: 'DATE_RANGE', scheduleGoal: true, durationDays: 10 }],
@@ -631,6 +640,8 @@ test('structured whole-schedule follow-up retains round robin and enforces daily
     from: '2027-06-01',
     to: '2027-06-10',
     scheduleGoal: true,
+    divisionIds: ['division-u12-men'],
+    divisionLabels: ['U12 男子组'],
   };
   const format = {
     id: 'format',
@@ -671,6 +682,18 @@ test('structured whole-schedule follow-up retains round robin and enforces daily
     ],
   };
   assert.equal(planningProposalSchema.safeParse(proposal).success, true);
+  assert.equal(
+    planningProposalSchema.parse({
+      divisionName: 'U12 男子组',
+      changes: [],
+    }).divisionName,
+    'U12 男子组',
+  );
+  assert.equal(
+    planningProposalSchema.parse({ allDivisions: true, changes: [] })
+      .allDivisions,
+    true,
+  );
   assert.equal(planningPending([period, format, ...windows], []).length, 0);
   const missingWindowDetails = planningPending(
     [
@@ -697,6 +720,9 @@ test('structured whole-schedule follow-up retains round robin and enforces daily
     id: `team-${index}`,
     name: `球队${index}`,
     active: true,
+    divisionId: 'division-u12-men',
+    divisionName: 'U12 男子组',
+    divisionActive: true,
   }));
   const config = {
     teamIds: teams.map((item) => item.id),
@@ -870,7 +896,55 @@ test('read-only registry validates tools and resolves Beijing relative dates acr
   );
 });
 
+test('read-only schedule tools and team names stay within the selected division', () => {
+  const match = (id, divisionId, homeEventTeamId, awayEventTeamId) => ({
+    id,
+    divisionId,
+    divisionLabel: divisionId === 'u12' ? 'U12 男子组' : 'U14 女子组',
+    homeEventTeamId,
+    awayEventTeamId,
+    homeLabel: '同名队',
+    awayLabel: `对手${divisionId}`,
+    startAt: '2027-06-05T01:00:00.000Z',
+    venue: divisionId,
+    order: 1,
+  });
+  const view = {
+    matches: [
+      match('match-u12', 'u12', 'home-u12', 'away-u12'),
+      match('match-u14', 'u14', 'home-u14', 'away-u14'),
+    ],
+  };
+  assert.equal(resolveTeam(view, '同名队').teamId, undefined);
+  assert.equal(resolveTeam(view, '同名队').choices.length, 2);
+  assert.equal(
+    resolveTeam(view, '同名队', undefined, 'u12').teamId,
+    'home-u12',
+  );
+  assert.deepEqual(
+    scheduleTools['schedule.list']
+      .execute(view, { range: null, divisionId: 'u12' })
+      .matches.map((item) => item.id),
+    ['match-u12'],
+  );
+  assert.deepEqual(
+    scheduleTools['schedule.match']
+      .execute(view, { range: null, divisionId: 'u14', ordinal: 1 })
+      .matches.map((item) => item.id),
+    ['match-u14'],
+  );
+  assert.equal(
+    queryPlanSchema.parse({ tool: 'schedule.list', divisionName: 'U12 男子组' })
+      .divisionName,
+    'U12 男子组',
+  );
+});
+
 test('Qwen schema and prompt distinguish source match from target time', () => {
+  assert.match(
+    intentSchema.shape.sourceDivisionName.description,
+    /原比赛.*组别/,
+  );
   assert.match(intentSchema.shape.sourceWeekday.description, /原比赛.*周六.*6/);
   assert.match(intentSchema.shape.sourceOrdinal.description, /当天.*第二场.*2/);
   assert.match(intentSchema.shape.targetWeekday.description, /目标星期/);
@@ -880,6 +954,7 @@ test('Qwen schema and prompt distinguish source match from target time', () => {
   assert.match(intentSchema.shape.targetOffsetMinutes.description, /分钟偏移/);
   const prompt = qwenIntentSystemPrompt({ targetWeekday: 7 });
   assert.match(prompt, /来源比赛/);
+  assert.match(prompt, /sourceDivisionName/);
   assert.match(prompt, /目标时间/);
   assert.match(prompt, /sourceWeekday=6, sourceOrdinal=2/);
   assert.match(prompt, /只返回本轮/);
@@ -1080,6 +1155,11 @@ test('intent merge invalidates mutually exclusive and derived schedule fields', 
   });
   assert.equal(sourceChanged.sourceMatchId, undefined);
   assert.equal(sourceChanged.targetStartAt, undefined);
+  const divisionChanged = mergeAgentIntent(known, {
+    sourceDivisionName: 'U14 女子组',
+  });
+  assert.equal(divisionChanged.sourceMatchId, undefined);
+  assert.equal(divisionChanged.sourceDivisionName, 'U14 女子组');
   const explicitDate = mergeAgentIntent(known, {
     targetDate: '2027-06-08',
     targetHour: 10,
@@ -1102,6 +1182,8 @@ test('intent merge invalidates mutually exclusive and derived schedule fields', 
 test('adjustment preview uses deterministic validation without mutating input', () => {
   const before = {
     id: '10000000-0000-4000-8000-000000000001',
+    divisionId: 'division-u12-men',
+    divisionLabel: 'U12 男子组',
     round: 1,
     order: 1,
     homeEventTeamId: '20000000-0000-4000-8000-000000000001',
@@ -1128,8 +1210,18 @@ test('adjustment preview uses deterministic validation without mutating input', 
     },
     matches,
     [
-      { id: before.homeEventTeamId, name: 'A', active: true },
-      { id: before.awayEventTeamId, name: 'B', active: true },
+      {
+        id: before.homeEventTeamId,
+        name: 'A',
+        active: true,
+        divisionId: before.divisionId,
+      },
+      {
+        id: before.awayEventTeamId,
+        name: 'B',
+        active: true,
+        divisionId: before.divisionId,
+      },
     ],
     before.id,
     '2027-06-06T02:00:00.000Z',

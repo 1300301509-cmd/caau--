@@ -182,6 +182,7 @@ const testTeamProfiles = (count: number, actionId: string): TeamProfile[] =>
   }));
 type QuerySource = {
   eventId: string;
+  divisionId?: string;
   matchId?: string;
   matchIds?: string[];
   revision: number;
@@ -233,6 +234,8 @@ type ConfirmationSummary = {
   beforeVenue: string;
   afterStartAt: string;
   afterVenue: string;
+  divisionId?: string;
+  divisionRevision?: number;
 };
 const digest = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -258,6 +261,10 @@ const confirmationHash = (input: {
     input.summary.beforeVenue,
     input.summary.afterStartAt,
     input.summary.afterVenue,
+    ...(input.summary.divisionId &&
+    Number.isInteger(input.summary.divisionRevision)
+      ? [input.summary.divisionId, input.summary.divisionRevision]
+      : []),
     confirmationTool.name,
     confirmationTool.version,
   ]);
@@ -324,12 +331,16 @@ export function mergeAgentIntent(
 ) {
   const next = { ...known };
   const sourceChanged =
-    patch.sourceWeekday !== undefined || patch.sourceOrdinal !== undefined;
+    patch.sourceWeekday !== undefined ||
+    patch.sourceOrdinal !== undefined ||
+    (patch.sourceDivisionName !== undefined &&
+      patch.sourceDivisionName !== known.sourceDivisionName);
   if (sourceChanged) {
     delete next.sourceMatchId;
     delete next.targetStartAt;
   }
   for (const key of [
+    'sourceDivisionName',
     'sourceWeekday',
     'sourceOrdinal',
     'targetHour',
@@ -386,7 +397,7 @@ export function mergeAgentIntent(
   return next;
 }
 function matchLabel(match: ScheduleMatchDto) {
-  return `第${match.order}场 · ${match.homeLabel} vs ${match.awayLabel}`;
+  return `${match.divisionLabel ? `${match.divisionLabel} · ` : ''}第${match.order}场 · ${match.homeLabel} vs ${match.awayLabel}`;
 }
 
 @Injectable()
@@ -584,6 +595,8 @@ export class AiService implements OnModuleDestroy {
         typeof source.revision !== 'number' ||
         !['DRAFT', 'PUBLISHED'].includes(source.status ?? '') ||
         (source.matchId !== undefined && typeof source.matchId !== 'string') ||
+        (source.divisionId !== undefined &&
+          typeof source.divisionId !== 'string') ||
         (source.matchIds !== undefined &&
           (!Array.isArray(source.matchIds) ||
             source.matchIds.some((id) => typeof id !== 'string')))
@@ -624,6 +637,9 @@ export class AiService implements OnModuleDestroy {
       lastQuery: recentQuery
         ? {
             eventId: recentQuery.eventId,
+            ...(recentQuery.divisionId
+              ? { divisionId: recentQuery.divisionId }
+              : {}),
             ...(recentQuery.matchId ? { matchId: recentQuery.matchId } : {}),
           }
         : undefined,
@@ -749,6 +765,18 @@ export class AiService implements OnModuleDestroy {
           ticket.task.step !== 'PREVIEW_READY'
         )
           throw new ConflictException('Confirmation binding changed');
+        if (!summary.divisionId || !summary.divisionRevision)
+          throw new ConflictException(
+            'Competition division is missing from this confirmation; preview again',
+          );
+        const division = await tx.eventDivision.findFirst({
+          where: { id: summary.divisionId, eventId: ticket.eventId },
+          select: { revision: true, active: true },
+        });
+        if (!division?.active || division.revision !== summary.divisionRevision)
+          throw new ConflictException(
+            'Competition division changed; preview again',
+          );
         const schedule = await this.scheduling.adjustInTransaction(
           tx,
           actor,
@@ -946,10 +974,18 @@ export class AiService implements OnModuleDestroy {
       where: { id: action.eventId },
       select: { name: true },
     });
+    const division = action.divisionId
+      ? await tx.eventDivision.findFirst({
+          where: { id: action.divisionId, eventId: action.eventId },
+          select: { name: true },
+        })
+      : null;
     return {
       id: action.id,
       eventId: action.eventId,
       eventName: event?.name ?? '当前赛事',
+      divisionId: action.divisionId,
+      divisionName: division?.name ?? '待选择组别',
       revision: action.revision,
       state: action.state as
         | 'COLLECTING'
@@ -1293,6 +1329,15 @@ export class AiService implements OnModuleDestroy {
                     mode: teamAction.mode as 'REAL' | 'TEST',
                     profiles: teamProfiles(teamAction.profiles),
                     missing: strings(teamAction.missing),
+                    divisionId: teamAction.divisionId,
+                    divisionName: teamAction.divisionId
+                      ? (
+                          await tx.eventDivision.findUnique({
+                            where: { id: teamAction.divisionId },
+                            select: { name: true },
+                          })
+                        )?.name
+                      : undefined,
                   },
                 }
               : {}),
@@ -1660,6 +1705,29 @@ export class AiService implements OnModuleDestroy {
           );
           return this.teamReply(tx, actor, sessionId, answer, [], 'CLARIFY');
         }
+        const divisions = await tx.eventDivision.findMany({
+          where: { eventId, active: true },
+          select: { id: true, name: true, revision: true },
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        });
+        const namedDivision = proposal.divisionName?.trim();
+        const choices = namedDivision
+          ? divisions.filter(
+              (division) =>
+                division.name === namedDivision ||
+                division.name.includes(namedDivision) ||
+                namedDivision.includes(division.name),
+            )
+          : [];
+        const selectedDivision = namedDivision
+          ? choices.length === 1
+            ? choices[0]
+            : null
+          : continuing && latest.divisionId
+            ? divisions.find((division) => division.id === latest.divisionId)
+            : divisions.length === 1
+              ? divisions[0]
+              : null;
         const id = continuing ? latest.id : randomUUID();
         const mode = proposal.mode ?? (continuing ? latest.mode : 'REAL');
         const patch = proposal.profile ?? {};
@@ -1706,6 +1774,7 @@ export class AiService implements OnModuleDestroy {
               ? strings(latest.teamIds)
               : [randomUUID()];
         }
+        if (!selectedDivision) missing.unshift('参赛组别');
         const state = missing.length ? 'COLLECTING' : 'PREVIEW_READY';
         if (!continuing) {
           await tx.agentPendingQuestion.deleteMany({ where: { sessionId } });
@@ -1743,6 +1812,8 @@ export class AiService implements OnModuleDestroy {
                 profiles: json(profiles),
                 missing: json(missing),
                 teamIds: json(teamIds),
+                divisionId: selectedDivision?.id ?? null,
+                divisionRevision: selectedDivision?.revision ?? null,
                 revision: { increment: 1 },
                 updatedAt: new Date(),
               },
@@ -1759,6 +1830,8 @@ export class AiService implements OnModuleDestroy {
                 profiles: json(profiles),
                 missing: json(missing),
                 teamIds: json(teamIds),
+                divisionId: selectedDivision?.id ?? null,
+                divisionRevision: selectedDivision?.revision ?? null,
               },
             });
         await tx.agentSession.update({
@@ -1767,22 +1840,26 @@ export class AiService implements OnModuleDestroy {
         });
         let answer: string;
         if (missing.length)
-          answer =
-            mode === 'TEST'
+          answer = !selectedDivision
+            ? divisions.length
+              ? `请先确认这些球队属于哪个竞赛组别：${divisions.map((division) => division.name).join('、')}。${missing.length > 1 ? `其他待补资料：${missing.slice(1).join('、')}。` : ''}`
+              : '当前赛事尚未建立竞赛组别，请先在球队管理中建立组别，再继续建队。'
+            : mode === 'TEST'
               ? '可以生成内测球队。请告诉我需要几支，单次最多 12 支。'
               : `我可以帮你建队。请先补充${missing[0]}；也可以一次告诉我${missing.join('、')}。`;
         else if (mode === 'TEST')
-          answer = `已准备 ${profiles.length} 支标记为内测的球队：${teamSummary(profiles)}。请核对后明确回复“确认添加这些球队”，我才会加入当前赛事。`;
+          answer = `已准备 ${profiles.length} 支标记为内测的球队，组别为 ${selectedDivision!.name}：${teamSummary(profiles)}。请核对后明确回复“确认添加这些球队”，我才会加入当前赛事。`;
         else {
           const duplicate = await tx.eventTeam.findFirst({
             where: {
               eventId,
+              divisionId: selectedDivision!.id,
               active: true,
               profile: { path: ['name'], equals: profiles[0]!.name },
             },
             select: { id: true },
           });
-          answer = `已整理球队“${profiles[0]!.name}”的档案，负责人 ${profiles[0]!.contactName}，电话 ${profiles[0]!.contactPhone}，所在地 ${profiles[0]!.province}${profiles[0]!.city}。${duplicate ? '当前赛事已有同名球队，请先核对；继续确认会新增另一支。' : ''}请核对后明确回复“确认添加这支球队”，我才会加入当前赛事。`;
+          answer = `已整理球队“${profiles[0]!.name}”的档案，组别 ${selectedDivision!.name}，负责人 ${profiles[0]!.contactName}，电话 ${profiles[0]!.contactPhone}，所在地 ${profiles[0]!.province}${profiles[0]!.city}。${duplicate ? '当前组别已有同名球队，请先核对；继续确认会新增另一支。' : ''}请核对后明确回复“确认添加这支球队”，我才会加入当前赛事。`;
         }
         await this.appendTurns(
           tx,
@@ -1796,7 +1873,18 @@ export class AiService implements OnModuleDestroy {
             revision: action.revision,
           }),
         );
-        return this.teamReply(tx, actor, sessionId, answer);
+        return this.teamReply(
+          tx,
+          actor,
+          sessionId,
+          answer,
+          selectedDivision
+            ? []
+            : divisions.map((division) => ({
+                id: division.id,
+                label: division.name,
+              })),
+        );
       },
       { retries: 5 },
     );
@@ -1858,6 +1946,20 @@ export class AiService implements OnModuleDestroy {
           current.organizationId
         )
           deny();
+        const division = current.divisionId
+          ? await tx.eventDivision.findFirst({
+              where: {
+                id: current.divisionId,
+                eventId: current.eventId,
+                active: true,
+              },
+              select: { id: true, revision: true, name: true },
+            })
+          : null;
+        if (!division || division.revision !== current.divisionRevision)
+          throw new ConflictException(
+            'Competition division changed; review team preview again',
+          );
         const profiles = teamProfiles(current.profiles);
         const teamIds = strings(current.teamIds);
         if (
@@ -1870,6 +1972,7 @@ export class AiService implements OnModuleDestroy {
           await this.teams!.createInTransaction(tx, actor, {
             id: teamIds[index],
             eventId: current.eventId,
+            divisionId: division.id,
             organizationId: current.organizationId,
             profile: profiles[index],
           });
@@ -1882,7 +1985,7 @@ export class AiService implements OnModuleDestroy {
             updatedAt: new Date(),
           },
         });
-        const answer = `已创建 ${profiles.length} 支球队并加入赛事：${teamSummary(profiles)}。球队管理中可以查看。`;
+        const answer = `已创建 ${profiles.length} 支球队并加入赛事的 ${division.name}：${teamSummary(profiles)}。球队管理中可以查看。`;
         await this.appendTurns(
           tx,
           sessionId,
@@ -2048,6 +2151,45 @@ export class AiService implements OnModuleDestroy {
           actor,
           eventId,
         );
+        const divisions = await tx.eventDivision.findMany({
+          where: { eventId },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        });
+        const namedDivisions = divisions.filter((division) =>
+          body.message.includes(division.name),
+        );
+        const proposedDivision = plan.divisionName?.trim();
+        const matchingDivisions = namedDivisions.length
+          ? namedDivisions
+          : proposedDivision && body.message.includes(proposedDivision)
+            ? divisions.filter((division) =>
+                division.name.includes(proposedDivision),
+              )
+            : [];
+        if (matchingDivisions.length > 1)
+          return {
+            status: 'CLARIFY',
+            message: '找到多个符合描述的参赛组别，请选择具体组别。',
+            candidates: matchingDivisions.map((division) => ({
+              id: division.id,
+              label: division.name,
+            })),
+          };
+        if (
+          proposedDivision &&
+          body.message.includes(proposedDivision) &&
+          matchingDivisions.length === 0
+        )
+          return {
+            status: 'CLARIFY',
+            message: '当前赛事没有找到这个参赛组别，请核对组别名称。',
+            candidates: divisions.map((division) => ({
+              id: division.id,
+              label: division.name,
+            })),
+          };
+        const division = matchingDivisions[0];
         const referencesMatch = /(?:刚才那场|那场|这场)/.test(body.message);
         const ordinal = explicitOrdinal(body.message);
         const toolName =
@@ -2083,13 +2225,14 @@ export class AiService implements OnModuleDestroy {
           plan.teamId && body.message.includes(plan.teamId)
             ? plan.teamId
             : undefined;
-        const team = resolveTeam(view, teamName, teamId);
+        const team = resolveTeam(view, teamName, teamId, division?.id);
         const source: QuerySource = {
           eventId,
+          ...(division ? { divisionId: division.id } : {}),
           revision: view.revision,
           status: view.status,
         };
-        const prefix = `赛事：${event.name}；赛程：${view.exists ? (view.status === 'DRAFT' ? '草稿' : '已发布') : '尚未生成'} V${view.revision}；北京日期：${range ? (range.from === range.to ? range.from : `${range.from} 至 ${range.to}`) : '未指定（当前整个赛程）'}。`;
+        const prefix = `赛事：${event.name}；${division ? `组别：${division.name}；` : ''}赛程：${view.exists ? (view.status === 'DRAFT' ? '草稿' : '已发布') : '尚未生成'} V${view.revision}；北京日期：${range ? (range.from === range.to ? range.from : `${range.from} 至 ${range.to}`) : '未指定（当前整个赛程）'}。`;
         if ((teamId || teamName) && !team.teamId) {
           return {
             status: 'CLARIFY',
@@ -2114,6 +2257,7 @@ export class AiService implements OnModuleDestroy {
         const result: QueryToolResult = tool.execute(view, {
           range,
           teamId: team.teamId,
+          divisionId: division?.id,
           matchId: reference,
           ordinal,
         });
@@ -2133,14 +2277,14 @@ export class AiService implements OnModuleDestroy {
             message: `${prefix}找到 ${result.total} 场候选比赛，请明确选择一场${result.total > 10 ? '；仅显示前 10 场，请缩小查询范围' : ''}。`,
             candidates: result.matches.slice(0, 10).map((match) => ({
               id: match.id,
-              label: `${match.homeLabel} vs ${match.awayLabel}`,
+              label: `${match.divisionLabel ? `${match.divisionLabel} · ` : ''}${match.homeLabel} vs ${match.awayLabel}`,
               detail: `${match.startAt ? beijingTime(match.startAt) : '待安排'} · ${match.venue}`,
             })),
             source,
           };
         const rows = result.matches.map(
           (match) =>
-            `${match.homeLabel} vs ${match.awayLabel}；${match.startAt ? `${beijingTime(match.startAt)}（北京时间）` : '尚未安排时间'}；场地：${match.venue || '待安排'}；比赛 ID：${match.id}`,
+            `${match.divisionLabel ? `组别：${match.divisionLabel}；` : ''}${match.homeLabel} vs ${match.awayLabel}；${match.startAt ? `${beijingTime(match.startAt)}（北京时间）` : '尚未安排时间'}；场地：${match.venue || '待安排'}；比赛 ID：${match.id}`,
         );
         const selected =
           result.type === 'match'
@@ -3301,14 +3445,86 @@ export class AiService implements OnModuleDestroy {
         }
         const matches = schedule.matches as unknown as ScheduleMatchDto[];
         const next = { ...state.parameters };
+        const divisions = await tx.eventDivision.findMany({
+          where: { eventId: event.id },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        });
+        const normalizedDivisionName = next.sourceDivisionName
+          ?.replace(/\s+/g, '')
+          .toLocaleLowerCase();
+        const divisionMatches = normalizedDivisionName
+          ? divisions.filter((division) =>
+              division.name
+                .replace(/\s+/g, '')
+                .toLocaleLowerCase()
+                .includes(normalizedDivisionName),
+            )
+          : [];
+        if (normalizedDivisionName && divisionMatches.length !== 1) {
+          return this.saveLocatedState(tx, task, {
+            state,
+            step: 'LOCATE_MATCH',
+            eventId: event.id,
+            matchId: null,
+            baselineRevision: schedule.revision,
+            pendingFields: ['sourceDivisionName'],
+            candidateEventIds: [],
+            candidateMatchIds: [],
+            parameters: next,
+            status: 'NEED_MATCH',
+            message: `请明确原比赛所属的参赛组别。当前组别：${divisions.map((division) => division.name).join('、') || '无'}。`,
+            candidates: [],
+          });
+        }
+        const divisionId = divisionMatches[0]?.id;
+        const scopedMatches = divisionId
+          ? matches.filter((match) => match.divisionId === divisionId)
+          : matches;
         let selected = next.sourceMatchId
-          ? matches.find((match) => match.id === next.sourceMatchId)
+          ? scopedMatches.find((match) => match.id === next.sourceMatchId)
           : undefined;
         if (next.sourceMatchId && !selected) deny();
         let matchCandidates: ScheduleMatchDto[] = [];
+        const weekdayMatches = next.sourceWeekday
+          ? scopedMatches.filter(
+              (match) =>
+                match.startAt &&
+                weekday(localParts(match.startAt).date) === next.sourceWeekday,
+            )
+          : scopedMatches;
+        const multipleDivisions =
+          new Set(weekdayMatches.map((match) => match.divisionId)).size > 1;
+        if (
+          !selected &&
+          !divisionId &&
+          multipleDivisions &&
+          next.sourceWeekday &&
+          next.sourceOrdinal
+        ) {
+          return this.saveLocatedState(tx, task, {
+            state,
+            step: 'LOCATE_MATCH',
+            eventId: event.id,
+            matchId: null,
+            baselineRevision: schedule.revision,
+            pendingFields: ['sourceDivisionName'],
+            candidateEventIds: [],
+            candidateMatchIds: weekdayMatches.map((match) => match.id),
+            parameters: next,
+            status: 'NEED_MATCH',
+            message:
+              '当天有多个参赛组别，请补充原比赛所属组别，或选择具体场次。',
+            candidates: weekdayMatches.slice(0, 20).map((match) => ({
+              id: match.id,
+              label: matchLabel(match),
+              detail: `${localParts(match.startAt).date} ${localParts(match.startAt).time} · ${match.venue}`,
+            })),
+          });
+        }
         if (!selected && next.sourceWeekday && next.sourceOrdinal) {
           const byDate = new Map<string, ScheduleMatchDto[]>();
-          for (const match of matches.filter((item) => item.startAt)) {
+          for (const match of scopedMatches.filter((item) => item.startAt)) {
             const date = localParts(match.startAt).date;
             if (weekday(date) !== next.sourceWeekday) continue;
             byDate.set(date, [...(byDate.get(date) ?? []), match]);
@@ -3326,7 +3542,9 @@ export class AiService implements OnModuleDestroy {
           if (matchCandidates.length === 1) selected = matchCandidates[0];
         }
         if (!selected) {
-          const choices = matchCandidates.length ? matchCandidates : matches;
+          const choices = matchCandidates.length
+            ? matchCandidates
+            : scopedMatches;
           return this.saveLocatedState(tx, task, {
             state,
             step: 'LOCATE_MATCH',
@@ -3497,12 +3715,14 @@ export class AiService implements OnModuleDestroy {
           select: { name: true },
         });
         if (!event) deny();
-        const canConfirm = !!(await tx.event.findFirst({
-          where: {
-            AND: [{ id: preview.eventId }, eventOperationsScope(actor)],
-          },
-          select: { id: true },
-        }));
+        const canConfirm =
+          !preview.issues.some((issue) => issue.code.startsWith('DIVISION_')) &&
+          !!(await tx.event.findFirst({
+            where: {
+              AND: [{ id: preview.eventId }, eventOperationsScope(actor)],
+            },
+            select: { id: true },
+          }));
         const consumedAt = new Date();
         await tx.agentConfirmationTicket.updateMany({
           where: { taskId: task.id, state: 'PENDING' },
@@ -3516,6 +3736,18 @@ export class AiService implements OnModuleDestroy {
           afterStartAt: preview.after.startAt,
           afterVenue: preview.after.venue,
         };
+        if (preview.before.divisionId) {
+          const division = await tx.eventDivision.findFirst({
+            where: { id: preview.before.divisionId, eventId: preview.eventId },
+            select: { revision: true, active: true },
+          });
+          if (!division?.active)
+            throw new ConflictException(
+              'Competition division changed; preview again',
+            );
+          summary.divisionId = preview.before.divisionId;
+          summary.divisionRevision = division.revision;
+        }
         const parameterHash = confirmationHash({
           ownerId: actor.id,
           eventId: preview.eventId,

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Button, Picker, Text, View } from '@tarojs/components';
+import { ApiError } from '@caau/api-client';
 import { client, newKey } from '../materials/session';
 import {
   Action,
@@ -32,6 +33,8 @@ const config = (): S['ScheduleConfigDto'] => ({
 export default function SchedulePage() {
   const [data, setData] = useState<Schedule>(),
     [teams, setTeams] = useState<S['TeamViewDto'][]>([]);
+  const [divisions, setDivisions] = useState<S['EventDivisionViewDto'][]>([]);
+  const [selectedDivision, setSelectedDivision] = useState('ALL');
   const [week, setWeek] = useState(monday(bj(Date.now()).slice(0, 10)));
   const [selectedDay, setSelectedDay] = useState('');
   const [generate, setGenerate] = useState<{
@@ -52,6 +55,8 @@ export default function SchedulePage() {
     () => {
       setData(undefined);
       setTeams([]);
+      setDivisions([]);
+      setSelectedDivision('ALL');
       setGenerate(undefined);
       setAdjust(undefined);
       pending.current = undefined;
@@ -69,7 +74,7 @@ export default function SchedulePage() {
   }
   async function load() {
     await (data ? ctx.read : ctx.run)(async (token, valid) => {
-      const [s, t] = await Promise.all([
+      const [s, t, d] = await Promise.all([
         client.request('getEventSchedule', {
           token,
           path: { eventId: ctx.eventId },
@@ -78,10 +83,20 @@ export default function SchedulePage() {
           token,
           path: { eventId: ctx.eventId },
         }),
+        client
+          .request('listEventDivisions', {
+            token,
+            path: { eventId: ctx.eventId },
+          })
+          .catch((cause) => {
+            if (cause instanceof ApiError && cause.status === 403) return [];
+            throw cause;
+          }),
       ]);
       if (valid()) {
         setData(s);
         setTeams(t);
+        setDivisions(d);
         ctx.setError('');
         const first = s.matches.find((m) => m.startAt);
         if (!data && first) setWeek(monday(bj(first.startAt).slice(0, 10)));
@@ -102,6 +117,18 @@ export default function SchedulePage() {
           };
           if (cfg.teamIds.length < 2 || !cfg.venues.length)
             throw new Error('请至少选择两支球队和一个比赛场地');
+          for (const division of divisions.filter((item) => item.active)) {
+            const count = teams.filter(
+              (team) =>
+                team.active &&
+                team.divisionId === division.id &&
+                cfg.teamIds.includes(team.id),
+            ).length;
+            if (count === 1)
+              throw new Error(
+                `${division.name}至少需要两支球队，或取消该组唯一已选球队`,
+              );
+          }
           if (
             !(await confirm(
               '生成候选赛程',
@@ -200,8 +227,19 @@ export default function SchedulePage() {
       void load();
     }
   }
-  const weekMatches =
-    data?.matches.filter((m) => inWeek(m.startAt, week)) ?? [];
+  const divisionName = (id: string | null, label = '') =>
+    id
+      ? label ||
+        divisions.find((division) => division.id === id)?.name ||
+        '历史组别'
+      : '待归组（历史）';
+  const visibleMatches =
+    data?.matches.filter(
+      (match) =>
+        selectedDivision === 'ALL' ||
+        (match.divisionId ?? 'LEGACY') === selectedDivision,
+    ) ?? [];
+  const weekMatches = visibleMatches.filter((m) => inWeek(m.startAt, week));
   const activeDay =
     selectedDay >= week && selectedDay <= shift(week, 6) ? selectedDay : '';
   const shown = weekMatches.filter(
@@ -285,32 +323,57 @@ export default function SchedulePage() {
               {generate.format === 'ROUND_ROBIN' ? '单循环' : '单败淘汰'}
             </Text>
           </Picker>
-          <Text className="competition-line">参赛球队（至少两支）</Text>
-          {teams
-            .filter((t) => t.active)
-            .map((t) => (
-              <Button
-                key={t.id}
-                disabled={ctx.busy || frozen}
-                className={
-                  generate.config.teamIds.includes(t.id) ? 'selected' : ''
-                }
-                onClick={() =>
-                  setGenerate({
-                    ...generate,
-                    config: {
-                      ...generate.config,
-                      teamIds: generate.config.teamIds.includes(t.id)
-                        ? generate.config.teamIds.filter((id) => id !== t.id)
-                        : [...generate.config.teamIds, t.id],
-                    },
-                  })
-                }
-              >
-                {generate.config.teamIds.includes(t.id) ? '已选 · ' : ''}
-                {t.profile.name}
-              </Button>
+          <Text className="competition-line">
+            按竞赛组别选择球队（每组至少两支）
+          </Text>
+          {divisions
+            .filter((division) => division.active)
+            .map((division) => (
+              <View key={division.id}>
+                <Text className="subtitle">{division.name}</Text>
+                {teams
+                  .filter(
+                    (team) => team.active && team.divisionId === division.id,
+                  )
+                  .map((t) => (
+                    <Button
+                      key={t.id}
+                      disabled={ctx.busy || frozen}
+                      className={
+                        generate.config.teamIds.includes(t.id) ? 'selected' : ''
+                      }
+                      onClick={() =>
+                        setGenerate({
+                          ...generate,
+                          config: {
+                            ...generate.config,
+                            teamIds: generate.config.teamIds.includes(t.id)
+                              ? generate.config.teamIds.filter(
+                                  (id) => id !== t.id,
+                                )
+                              : [...generate.config.teamIds, t.id],
+                          },
+                        })
+                      }
+                    >
+                      {generate.config.teamIds.includes(t.id) ? '已选 · ' : ''}
+                      {t.profile.name}
+                    </Button>
+                  ))}
+              </View>
             ))}
+          {teams.some(
+            (team) =>
+              team.active &&
+              !divisions.some(
+                (division) =>
+                  division.active && division.id === team.divisionId,
+              ),
+          ) && (
+            <Text className="competition-note">
+              有球队待归组或所属组别已停用，请先在球队管理中处理。
+            </Text>
+          )}
           <Field
             label="比赛场地（多个以逗号分隔）"
             max={2000}
@@ -413,7 +476,18 @@ export default function SchedulePage() {
                   format: data?.format ?? 'ROUND_ROBIN',
                   config: {
                     ...cfg,
-                    teamIds: [...cfg.teamIds],
+                    teamIds: cfg.teamIds.filter((id) =>
+                      teams.some(
+                        (team) =>
+                          team.id === id &&
+                          team.active &&
+                          divisions.some(
+                            (division) =>
+                              division.id === team.divisionId &&
+                              division.active,
+                          ),
+                      ),
+                    ),
                     venues: [...cfg.venues],
                   },
                   venues: cfg.venues.join('，'),
@@ -448,6 +522,44 @@ export default function SchedulePage() {
                 </Action>
                 <Action onClick={() => setWeek(shift(week, 7))}>下一周</Action>
               </View>
+              <Picker
+                range={[
+                  '全部组别',
+                  ...divisions.map((division) => division.name),
+                  '待归组（历史）',
+                ]}
+                value={
+                  selectedDivision === 'ALL'
+                    ? 0
+                    : selectedDivision === 'LEGACY'
+                      ? divisions.length + 1
+                      : Math.max(
+                          0,
+                          divisions.findIndex(
+                            (division) => division.id === selectedDivision,
+                          ) + 1,
+                        )
+                }
+                onChange={(e) => {
+                  const index = Number(e.detail.value);
+                  setSelectedDivision(
+                    index === 0
+                      ? 'ALL'
+                      : index === divisions.length + 1
+                        ? 'LEGACY'
+                        : (divisions[index - 1]?.id ?? 'ALL'),
+                  );
+                }}
+              >
+                <Text className="competition-line">
+                  竞赛组别：
+                  {selectedDivision === 'ALL'
+                    ? '全部组别'
+                    : selectedDivision === 'LEGACY'
+                      ? '待归组（历史）'
+                      : divisionName(selectedDivision)}
+                </Text>
+              </Picker>
               <Picker
                 mode="date"
                 value={week}
@@ -488,11 +600,12 @@ export default function SchedulePage() {
                   ? `${activeDay} · 点击已选日期返回全周`
                   : '全周赛程 · 点击日期查看当天'}
               </Text>
-              {scheduleDay(data.matches, week, activeDay).map((m) => (
+              {scheduleDay(visibleMatches, week, activeDay).map((m) => (
                 <View className="card match-schedule-card" key={m.id}>
                   <Text className="competition-note">
                     {m.startAt ? bj(m.startAt).replace('T', ' ') : '待安排'} ·
-                    第 {m.round} 轮
+                    {divisionName(m.divisionId, m.divisionLabel)} · 第 {m.round}{' '}
+                    轮
                   </Text>
                   <View className="competition-match-teams">
                     <Text>{m.homeLabel}</Text>

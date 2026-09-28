@@ -33,12 +33,17 @@ export async function eventSituationIntegration(t, context) {
   ).rows[0];
   assert.ok(appointment);
   const eventId = appointment.eventId;
-  let eventTeams = await call('a', 'GET', `events/${eventId}/teams`);
-  for (let index = eventTeams.length; index < 2; index += 1) {
-    await call('a', 'POST', 'teams', {
+  const division = await call('a', 'POST', `events/${eventId}/divisions`, {
+    id: randomUUID(),
+    name: '赛事情况测试组',
+  });
+  const masterIds = [];
+  for (let index = 0; index < 2; index += 1) {
+    const master = await call('a', 'POST', 'teams', {
       id: randomUUID(),
       organizationId: orgA,
       eventId,
+      divisionId: division.id,
       profile: {
         name: `赛事情况测试队${index + 1}`,
         contactName: `领队${index + 1}`,
@@ -53,11 +58,13 @@ export async function eventSituationIntegration(t, context) {
         notes: '',
       },
     });
+    masterIds.push(master.id);
   }
-  eventTeams = (await call('a', 'GET', `events/${eventId}/teams`)).filter(
-    (team) => team.active,
+  const eventTeams = await call('a', 'GET', `events/${eventId}/teams`);
+  const teamIds = masterIds.map(
+    (id) => eventTeams.find((team) => team.teamId === id)?.id,
   );
-  const teamIds = eventTeams.slice(0, 2).map((team) => team.id);
+  assert.ok(teamIds.every(Boolean));
   let schedule = await call(
     'a',
     'POST',

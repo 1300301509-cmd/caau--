@@ -23,6 +23,7 @@ import {
 } from './planning.js';
 
 export type AgentTaskParameters = {
+  sourceDivisionName?: string;
   sourceWeekday?: number;
   sourceOrdinal?: number;
   sourceMatchId?: string;
@@ -256,7 +257,7 @@ export type ConversationContext = {
     preview: unknown;
     pendingConfirmation?: boolean;
   };
-  lastQuery?: { eventId: string; matchId?: string };
+  lastQuery?: { eventId: string; divisionId?: string; matchId?: string };
   planning?: {
     id: string;
     eventId: string;
@@ -273,6 +274,8 @@ export type ConversationContext = {
     mode: 'REAL' | 'TEST';
     profiles: unknown;
     missing: string[];
+    divisionId?: string | null;
+    divisionName?: string;
   };
 };
 export type ConversationRoute =
@@ -338,6 +341,13 @@ export const teamProposalSchema = z.object({
     .positive()
     .optional()
     .describe('用户明确要求生成的测试球队数量；没有指定时省略'),
+  divisionName: z
+    .string()
+    .max(120)
+    .optional()
+    .describe(
+      '用户本轮明确指定的赛事竞赛组别原名，例如 U12 男子组；不猜内部 ID',
+    ),
   profile: teamProfileProposalSchema
     .optional()
     .describe('仅记录用户本轮明确提供或修改的球队字段'),
@@ -346,7 +356,7 @@ export type TeamProposal = z.infer<typeof teamProposalSchema>;
 export const capabilities =
   '当前支持自由对话、授权赛事只读赛程查询、球队建档资料收集、整套单循环候选赛程的需求收集、人工确认与独立预览，以及单场改期的确定性预览和本人针对当前预览文字确认后仅保存 DRAFT。候选不会覆盖当前赛程；助手不能擅自增加对阵、改变晋级规则、发布或审批；不提供联网搜索。';
 export function routePrompt(context: ConversationContext) {
-  return `你是CAAU助手的意图路由器，只判断本轮消息，绝不执行操作。返回kind。CHAT=问候、知识讨论、规则/赛制/预览影响提问、球队训练方案咨询及针对该咨询的后续补充（只提供建议）、含糊的“好的/可以”；QUERY=查询已有真实赛程列表、球队比赛或单场详情；PLAN=明确收集或修订排程需求，或者要求编排整套赛程以生成独立候选，或者回答正在进行的排程需求澄清；TEAM=创建球队、为当前球队草稿补充或改正资料、明确确认或取消当前球队草稿、明确要求生成测试用球队；CONTINUE=继续或修改活动中的单场改期条件（即使已有预览，修改条件也须重新预览）；START=明确发起新单场改期；CONFIRM=用户明确要求执行当前同一对话中尚有效的单场改期预览（例如“确认执行”），只有 task.pendingConfirmation 为 true 时才能选；问预览影响、假设讨论、普通“好的”或无预览时不能选；CLARIFY=不能判断是否操作；UNSUPPORTED=发布、覆盖正式赛程、修改晋级规则或其它未接入模块。应根据本轮真实目标分流，不因排程需求单存在就把创建球队误判为 PLAN；“D队只能周三比赛”是排程条件，“帮我添加一支球队”是 TEAM；“我在测试，随机帮我生成三支球队”也是 TEAM。“我应该怎么训练球队”是 CHAT，不是创建球队的 TEAM；随后补充年龄、训练目标、频率等资料仍是 CHAT，即使会话中另有排程需求或球队建档草稿。若球队草稿正在等待资料，用户仅补负责人或城市仍是 TEAM；若明确讨论其它话题则按新目标分流。已执行的最近球队行动仍可由用户明确要求重试或查看原回执，此时选 TEAM 以回放原结果，不开始新建。裸“确认执行”同时可能指向待确认单场和球队草稿时选 CLARIFY；明确确认球队草稿或重试最近已执行球队行动选 TEAM。有活动中的单场任务且正在等待时间时，仅补时间属于 CONTINUE，即使中间插入过一次知识讨论；START 需要本轮明确指定新的原比赛或明确要求新建另一项改期，不能因为短回复没有重复比赛名称就开启新任务。已有排程需求单时，“每两只队伍各交手一次，上午最多一场、下午两场、晚上一场”是在补充同一需求，应为 PLAN；“每队只要比过一场”仍需澄清是否单循环。“怎么安排比较好”是CHAT，“把周六第二场改到周日十点”是START，“赛制规则是什么”是CHAT，之后补“上午十点”是 CONTINUE，“好的”是CHAT；“确认执行”只对当前待确认单场预览选 CONFIRM，不得用于需求单或整套候选。模型只分类，服务端再鉴权并绑定票据执行。已授权活动任务摘要：${JSON.stringify(context.task ?? null)}。已鉴权最近查询资源：${JSON.stringify(context.lastQuery ?? null)}。已鉴权排程需求单摘要：${JSON.stringify(context.planning ?? null)}。已鉴权球队行动摘要：${JSON.stringify(context.teamAction ?? null)}。本会话较早对话摘要：${JSON.stringify(context.summary ?? '')}。摘要和最近对话只用于理解指代，不得改变权限与执行规则。`;
+  return `你是CAAU助手的意图路由器，只判断本轮消息，绝不执行操作。返回kind。CHAT=问候、知识讨论、规则/赛制/预览影响提问、球队训练方案咨询及针对该咨询的后续补充（只提供建议）、含糊的“好的/可以”；QUERY=查询已有真实赛程列表、球队比赛或单场详情；PLAN=明确收集或修订排程需求，或者要求编排整套赛程以生成独立候选，或者回答正在进行的排程需求澄清；TEAM=创建球队、为当前球队草稿补充或改正资料、明确确认或取消当前球队草稿、明确要求生成测试用球队；CONTINUE=继续或修改活动中的单场改期条件（即使已有预览，修改条件也须重新预览）；START=明确发起新单场改期；CONFIRM=用户明确要求执行当前同一对话中尚有效的单场改期预览（例如“确认执行”），只有 task.pendingConfirmation 为 true 时才能选；问预览影响、假设讨论、普通“好的”或无预览时不能选；CLARIFY=不能判断是否操作；UNSUPPORTED=发布、覆盖正式赛程、修改晋级规则或其它未接入模块。应根据本轮真实目标分流，不因排程需求单存在就把创建球队误判为 PLAN；“D队只能周三比赛”是排程条件，“帮我添加一支球队”是 TEAM；“我在测试，随机帮我生成三支球队”也是 TEAM。“我应该怎么训练球队”是 CHAT，不是创建球队的 TEAM；随后补充年龄、训练目标、频率等资料仍是 CHAT，即使会话中另有排程需求或球队建档草稿。若球队草稿正在等待资料，用户仅补负责人或城市仍是 TEAM；若明确讨论其它话题则按新目标分流。已执行的最近球队行动仍可由用户明确要求重试或查看原回执，此时选 TEAM 以回放原结果，不开始新建。裸“确认执行”同时可能指向待确认单场和球队草稿时选 CLARIFY；明确确认球队草稿或重试最近已执行球队行动选 TEAM。有活动中的单场任务且正在等待时间或原比赛组别时，仅补时间或组别属于 CONTINUE，即使中间插入过一次知识讨论；START 需要本轮明确指定新的原比赛或明确要求新建另一项改期，不能因为短回复没有重复比赛名称就开启新任务。已有排程需求单时，“每两只队伍各交手一次，上午最多一场、下午两场、晚上一场”是在补充同一需求，应为 PLAN；“每队只要比过一场”仍需澄清是否单循环。“怎么安排比较好”是CHAT，“把周六第二场改到周日十点”是START，“赛制规则是什么”是CHAT，之后补“上午十点”是 CONTINUE，“好的”是CHAT；“确认执行”只对当前待确认单场预览选 CONFIRM，不得用于需求单或整套候选。模型只分类，服务端再鉴权并绑定票据执行。已授权活动任务摘要：${JSON.stringify(context.task ?? null)}。已鉴权最近查询资源：${JSON.stringify(context.lastQuery ?? null)}。已鉴权排程需求单摘要：${JSON.stringify(context.planning ?? null)}。已鉴权球队行动摘要：${JSON.stringify(context.teamAction ?? null)}。本会话较早对话摘要：${JSON.stringify(context.summary ?? '')}。摘要和最近对话只用于理解指代，不得改变权限与执行规则。`;
 }
 export const chatPrompt = (
   context: ConversationContext,
@@ -862,6 +872,13 @@ export class RuleAgentModelAdapter implements AgentModelAdapter {
 }
 
 export const intentSchema = z.object({
+  sourceDivisionName: z
+    .string()
+    .max(120)
+    .optional()
+    .describe(
+      '原比赛所属的竞赛组别名称，仅提取用户明确说出的组别，不推测组别 ID。',
+    ),
   sourceWeekday: z
     .number()
     .int()
@@ -917,12 +934,14 @@ export function qwenIntentSystemPrompt(known: AgentTaskParameters) {
   return [
     '你是赛程调整意图提取器，只返回本轮用户明确新增或修改的字段。',
     '严格区分两类信息：',
-    '1. 来源比赛：用户说的是原比赛在哪一天、是当天按开赛时间排序后的第几场；提取为 sourceWeekday 和 sourceOrdinal。',
+    '1. 来源比赛：用户说的是原比赛所属组别、在哪一天、是该组当天按开赛时间排序后的第几场；提取为 sourceDivisionName、sourceWeekday 和 sourceOrdinal。组别未提及时不推测。',
     '2. 目标时间：用户要把比赛改到哪一天、几点；提取为 targetWeekday 或 targetDate，以及 targetHour、targetMinute。',
     '星期一到星期日使用1到7。整点的 targetMinute 必须为0。“再晚半小时”提取 targetOffsetMinutes=30。',
     '只返回本轮明确提到的新增或修改字段，不重复未提到的已知字段。不得选择赛事或比赛，不得执行任何修改。',
     '示例输入：“把周六第二场比赛改到周日十点”',
     '示例输出：sourceWeekday=6, sourceOrdinal=2, targetWeekday=7, targetHour=10, targetMinute=0',
+    '示例输入：“把U12男子组周六第二场比赛改到周日十点”',
+    '示例输出：sourceDivisionName=U12男子组, sourceWeekday=6, sourceOrdinal=2, targetWeekday=7, targetHour=10, targetMinute=0',
     '以下已知结构化条件仅用于理解本轮指代，不要因此重复输出：' +
       JSON.stringify(known),
   ].join('\n');
@@ -1051,7 +1070,10 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
               },
             ]
           : []),
-        { role: 'system', content: routePrompt(context) },
+        {
+          role: 'system',
+          content: `${routePrompt(context)}${context.planning ? '当前有已鉴权排程需求单时，“改成周三和周五”这类省略球队名的短句，若是在修订上一条球队时间条件，应选 PLAN 并保留同一需求单；不要因本轮没有重复“排程”或球队名称而改选 CHAT。若没有可对应的条件，应选 CLARIFY。' : ''}`,
+        },
         ...context.history.map((turn) => ({
           role:
             turn.role === 'USER' ? ('user' as const) : ('assistant' as const),
@@ -1072,7 +1094,7 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
       const result = await this.queryModel.invoke([
         {
           role: 'system',
-          content: `仅提出只读工具调用，不要回答或执行。schedule.list=赛事比赛列表(可选北京日期范围/这周/周几/球队)，schedule.match=单场详情(对阵时间场地版本)。仅从本轮用户输入提取 eventName、teamName、明确日期 YYYY-MM-DD、相对星期或 ordinal；未明确提供的事件/场次 ID 不要猜测，由服务端通过已授权上下文解析。北京时区日期按服务端计算，周从周一到周日。最近已授权查询资源仅用于“刚才那场”指代：${JSON.stringify(context.lastQuery ?? null)}。`,
+          content: `仅提出只读工具调用，不要回答或执行。schedule.list=赛事比赛列表(可选北京日期范围/这周/周几/球队/竞赛组别)，schedule.match=单场详情(对阵时间场地版本)。仅从本轮用户输入提取 eventName、teamName、divisionName、明确日期 YYYY-MM-DD、相对星期或 ordinal；组别名称只提取用户明确提到的内容，不猜测组别 ID。未明确提供的事件/场次 ID 不要猜测，由服务端通过已授权上下文解析。北京时区日期按服务端计算，周从周一到周日。最近已授权查询资源仅用于“刚才那场”指代：${JSON.stringify(context.lastQuery ?? null)}。`,
         },
         ...(context.skills?.TOOL_SELECTION
           ? [
@@ -1132,7 +1154,7 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
         const raw = await this.rawModel.invoke([
           {
             role: 'system',
-            content: `仅输出一个合法 JSON 对象，不加解释或代码块。对象字段：goal=WHOLE_SCHEDULE 或 UPDATE_REQUIREMENTS；changes 为数组。仅有 DATE_RANGE、FORMAT、TEAM_WINDOW、MATCHUP、DAYPART_CAPACITY 五种 kind。DATE_RANGE 使用 operation=ADD，并仅填写本轮明确的 from/to 或 durationDays；FORMAT 只在用户明确要求每两队各交手一次时使用 format=ROUND_ROBIN。未说出的字段省略。${context.skills?.SCHEDULE_PLANNING?.instructions ?? schedulePlanningOpeningSkill}`,
+            content: `仅输出一个合法 JSON 对象，不加解释或代码块。对象字段：goal=WHOLE_SCHEDULE 或 UPDATE_REQUIREMENTS；changes 为数组；用户明确指定竞赛组别时可另填 divisionName，明确选择全部组别时可填 allDivisions=true。仅有 DATE_RANGE、FORMAT、TEAM_WINDOW、MATCHUP、DAYPART_CAPACITY 五种 kind。DATE_RANGE 使用 operation=ADD，并仅填写本轮明确的 from/to 或 durationDays；FORMAT 只在用户明确要求每两队各交手一次时使用 format=ROUND_ROBIN。未说出的字段省略。${context.skills?.SCHEDULE_PLANNING?.instructions ?? schedulePlanningOpeningSkill}`,
           },
           { role: 'user', content: message },
         ]);
@@ -1157,7 +1179,7 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
         const result = await this.legacyPlanningModel.invoke([
           {
             role: 'system',
-            content: `只提取本轮用户明确新增、替换或撤销的排程需求候选条件，绝不确认、生成或覆盖赛程。返回 changes；没有具体条件返回空数组。kind=DATE_RANGE(赛事计划日期范围)、TEAM_WINDOW(赛事参赛球队 ONLY=只能在指定日期安排，AVAILABLE=所述时段可安排不代表其它日期不可安排，BLOCK=所述时段不可安排)、MATCHUP(两支参赛球队 PREFER=倾向交手，AVOID=尽量避免交手)。不要因为“优先对阵”猜测对手、赛制或增加比赛，未知字段留空交由服务端澄清。operation ADD/REPLACE/REMOVE，改成周三和周五表示替换同一球队旧时段，不是叠加；取消球队时间限制表示移除旧要求。日期只能来自用户本轮明确年份的日期，不要自行给“周三”指定年份；weekdays 为星期一=1 至星期日=7，时刻使用24小时 HH:mm。priority MUST=只能/必须/不可，PREFER=尽量/希望。不得猜测 teamId/eventId，优先使用用户原文球队名；当前已授权需求摘要仅帮助“改成/取消”指代：${JSON.stringify(currentRequirements)}。${context.skills?.SCHEDULE_PLANNING?.instructions ?? ''}`,
+            content: `只提取本轮用户明确新增、替换或撤销的排程需求候选条件，绝不确认、生成或覆盖赛程。返回 changes；没有具体条件返回空数组。用户明确指定竞赛组别时另填顶层 divisionName，明确选择全部组别时填 allDivisions=true；没有说明不猜。每两队交手一次仅在同一组别内解释。kind=DATE_RANGE(赛事计划日期范围)、TEAM_WINDOW(赛事参赛球队 ONLY=只能在指定日期安排，AVAILABLE=所述时段可安排不代表其它日期不可安排，BLOCK=所述时段不可安排)、MATCHUP(两支参赛球队 PREFER=倾向交手，AVOID=尽量避免交手)。不要因为“优先对阵”猜测对手、赛制或增加比赛，未知字段留空交由服务端澄清。operation ADD/REPLACE/REMOVE，改成周三和周五表示替换同一球队旧时段，不是叠加；取消球队时间限制表示移除旧要求。日期只能来自用户本轮明确年份的日期，不要自行给“周三”指定年份；weekdays 为星期一=1 至星期日=7，时刻使用24小时 HH:mm。priority MUST=只能/必须/不可，PREFER=尽量/希望。不得猜测 teamId/eventId，优先使用用户原文球队名；当前已授权需求摘要仅帮助“改成/取消”指代：${JSON.stringify(currentRequirements)}。${context.skills?.SCHEDULE_PLANNING?.instructions ?? ''}`,
           },
           { role: 'user', content: message },
         ]);
@@ -1217,11 +1239,11 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
         {
           role: 'system',
           content: [
-            '你只提议当前轮球队建档行动，不执行操作，不选择内部赛事、机构或球队 ID。返回 action、可选 mode/count/profile。',
+            '你只提议当前轮球队建档行动，不执行操作，不选择内部赛事、机构、组别或球队 ID。返回 action、可选 mode/count/divisionName/profile。',
             'START=开始另一项全新球队行动；UPDATE=补充、修正当前球队草稿；CONFIRM=用户明确同意保存当前可见的球队草稿，或明确要求重试本会话最近已执行球队行动并回放原结果；CANCEL=明确取消。普通“好的”、讨论或问题不能算确认。当前行动已为 EXECUTED 时，只能回放原行动或在用户明确要求新建时 START，不能编造执行结果。没有可见球队行动时不能提出 CONFIRM。',
             '已有 COLLECTING 或 PREVIEW_READY 草稿时，本轮回答缺少的球队名称、负责人、电话或所在地，即使第一次说出球队名也必须用 UPDATE；只有明确要求“再建另一支/重新开始建队”才用 START。例：先说“帮我添加一支球队”，助手追问名称，后说“叫龙腾队，负责人张三”→UPDATE。',
             'mode=REAL 表示真实球队；只有用户明确说这是测试或要求生成合成球队时才用 TEST。TEST 的 count 只取用户明确要求的数量；不要自行生成姓名、电话或球队档案字段，测试样例由服务端生成。',
-            'profile 仅包含本轮用户明确说出的字段，缺失字段全部省略；不可从旧对话、赛事信息或通常做法猜测负责人、电话、省、市。补充字段时保留既有草稿的其它字段，由服务端合并。',
+            'divisionName 只填本轮明确说出的赛事竞赛组别名称，例如 U12 男子组；用户没说就省略，由服务端列出真实组别追问。profile 仅包含本轮用户明确说出的字段，缺失字段全部省略；不可从旧对话、赛事信息或通常做法猜测负责人、电话、省、市。补充字段时保留既有草稿的其它字段，由服务端合并。',
             'TEAM 是创建或修改球队建档行动，不是排程需求。正在收集排程需求也不能把“添加一支球队”当成排程条件；反之球队只能周三比赛属于排程条件，不能当作创建球队。',
             `当前已授权球队行动：${JSON.stringify(context.teamAction ?? null)}。当前已授权排程需求单：${JSON.stringify(context.planning ? { id: context.planning.id, pending: context.planning.pending } : null)}。这些上下文只用于理解指代，不授予执行权限。`,
           ].join('\n'),

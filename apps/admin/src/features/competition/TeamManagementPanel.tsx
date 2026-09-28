@@ -19,6 +19,7 @@ import { useAuth } from '../auth/AuthContext';
 type Team = components['schemas']['TeamViewDto'];
 type Profile = components['schemas']['TeamProfileDto'];
 type Organization = components['schemas']['TeamOrganizationDto'];
+type Division = components['schemas']['EventDivisionViewDto'];
 type Schedule = components['schemas']['ScheduleViewDto'];
 type Removal = {
   team: Team;
@@ -49,7 +50,7 @@ function failure(error: unknown) {
     if (error.status === 403) return '当前账号没有此范围的球队管理权限。';
     if (error.status === 409)
       return '资料或状态已变化。请保留当前填写内容，关闭窗口并刷新列表后重新修改。';
-    if (error.status === 400) return '请检查必填信息和联系方式格式。';
+    if (error.status === 400) return '请检查必填信息、联系方式和竞赛组别。';
   }
   return '操作未完成，请稍后重试。填写内容已保留。';
 }
@@ -68,10 +69,12 @@ export function TeamManagementPanel({
   const [tab, setTab] = useState('event');
   const [teams, setTeams] = useState<Team[]>([]);
   const [entries, setEntries] = useState<Team[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [eventError, setEventError] = useState('');
+  const [divisionError, setDivisionError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState('');
   const [participation, setParticipation] = useState('active');
@@ -86,10 +89,18 @@ export function TeamManagementPanel({
   } | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkId, setLinkId] = useState<string>();
+  const [linkDivisionId, setLinkDivisionId] = useState<string>();
+  const [divisionEditor, setDivisionEditor] = useState<Division | 'new' | null>(
+    null,
+  );
+  const [divisionName, setDivisionName] = useState('');
+  const [divisionActive, setDivisionActive] = useState(true);
+  const [divisionSaveError, setDivisionSaveError] = useState('');
+  const [divisionCreateId, setDivisionCreateId] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [form] = Form.useForm<
-    Profile & { organizationId: string; active: boolean }
+    Profile & { organizationId: string; divisionId: string; active: boolean }
   >();
   useEffect(() => {
     let alive = true;
@@ -98,14 +109,19 @@ export function TeamManagementPanel({
     setEventError('');
     setTeams([]);
     setEntries([]);
+    setDivisions([]);
     setOrganizations([]);
+    setDivisionError('');
     void Promise.allSettled([
       client.request('listTeams', { token }),
       client.request('listTeamOrganizations', { token }),
       eventId
         ? client.request('listEventTeams', { token, path: { eventId } })
         : Promise.resolve([] as Team[]),
-    ]).then(([master, orgs, event]) => {
+      eventId
+        ? client.request('listEventDivisions', { token, path: { eventId } })
+        : Promise.resolve([] as Division[]),
+    ]).then(([master, orgs, event, groups]) => {
       if (!alive) return;
       if (master.status === 'fulfilled') setTeams(master.value);
       else setError(failure(master.reason));
@@ -113,6 +129,8 @@ export function TeamManagementPanel({
       else setError(failure(orgs.reason));
       if (event.status === 'fulfilled') setEntries(event.value);
       else setEventError(failure(event.reason));
+      if (groups.status === 'fulfilled') setDivisions(groups.value);
+      else setDivisionError(failure(groups.reason));
       setLoading(false);
     });
     return () => {
@@ -130,6 +148,7 @@ export function TeamManagementPanel({
       ...empty,
       ...row?.profile,
       organizationId: organizations[0]?.id ?? '',
+      divisionId: row?.divisionId ?? undefined,
       active: row?.active ?? true,
     });
   }
@@ -159,7 +178,7 @@ export function TeamManagementPanel({
           await client.request('updateEventTeam', {
             token,
             path: { eventId, id: editor.id },
-            body,
+            body: { ...body, divisionId: values.divisionId },
           });
         else
           await client.request('updateTeam', {
@@ -174,7 +193,9 @@ export function TeamManagementPanel({
             id: editor.id,
             organizationId: values.organizationId,
             profile,
-            ...(editor.scope === 'event' ? { eventId } : {}),
+            ...(editor.scope === 'event'
+              ? { eventId, divisionId: values.divisionId }
+              : {}),
           },
         });
       setEditor(null);
@@ -186,19 +207,58 @@ export function TeamManagementPanel({
     }
   }
   async function link() {
-    if (!linkId || saving) return;
+    if (!linkId || !linkDivisionId || saving) return;
     setSaving(true);
     setSaveError('');
     try {
       await client.request('addEventTeam', {
         token,
         path: { eventId },
-        body: { teamId: linkId },
+        body: { teamId: linkId, divisionId: linkDivisionId },
       });
       setLinkOpen(false);
       setAttempt((v) => v + 1);
     } catch (cause) {
       setSaveError(failure(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function saveDivision() {
+    if (!divisionEditor || saving) return;
+    const name = divisionName.trim();
+    if (!name || name.length > 120) {
+      setDivisionSaveError('请填写不超过 120 字的组别名称。');
+      return;
+    }
+    setSaving(true);
+    setDivisionSaveError('');
+    try {
+      if (divisionEditor === 'new') {
+        await client.request('createEventDivision', {
+          token,
+          path: { eventId },
+          body: { id: divisionCreateId, name },
+        });
+      } else {
+        await client.request('updateEventDivision', {
+          token,
+          path: { eventId, id: divisionEditor.id },
+          body: {
+            name,
+            active: divisionActive,
+            expectedRevision: divisionEditor.revision,
+          },
+        });
+      }
+      setDivisionEditor(null);
+      setAttempt((v) => v + 1);
+    } catch (cause) {
+      setDivisionSaveError(
+        cause instanceof ApiError && cause.status === 409
+          ? '组别名称已存在或版本已变化，请刷新核对后再保存。'
+          : failure(cause),
+      );
     } finally {
       setSaving(false);
     }
@@ -307,10 +367,58 @@ export function TeamManagementPanel({
             : '球队档案独立维护，修改后不会自动同步到已参加的比赛。'
         }
       />
-      {(error || (tab === 'event' && eventError)) && (
-        <Alert type="error" showIcon title={error || eventError} />
+      {(error || (tab === 'event' && (eventError || divisionError))) && (
+        <Alert
+          type="error"
+          showIcon
+          title={error || eventError || divisionError}
+        />
       )}
       {notice && <Alert type="success" showIcon title={notice} />}
+      {tab === 'event' && (
+        <div className="team-toolbar">
+          <Space wrap>
+            <strong>赛事竞赛组别</strong>
+            {divisions.map((group) => (
+              <Button
+                key={group.id}
+                disabled={loading || !!divisionError}
+                onClick={() => {
+                  setDivisionEditor(group);
+                  setDivisionName(group.name);
+                  setDivisionActive(group.active);
+                  setDivisionSaveError('');
+                }}
+              >
+                {group.name}
+                {group.active ? '' : ' · 已停用'}
+              </Button>
+            ))}
+            <Button
+              disabled={!eventId || loading || !!divisionError}
+              onClick={() => {
+                setDivisionEditor('new');
+                setDivisionCreateId(crypto.randomUUID());
+                setDivisionName('');
+                setDivisionActive(true);
+                setDivisionSaveError('');
+              }}
+            >
+              新建组别
+            </Button>
+          </Space>
+        </div>
+      )}
+      {tab === 'event' &&
+        !divisions.some((group) => group.active) &&
+        !loading &&
+        !divisionError && (
+          <Alert
+            type="info"
+            showIcon
+            title="请先创建竞赛组别，再添加本赛事球队。旧参赛记录需人工归组。"
+          />
+        )}
       <div className="team-toolbar">
         <Input.Search
           aria-label="搜索球队"
@@ -338,9 +446,17 @@ export function TeamManagementPanel({
           </Button>
           {tab === 'event' && (
             <Button
-              disabled={!eventId || loading || !!eventError || !!error}
+              disabled={
+                !eventId ||
+                loading ||
+                !!eventError ||
+                !!divisionError ||
+                !!error ||
+                !divisions.some((group) => group.active)
+              }
               onClick={() => {
                 setLinkId(undefined);
+                setLinkDivisionId(undefined);
                 setSaveError('');
                 setLinkOpen(true);
               }}
@@ -354,7 +470,9 @@ export function TeamManagementPanel({
               loading ||
               !organizations.length ||
               !!error ||
-              (tab === 'event' && (!eventId || !!eventError))
+              (tab === 'event' && (!eventId || !!eventError)) ||
+              (tab === 'event' &&
+                (!!divisionError || !divisions.some((group) => group.active)))
             }
             onClick={() => edit()}
           >
@@ -398,6 +516,18 @@ export function TeamManagementPanel({
             ),
           },
           { title: '负责人', dataIndex: ['profile', 'contactName'] },
+          ...(tab === 'event'
+            ? [
+                {
+                  title: '竞赛组别',
+                  render: (_: unknown, row: Team) =>
+                    row.divisionId
+                      ? (divisions.find((group) => group.id === row.divisionId)
+                          ?.name ?? '组别暂不可见')
+                      : '待归组',
+                },
+              ]
+            : []),
           { title: '联系方式', dataIndex: ['profile', 'contactPhone'] },
           {
             title: '所在城市',
@@ -532,6 +662,27 @@ export function TeamManagementPanel({
           />
         )}
         <Form form={form} layout="vertical" disabled={saving}>
+          {editor?.scope === 'event' && (
+            <Form.Item
+              name="divisionId"
+              label="竞赛组别"
+              rules={[{ required: true, message: '请选择本赛事组别' }]}
+            >
+              <Select
+                placeholder="选择 U12 男子组等赛事组别"
+                options={divisions
+                  .filter(
+                    (group) =>
+                      group.active || group.id === editor.row?.divisionId,
+                  )
+                  .map((group) => ({
+                    value: group.id,
+                    label: `${group.name}${group.active ? '' : ' · 已停用'}`,
+                    disabled: !group.active,
+                  }))}
+              />
+            </Form.Item>
+          )}
           {!editor?.row && (
             <Form.Item
               name="organizationId"
@@ -598,12 +749,41 @@ export function TeamManagementPanel({
         </Form>
       </Modal>
       <Modal
+        open={!!divisionEditor}
+        title={divisionEditor === 'new' ? '新建竞赛组别' : '编辑竞赛组别'}
+        okText="保存"
+        confirmLoading={saving}
+        onOk={() => void saveDivision()}
+        onCancel={() => {
+          if (!saving) setDivisionEditor(null);
+        }}
+      >
+        <p>组别属于当前赛事。相同组别的队伍才能编排在同一场比赛。</p>
+        {divisionSaveError && <Alert type="error" title={divisionSaveError} />}
+        <Input
+          aria-label="组别名称"
+          value={divisionName}
+          maxLength={120}
+          placeholder="例如 U12 男子组"
+          onChange={(event) => setDivisionName(event.target.value)}
+        />
+        {divisionEditor && divisionEditor !== 'new' && (
+          <Switch
+            checked={divisionActive}
+            onChange={setDivisionActive}
+            checkedChildren="启用"
+            unCheckedChildren="停用"
+            style={{ marginTop: 16 }}
+          />
+        )}
+      </Modal>
+      <Modal
         open={linkOpen}
         title="从球队档案添加到本赛事"
         okText="添加"
         cancelText="取消"
         confirmLoading={saving}
-        okButtonProps={{ disabled: !linkId }}
+        okButtonProps={{ disabled: !linkId || !linkDivisionId }}
         cancelButtonProps={{ disabled: saving }}
         closable={!saving}
         maskClosable={false}
@@ -613,6 +793,16 @@ export function TeamManagementPanel({
         }}
       >
         <p>添加时复制当前档案。以后档案更新，本赛事资料保持不变。</p>
+        <Select
+          aria-label="选择竞赛组别"
+          style={{ width: '100%', marginBottom: 12 }}
+          value={linkDivisionId}
+          onChange={setLinkDivisionId}
+          placeholder="选择本赛事竞赛组别"
+          options={divisions
+            .filter((group) => group.active)
+            .map((group) => ({ value: group.id, label: group.name }))}
+        />
         {saveError && <Alert type="error" title={saveError} />}
         <Select
           aria-label="选择球队档案"

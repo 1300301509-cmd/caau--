@@ -65,6 +65,15 @@ export const planningChangeSchema = z.object({
 });
 export const planningProposalSchema = z.object({
   goal: z.enum(['WHOLE_SCHEDULE', 'UPDATE_REQUIREMENTS']).optional(),
+  divisionName: z
+    .string()
+    .max(120)
+    .optional()
+    .describe('用户本轮明确指定的竞赛组别原名；不要编造组别 ID'),
+  allDivisions: z
+    .boolean()
+    .optional()
+    .describe('仅用户明确说给当前赛事全部组别排程时为 true'),
   changes: z.array(planningChangeSchema).max(8),
   unhandled: z.array(z.string().max(160)).max(4).optional(),
 });
@@ -93,6 +102,10 @@ export type PlanningCondition = {
   durationDays?: number;
   scheduleGoal?: boolean;
   dateSource?: 'USER' | 'EVENT_PROFILE' | 'EVENT_SCHEDULE';
+  divisionIds?: string[];
+  divisionLabels?: string[];
+  divisionRevisions?: Record<string, number>;
+  allDivisions?: boolean;
   format?: 'ROUND_ROBIN';
   daypart?: 'MORNING' | 'AFTERNOON' | 'EVENING';
   maxMatchesPerDay?: number;
@@ -311,6 +324,8 @@ export function planningPending(
     pending.push(
       '请确认对阵规则：是否每两支参赛球队各交手一次（单循环）？“每队比过一场”不能确定这一点。',
     );
+  if (period?.scheduleGoal && !period.divisionIds?.length)
+    pending.push('请确认要编排哪个竞赛组别，或明确选择当前赛事的全部组别。');
   if (unresolved.length)
     pending.push(
       '已有球队时段描述尚未转换为明确日期；请先补全赛事日期范围或具体日期。',
@@ -346,7 +361,7 @@ export const daypartLabel = (value?: PlanningCondition['daypart']) =>
 export function conditionSummary(condition: PlanningCondition) {
   const strength = condition.priority === 'MUST' ? '必须满足' : '尽量满足';
   if (condition.kind === 'DATE_RANGE')
-    return `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `，共 ${condition.durationDays} 天` : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}（${strength}）`;
+    return `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `，共 ${condition.durationDays} 天` : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}；竞赛组别：${condition.allDivisions ? '当前全部组别' : condition.divisionLabels?.join('、') || '待确认'}（${strength}）`;
   if (condition.kind === 'FORMAT')
     return `单循环：每两支参赛球队各交手一次（${strength}）`;
   if (condition.kind === 'DAYPART_CAPACITY')

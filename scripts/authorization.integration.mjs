@@ -135,6 +135,7 @@ export async function authorizationIntegration(t) {
                   '202609280001_agent_skill_runtime',
                   '202609290001_agent_candidate_draft_confirmation',
                   '202609290002_agent_team_action',
+                  '202609300001_event_divisions',
                 ],
               ],
             )
@@ -1039,7 +1040,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          31, // Includes the forward-only agent team action migration.
+          32, // Includes the forward-only event division migration.
         );
       },
     );

@@ -339,6 +339,7 @@ model Event {
   agentScheduleCandidates AgentScheduleCandidate[]
   staff EventStaff[]
   teams EventTeam[]
+  divisions EventDivision[]
   schedule EventSchedule?
   supplies EventSupplyItem[]
   matchStaff EventMatchStaff[]
@@ -510,6 +511,8 @@ model AgentTeamAction {
   ownerId String @db.Uuid
   eventId String @db.Uuid
   organizationId String @db.Uuid
+  divisionId String? @db.Uuid
+  divisionRevision Int?
   state String @default("COLLECTING") @db.VarChar(24)
   mode String @default("REAL") @db.VarChar(8)
   profiles Json @default("[]")
@@ -1372,12 +1375,42 @@ model Team {
   versions TeamVersion[]
   @@index([organizationId])
 }
+model EventDivision {
+  id String @id @db.Uuid
+  eventId String @db.Uuid
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  name String @db.VarChar(120)
+  active Boolean @default(true)
+  revision Int @default(1)
+  createdBy String @db.Uuid
+  updatedBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  teams EventTeam[]
+  versions EventDivisionVersion[]
+  @@unique([eventId, name])
+  @@unique([id, eventId])
+  @@index([eventId, active])
+}
+model EventDivisionVersion {
+  id String @id @db.Uuid
+  divisionId String @db.Uuid
+  division EventDivision @relation(fields: [divisionId], references: [id], onDelete: Restrict)
+  name String @db.VarChar(120)
+  active Boolean
+  revision Int
+  actorId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([divisionId, revision])
+}
 model EventTeam {
   id String @id @db.Uuid
   eventId String @db.Uuid
   teamId String @db.Uuid
+  divisionId String? @db.Uuid
   event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
   team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  division EventDivision? @relation(fields: [divisionId, eventId], references: [id, eventId], onDelete: Restrict)
   profile Json
   sourceTeamRevision Int
   active Boolean @default(true)
@@ -1389,6 +1422,7 @@ model EventTeam {
   versions EventTeamVersion[]
   roster EventTeamRoster?
   @@unique([eventId, teamId])
+  @@index([divisionId, eventId])
 }
 
 model EventTeamRoster {
@@ -1437,6 +1471,7 @@ model EventTeamVersion {
   id String @id @db.Uuid
   eventTeamId String @db.Uuid
   eventTeam EventTeam @relation(fields: [eventTeamId], references: [id], onDelete: Restrict)
+  divisionId String? @db.Uuid
   profile Json
   active Boolean
   revision Int

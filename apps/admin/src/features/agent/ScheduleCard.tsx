@@ -74,7 +74,7 @@ function PlanningCard({
         {planning.conditions.map((condition) => (
           <li key={condition.id}>
             {condition.kind === 'DATE_RANGE'
-              ? `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `（共 ${condition.durationDays} 天）` : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
+              ? `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `（共 ${condition.durationDays} 天）` : ''}；组别：${condition.divisionLabels?.join('、') || '待明确'}${condition.allDivisions ? '（全部组别）' : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
               : condition.kind === 'FORMAT'
                 ? '单循环：每两支参赛球队各交手一次'
                 : condition.kind === 'DAYPART_CAPACITY'
@@ -113,7 +113,7 @@ function PlanningCard({
       {planning.status === 'STALE' && (
         <Alert
           type="error"
-          title="参赛记录已停用，原确认不再有效。请在对话中移除无效条件，重新人工确认。"
+          title="参赛记录或组别已变化，原确认不再有效。请在对话中修订条件，重新人工确认。"
         />
       )}
       {planning.pending.map((item) => (
@@ -175,7 +175,7 @@ function TeamActionCard({
         </Tag>
       </header>
       <p>
-        赛事：{action.eventName} ·{' '}
+        赛事：{action.eventName} · 组别：{action.divisionName || '待补'} ·{' '}
         {action.mode === 'TEST' ? '内测合成球队' : '真实球队'} ·{' '}
         {action.profiles.length ? `${action.profiles.length} 支` : '数量待补'}
       </p>

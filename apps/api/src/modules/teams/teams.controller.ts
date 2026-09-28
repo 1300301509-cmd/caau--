@@ -23,6 +23,10 @@ import {
   CreateTeamDto,
   UpdateTeamDto,
   AddEventTeamDto,
+  UpdateEventTeamDto,
+  EventDivisionViewDto,
+  CreateEventDivisionDto,
+  UpdateEventDivisionDto,
 } from './teams.dto.js';
 @ApiBearerAuth()
 @ApiCookieAuth('webSession')
@@ -68,6 +72,51 @@ export class TeamsController {
   ) {
     return this.teams.update(request.token ?? '', id, body);
   }
+  @Get('events/:eventId/divisions')
+  @Permission('teams')
+  @HttpCode(200)
+  @ApiOperation({
+    operationId: 'listEventDivisions',
+    summary: 'listEventDivisions',
+  })
+  @ApiOkResponse({ type: EventDivisionViewDto, isArray: true })
+  listEventDivisions(
+    @Param('eventId') eventId: string,
+    @Req() request: AuthRequest,
+  ) {
+    return this.teams.listDivisions(request.token ?? '', eventId);
+  }
+  @Post('events/:eventId/divisions')
+  @Permission('teams')
+  @HttpCode(200)
+  @ApiOperation({
+    operationId: 'createEventDivision',
+    summary: 'createEventDivision',
+  })
+  @ApiOkResponse({ type: EventDivisionViewDto })
+  createEventDivision(
+    @Param('eventId') eventId: string,
+    @Req() request: AuthRequest,
+    @Body() body: CreateEventDivisionDto,
+  ) {
+    return this.teams.createDivision(request.token ?? '', eventId, body);
+  }
+  @Put('events/:eventId/divisions/:id')
+  @Permission('teams')
+  @HttpCode(200)
+  @ApiOperation({
+    operationId: 'updateEventDivision',
+    summary: 'updateEventDivision',
+  })
+  @ApiOkResponse({ type: EventDivisionViewDto })
+  updateEventDivision(
+    @Param('eventId') eventId: string,
+    @Param('id') id: string,
+    @Req() request: AuthRequest,
+    @Body() body: UpdateEventDivisionDto,
+  ) {
+    return this.teams.updateDivision(request.token ?? '', eventId, id, body);
+  }
   @Get('events/:eventId/teams')
   @Permission('teams')
   @HttpCode(200)
@@ -100,7 +149,7 @@ export class TeamsController {
     @Param('eventId') eventId: string,
     @Param('id') id: string,
     @Req() request: AuthRequest,
-    @Body() body: UpdateTeamDto,
+    @Body() body: UpdateEventTeamDto,
   ) {
     return this.teams.updateEvent(request.token ?? '', eventId, id, body);
   }

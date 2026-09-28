@@ -5,13 +5,14 @@ import type {
   ScheduleMatchDto,
 } from '../scheduling/scheduling.dto.js';
 import {
-  roundRobin,
+  roundRobinByDivision,
   scheduleSlots,
   validateSchedule,
+  type ScheduleTeam,
 } from '../scheduling/scheduling.algorithm.js';
 import type { PlanningCondition } from './planning.js';
 
-type Team = { id: string; name: string; active: boolean };
+type Team = ScheduleTeam;
 type Slot = { time: number; startAt: string; venue: string };
 type Outcome = 'FOUND' | 'PROVEN_CONFLICT' | 'SEARCH_LIMIT';
 export type PreferenceReport = {
@@ -201,7 +202,21 @@ export function auditCandidate(
     issues.push({ code, message, matchIds });
   const pair = (match: ScheduleMatchDto) =>
     [match.homeEventTeamId, match.awayEventTeamId].sort().join(':');
-  const expected = (config.teamIds.length * (config.teamIds.length - 1)) / 2;
+  const selected = config.teamIds.map((id) =>
+    teams.find((team) => team.id === id),
+  );
+  const divisionCounts = new Map<string, number>();
+  for (const team of selected) {
+    if (!team?.divisionId) continue;
+    divisionCounts.set(
+      team.divisionId,
+      (divisionCounts.get(team.divisionId) ?? 0) + 1,
+    );
+  }
+  const expected = [...divisionCounts.values()].reduce(
+    (count, size) => count + (size * (size - 1)) / 2,
+    0,
+  );
   const pairs = new Set<string>();
   if (new Set(matches.map((match) => match.order)).size !== matches.length)
     issue(
@@ -265,7 +280,9 @@ export function auditCandidate(
       found.startAt !== match.startAt ||
       found.venue !== match.venue ||
       found.round !== match.round ||
-      found.order !== match.order
+      found.order !== match.order ||
+      (found.divisionId ?? null) !== (match.divisionId ?? null) ||
+      (found.divisionLabel ?? '') !== (match.divisionLabel ?? '')
     )
       issue('FIXED_MATCH', '受保护场次被调整。', [match.id]);
   }
@@ -278,12 +295,22 @@ export function calculateCandidate(
   conditions: PlanningCondition[],
   baseline: ScheduleMatchDto[],
   fixedMatchIds: string[],
+  scope?: {
+    targetDivisionIds: string[];
+    preservedMatches: ScheduleMatchDto[];
+  },
 ): CandidateCalculation {
   const teamMap = new Map(teams.map((team) => [team.id, team]));
-  const matches = roundRobin(
-    config.teamIds.map((id) => teamMap.get(id)!),
+  const targets = scope ? new Set(scope.targetDivisionIds) : null;
+  const preserved =
+    scope?.preservedMatches.map((match) => ({ ...match })) ?? [];
+  const generated = roundRobinByDivision(
+    config.teamIds
+      .map((id) => teamMap.get(id)!)
+      .filter((team) => !targets || targets.has(team.divisionId!)),
     randomUUID,
   );
+  const matches = [...preserved, ...generated];
   const prior = new Map(
     baseline.map((match) => [
       [match.homeEventTeamId, match.awayEventTeamId].sort().join(':'),
@@ -291,7 +318,7 @@ export function calculateCandidate(
     ]),
   );
   const fixed = baseline.filter((match) => fixedMatchIds.includes(match.id));
-  for (const match of matches) {
+  for (const match of generated) {
     const before = prior.get(
       [match.homeEventTeamId, match.awayEventTeamId].sort().join(':'),
     );
@@ -301,6 +328,30 @@ export function calculateCandidate(
       match.venue = before.venue;
       match.round = before.round;
       match.order = before.order;
+    }
+  }
+  if (scope) {
+    // Other divisions keep their complete baseline rows. Reuse a target pair's
+    // prior order where possible, then fill only unoccupied event-wide orders.
+    const occupied = new Set(preserved.map((match) => match.order));
+    for (const match of generated.filter((item) =>
+      fixedMatchIds.includes(item.id),
+    ))
+      occupied.add(match.order);
+    for (const match of generated.filter(
+      (item) => !fixedMatchIds.includes(item.id),
+    )) {
+      const previous = prior.get(
+        [match.homeEventTeamId, match.awayEventTeamId].sort().join(':'),
+      );
+      if (previous?.order && !occupied.has(previous.order)) {
+        match.order = previous.order;
+      } else {
+        let order = 1;
+        while (occupied.has(order)) order += 1;
+        match.order = order;
+      }
+      occupied.add(match.order);
     }
   }
   const available = scheduleSlots(config).filter((slot) =>
@@ -367,13 +418,13 @@ export function calculateCandidate(
     ).filter((issue) => issue.code !== 'FORMAT_COUNT');
     if (issues.length) return empty('PROVEN_CONFLICT', issues, 0);
   }
-  const ordered = [...matches].sort(
+  const ordered = [...generated].sort(
     (a, b) =>
       Number(!!b.startAt) - Number(!!a.startAt) ||
       a.round - b.round ||
       a.order - b.order,
   );
-  const used: ScheduleMatchDto[] = [];
+  const used: ScheduleMatchDto[] = [...preserved];
   let explored = 0;
   let limited = false;
   const deadline = Date.now() + 1500;

@@ -35,7 +35,7 @@ export async function teamsIntegration(t, ctx) {
     introduction: '合成测试',
     notes: '',
   };
-  let team, entry, e1, e2, second;
+  let team, entry, e1, e2, second, division1, division2;
   await t.test(
     'teams: manual creation, organization isolation, validation and idempotency',
     async () => {
@@ -92,10 +92,63 @@ export async function teamsIntegration(t, ctx) {
         name: '合成球队赛事二',
         description: 'team test',
       });
+      const divisionBody1 = { id: randomUUID(), name: 'U12 男子组' };
+      division1 = await call(
+        'super',
+        'POST',
+        `events/${e1.id}/divisions`,
+        divisionBody1,
+      );
+      division2 = await call('super', 'POST', `events/${e2.id}/divisions`, {
+        id: randomUUID(),
+        name: 'U12 男子组',
+      });
+      assert.equal(
+        (
+          await call(
+            'super',
+            'POST',
+            `events/${e1.id}/divisions`,
+            divisionBody1,
+          )
+        ).id,
+        division1.id,
+      );
+      assert.equal(
+        (await call('super', 'GET', `events/${e1.id}/divisions`)).length,
+        1,
+      );
+      await call('a', 'GET', `events/${e1.id}/divisions`, undefined, 403);
+      await call(
+        'super',
+        'POST',
+        `events/${e1.id}/divisions`,
+        { id: randomUUID(), name: division1.name },
+        409,
+      );
+      await call(
+        'super',
+        'POST',
+        `events/${e1.id}/teams`,
+        { teamId: team.id },
+        400,
+      );
+      await call(
+        'super',
+        'POST',
+        `events/${e1.id}/teams`,
+        { teamId: team.id, divisionId: division2.id },
+        400,
+      );
       entry = await call('super', 'POST', `events/${e1.id}/teams`, {
         teamId: team.id,
+        divisionId: division1.id,
       });
-      await call('super', 'POST', `events/${e2.id}/teams`, { teamId: team.id });
+      assert.equal(entry.divisionId, division1.id);
+      await call('super', 'POST', `events/${e2.id}/teams`, {
+        teamId: team.id,
+        divisionId: division2.id,
+      });
       team = await call('a', 'PUT', `teams/${team.id}`, {
         expectedRevision: 1,
         active: true,
@@ -113,6 +166,7 @@ export async function teamsIntegration(t, ctx) {
         (
           await call('super', 'POST', `events/${e1.id}/teams`, {
             teamId: team.id,
+            divisionId: division1.id,
           })
         ).profile.name,
         p.name,
@@ -164,6 +218,14 @@ export async function teamsIntegration(t, ctx) {
       );
       await call('a', 'POST', `events/${appointment.eventId}/teams`, {
         teamId: second.id,
+        divisionId: (
+          await call(
+            'super',
+            'POST',
+            `events/${appointment.eventId}/divisions`,
+            { id: randomUUID(), name: 'U12 男子组' },
+          )
+        ).id,
       });
       await call(
         'b',
@@ -186,6 +248,135 @@ export async function teamsIntegration(t, ctx) {
       await sql.query(
         'UPDATE "HostingApplicationHandlerGrant" SET active=true WHERE "memberId"=$1',
         [members.a],
+      );
+    },
+  );
+  await t.test(
+    'teams: event divisions use CAS, same-event assignment, immutable history and audit',
+    async () => {
+      const extra = await call('super', 'POST', `events/${e1.id}/divisions`, {
+        id: randomUUID(),
+        name: 'U14 女子组',
+      });
+      await call(
+        'super',
+        'POST',
+        `events/${e1.id}/teams`,
+        { teamId: team.id, divisionId: extra.id },
+        409,
+      );
+      await call(
+        'super',
+        'PUT',
+        `events/${e1.id}/divisions/${division1.id}`,
+        {
+          name: division1.name,
+          active: false,
+          expectedRevision: division1.revision,
+        },
+        409,
+      );
+      entry = await call('super', 'PUT', `events/${e1.id}/teams/${entry.id}`, {
+        expectedRevision: entry.revision,
+        active: true,
+        profile: entry.profile,
+        divisionId: extra.id,
+      });
+      assert.equal(entry.divisionId, extra.id);
+      await call(
+        'super',
+        'PUT',
+        `events/${e1.id}/teams/${entry.id}`,
+        {
+          expectedRevision: entry.revision - 1,
+          active: true,
+          profile: entry.profile,
+          divisionId: division1.id,
+        },
+        409,
+      );
+      await call(
+        'super',
+        'PUT',
+        `events/${e1.id}/teams/${entry.id}`,
+        {
+          expectedRevision: entry.revision,
+          active: true,
+          profile: entry.profile,
+          divisionId: division2.id,
+        },
+        400,
+      );
+      await assert.rejects(
+        runtime.query(
+          'UPDATE "EventTeam" SET "divisionId"=$1,revision=revision+1 WHERE id=$2',
+          [division2.id, entry.id],
+        ),
+      );
+      const version = (
+        await sql.query(
+          'SELECT "divisionId" FROM "EventTeamVersion" WHERE "eventTeamId"=$1 AND revision=$2',
+          [entry.id, entry.revision],
+        )
+      ).rows[0];
+      assert.equal(version.divisionId, extra.id);
+      entry = await call('super', 'PUT', `events/${e1.id}/teams/${entry.id}`, {
+        expectedRevision: entry.revision,
+        active: true,
+        profile: entry.profile,
+        divisionId: division1.id,
+      });
+      division1 = await call(
+        'super',
+        'PUT',
+        `events/${e1.id}/divisions/${division1.id}`,
+        {
+          name: 'U12 男子组 · 改名',
+          active: true,
+          expectedRevision: division1.revision,
+        },
+      );
+      await call(
+        'super',
+        'PUT',
+        `events/${e1.id}/divisions/${division1.id}`,
+        {
+          name: '过期资料',
+          active: true,
+          expectedRevision: division1.revision - 1,
+        },
+        409,
+      );
+      const inactive = await call(
+        'super',
+        'PUT',
+        `events/${e1.id}/divisions/${extra.id}`,
+        {
+          name: extra.name,
+          active: false,
+          expectedRevision: extra.revision,
+        },
+      );
+      assert.equal(inactive.active, false);
+      await call(
+        'super',
+        'POST',
+        `events/${e1.id}/teams`,
+        { teamId: second.id, divisionId: extra.id },
+        400,
+      );
+      const audit = (
+        await sql.query(
+          'SELECT "actorId" FROM "AuditRecord" WHERE action=$1 AND "resourceId"=$2 AND outcome=$3 ORDER BY "occurredAt" DESC LIMIT 1',
+          ['eventDivisions.update', division1.id, 'ALLOWED'],
+        )
+      ).rows[0];
+      assert.equal(audit.actorId, users.super);
+      await assert.rejects(
+        runtime.query(
+          'DELETE FROM "EventDivisionVersion" WHERE "divisionId"=$1',
+          [division1.id],
+        ),
       );
     },
   );

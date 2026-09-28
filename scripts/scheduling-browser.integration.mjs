@@ -53,7 +53,9 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
         response.url().includes('/agent/sessions/') &&
         response.url().endsWith('/messages/stream')
       ) {
-        const events = (await response.text())
+        const body = await response.text().catch(() => null);
+        if (body === null) return; // Navigation can cancel a streamed response.
+        const events = body
           .trim()
           .split('\n')
           .map((line) => JSON.parse(line));
@@ -100,6 +102,9 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       name: /按当前条件重新生成|生成候选赛程/,
     });
     await expect(generate).toBeEnabled({ timeout: 15000 });
+    await expect(settings.locator('.schedule-team-group')).toContainText(
+      'U12 男子组',
+    );
     await page.getByLabel('每日结束', { exact: true }).fill('09:10');
     await generate.click();
     await expect(
@@ -114,6 +119,9 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await expect(
       page.locator('.schedule-week-table .schedule-match-card'),
     ).toHaveCount(6);
+    await expect(
+      page.locator('.schedule-week-table .schedule-match-card').first(),
+    ).toContainText('U12 男子组');
     const range = await page.getByTestId('schedule-week-range').innerText();
     await expect(page.locator('.schedule-week-table thead th')).toHaveCount(8);
     await page.getByRole('button', { name: '下一周', exact: true }).click();
@@ -289,6 +297,21 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
     await expect(page.locator('.schedule-agent-history')).toContainText(
       '不能代为执行',
     );
+    // Streaming text can contain the final wording before the response and
+    // durable turns have completed. Reloading at that point aborts the stream.
+    await expect(page.getByLabel('对话消息')).toHaveValue('', {
+      timeout: 15000,
+    });
+    await expect
+      .poll(async () => {
+        const result = await sql.query(
+          `SELECT count(*)::int n FROM "AgentTurn"
+           WHERE "sessionId"=$1 AND role='USER' AND content=$2`,
+          [freshSession.id, '请批量重排整套赛程并发布赛程'],
+        );
+        return result.rows[0].n;
+      })
+      .toBe(1);
     await expect(page.locator('.schedule-agent-preview')).toHaveCount(0);
     expect(
       (

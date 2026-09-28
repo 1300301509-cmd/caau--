@@ -85,12 +85,28 @@ export class SchedulingService {
   }
 
   private async teams(tx: Tx, eventId: string) {
-    const rows = await tx.eventTeam.findMany({
-      where: { eventId },
-      orderBy: { createdAt: 'asc' },
-    });
+    const [rows, divisions] = await Promise.all([
+      tx.eventTeam.findMany({
+        where: { eventId },
+        orderBy: { createdAt: 'asc' },
+      }),
+      tx.eventDivision.findMany({
+        where: { eventId },
+        select: { id: true, name: true, active: true },
+      }),
+    ]);
+    const divisionMap = new Map(
+      divisions.map((division) => [division.id, division]),
+    );
     return rows.map((row) => ({
       id: row.id,
+      divisionId: row.divisionId,
+      divisionName: row.divisionId
+        ? (divisionMap.get(row.divisionId)?.name ?? '')
+        : '',
+      divisionActive: row.divisionId
+        ? divisionMap.get(row.divisionId)?.active === true
+        : false,
       name:
         typeof row.profile === 'object' &&
         row.profile &&
@@ -104,7 +120,13 @@ export class SchedulingService {
 
   private async view(tx: Tx, row: Plan): Promise<ScheduleViewDto> {
     const config = row.config as unknown as ScheduleConfigDto;
-    const matches = row.matches as unknown as ScheduleMatchDto[];
+    const matches = (row.matches as unknown as ScheduleMatchDto[]).map(
+      (match) => ({
+        ...match,
+        divisionId: match.divisionId ?? null,
+        divisionLabel: match.divisionLabel ?? '',
+      }),
+    );
     const issues = validateSchedule(
       config,
       matches,
@@ -192,7 +214,11 @@ export class SchedulingService {
           throw new BadRequestException('Venue is not configured');
         const preview = calculateAdjustmentPreview(
           config,
-          current.matches as unknown as ScheduleMatchDto[],
+          (current.matches as unknown as ScheduleMatchDto[]).map((match) => ({
+            ...match,
+            divisionId: match.divisionId ?? null,
+            divisionLabel: match.divisionLabel ?? '',
+          })),
           await this.teams(tx, eventId),
           matchId,
           startAt,
@@ -231,6 +257,13 @@ export class SchedulingService {
           )
         )
           throw new ConflictException('Selected team is unavailable');
+        if (
+          config.teamIds.some((id) => {
+            const team = teams.find((item) => item.id === id);
+            return !team?.divisionId || !team.divisionActive;
+          })
+        )
+          throw new ConflictException('Selected team has no active division');
         const commandHash = hash({ format, config });
         const current = await tx.eventSchedule.findUnique({
           where: { eventId },
@@ -394,6 +427,16 @@ export class SchedulingService {
       matches,
       await this.teams(tx, eventId),
     );
+    if (
+      issues.some(
+        (issue) =>
+          issue.code.startsWith('DIVISION_') ||
+          issue.code === 'TEAM_REFERENCE_INVALID',
+      )
+    )
+      throw new ConflictException(
+        'Competition division or team reference changed; regenerate the schedule before adjusting it',
+      );
     const changed = await tx.eventSchedule.updateMany({
       where: { eventId, revision: expectedRevision },
       data: {

@@ -139,6 +139,10 @@ async function main() {
       name: 'CAAU-049 Qwen isolated acceptance',
       description: 'Temporary synthetic event',
     });
+    const division = await api(token, 'POST', `events/${event.id}/divisions`, {
+      id: randomUUID(),
+      name: 'U12 男子组',
+    });
     for (let index = 1; index <= 4; index++) {
       await api(token, 'POST', 'teams', {
         id: randomUUID(),
@@ -148,6 +152,7 @@ async function main() {
           ])
         ).rows[0]?.id,
         eventId: event.id,
+        divisionId: division.id,
         profile: {
           name: `Synthetic Qwen team ${index}`,
           contactName: `Synthetic contact ${index}`,

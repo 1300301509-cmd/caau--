@@ -17,10 +17,15 @@ import {
   eventOperations,
   isHeadquartersSuperAdmin,
 } from '../authorization/policy.js';
-import type { TeamProfileDto, TeamViewDto } from './teams.dto.js';
+import type {
+  TeamProfileDto,
+  TeamViewDto,
+  EventDivisionViewDto,
+} from './teams.dto.js';
 type Tx = Prisma.TransactionClient;
 type Master = Prisma.TeamGetPayload<{ include: { members: true } }>;
 type Entry = Prisma.EventTeamGetPayload<Record<string, never>>;
+type Division = Prisma.EventDivisionGetPayload<Record<string, never>>;
 const fields = {
   name: 120,
   contactName: 80,
@@ -118,6 +123,7 @@ export class TeamsService {
       teamId: master ? row.id : row.teamId,
       organizationId: master ? row.organizationId : '',
       eventId: master ? '' : row.eventId,
+      divisionId: master ? null : row.divisionId,
       profile: row.profile as unknown as TeamProfileDto,
       active: row.active,
       revision: row.revision,
@@ -126,6 +132,140 @@ export class TeamsService {
       canEdit: master ? this.editable(actor, row) : true,
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+  private viewDivision(row: Division): EventDivisionViewDto {
+    return {
+      id: row.id,
+      eventId: row.eventId,
+      name: row.name,
+      active: row.active,
+      revision: row.revision,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+  private async requireDivision(tx: Tx, eventId: string, value: unknown) {
+    const id = uuid(value);
+    const division = await tx.eventDivision.findFirst({
+      where: { id, eventId, active: true },
+    });
+    if (!division) throw new BadRequestException('请选择本赛事有效竞赛组别');
+    return division;
+  }
+  listDivisions(token: string, eventId: string) {
+    return this.auth.run(
+      token,
+      'eventDivisions.list',
+      eventId,
+      {},
+      async (tx, actor) => {
+        await this.event(tx, actor, eventId);
+        return (
+          await tx.eventDivision.findMany({
+            where: { eventId },
+            orderBy: [{ active: 'desc' }, { createdAt: 'asc' }],
+          })
+        ).map((row) => this.viewDivision(row));
+      },
+    );
+  }
+  createDivision(token: string, eventId: string, input: unknown) {
+    return this.auth.run(
+      token,
+      'eventDivisions.create',
+      eventId,
+      input,
+      async (tx, actor) => {
+        await this.event(tx, actor, eventId);
+        const body = bodyObject(input, ['id', 'name']);
+        const id = uuid(body.id);
+        const name = text(body.name, 120);
+        const existing = await tx.eventDivision.findUnique({ where: { id } });
+        if (existing) {
+          if (
+            existing.eventId !== eventId ||
+            existing.name !== name ||
+            existing.createdBy !== actor.id
+          )
+            throw new ConflictException('组别创建冲突');
+          return this.viewDivision(existing);
+        }
+        const row = await tx.eventDivision.create({
+          data: { id, eventId, name, createdBy: actor.id, updatedBy: actor.id },
+        });
+        await tx.eventDivisionVersion.create({
+          data: {
+            id: randomUUID(),
+            divisionId: id,
+            name,
+            active: true,
+            revision: 1,
+            actorId: actor.id,
+          },
+        });
+        return this.viewDivision(row);
+      },
+      { retries: 2, retryUnique: true },
+    );
+  }
+  updateDivision(token: string, eventId: string, id: string, input: unknown) {
+    return this.auth.run(
+      token,
+      'eventDivisions.update',
+      id,
+      { ...bodyObject(input, ['name', 'active', 'expectedRevision']), eventId },
+      async (tx, actor) => {
+        await this.event(tx, actor, eventId);
+        const body = bodyObject(input, ['name', 'active', 'expectedRevision']);
+        const divisionId = uuid(id);
+        const name = text(body.name, 120);
+        if (
+          typeof body.active !== 'boolean' ||
+          !Number.isSafeInteger(body.expectedRevision) ||
+          Number(body.expectedRevision) < 1
+        )
+          throw new BadRequestException('Invalid division revision or active');
+        const previous = await tx.eventDivision.findFirst({
+          where: { id: divisionId, eventId },
+        });
+        if (!previous) deny();
+        if (
+          !body.active &&
+          (await tx.eventTeam.count({
+            where: { eventId, divisionId, active: true },
+          }))
+        )
+          throw new ConflictException('组别仍有参赛球队，请先归组或移出');
+        const changed = await tx.eventDivision.updateMany({
+          where: {
+            id: divisionId,
+            eventId,
+            revision: Number(body.expectedRevision),
+          },
+          data: {
+            name,
+            active: body.active,
+            revision: { increment: 1 },
+            updatedBy: actor.id,
+            updatedAt: new Date(),
+          },
+        });
+        if (changed.count !== 1)
+          throw new ConflictException('组别已更新，请刷新后重试');
+        await tx.eventDivisionVersion.create({
+          data: {
+            id: randomUUID(),
+            divisionId,
+            name,
+            active: body.active,
+            revision: Number(body.expectedRevision) + 1,
+            actorId: actor.id,
+          },
+        });
+        return this.viewDivision(
+          (await tx.eventDivision.findUnique({ where: { id: divisionId } }))!,
+        );
+      },
+    );
   }
   organizationsList(token: string) {
     return this.auth.run(
@@ -175,20 +315,28 @@ export class TeamsService {
       'id',
       'organizationId',
       'eventId',
+      'divisionId',
       'profile',
     ]);
     const id = uuid(body.id),
       organizationId = uuid(body.organizationId),
       p = profile(body.profile);
     const eventId = body.eventId === undefined ? undefined : uuid(body.eventId);
+    if (!eventId && body.divisionId !== undefined)
+      throw new BadRequestException('组别只能用于赛事参赛记录');
     if (
       !isHeadquartersSuperAdmin(actor) &&
       !this.organizations(actor).includes(organizationId)
     )
       deny();
     if (eventId) await this.event(tx, actor, eventId);
+    const divisionId = eventId
+      ? (await this.requireDivision(tx, eventId, body.divisionId)).id
+      : undefined;
     const creationHash = createHash('sha256')
-      .update(JSON.stringify({ organizationId, eventId, profile: p }))
+      .update(
+        JSON.stringify({ organizationId, eventId, divisionId, profile: p }),
+      )
       .digest('hex');
     const previous = await tx.team.findUnique({
       where: { id },
@@ -223,7 +371,7 @@ export class TeamsService {
         actorId: actor.id,
       },
     });
-    if (eventId) await this.attach(tx, actor, eventId, row);
+    if (eventId) await this.attach(tx, actor, eventId, divisionId!, row);
     return this.view(row, actor);
   }
   update(token: string, id: string, input: unknown) {
@@ -278,17 +426,28 @@ export class TeamsService {
       },
     );
   }
-  private async attach(tx: Tx, actor: Actor, eventId: string, team: Master) {
+  private async attach(
+    tx: Tx,
+    actor: Actor,
+    eventId: string,
+    divisionId: string,
+    team: Master,
+  ) {
     const existing = await tx.eventTeam.findUnique({
       where: { eventId_teamId: { eventId, teamId: team.id } },
     });
-    if (existing) return existing; // Retry never refreshes an existing snapshot.
+    if (existing) {
+      if (existing.divisionId !== divisionId)
+        throw new ConflictException('球队已参赛，改组请编辑本赛事球队');
+      return existing; // Retry never refreshes an existing snapshot.
+    }
     if (!team.active) throw new ConflictException('归档球队不能新增到赛事');
     const row = await tx.eventTeam.create({
       data: {
         id: randomUUID(),
         eventId,
         teamId: team.id,
+        divisionId,
         profile: team.profile as Prisma.InputJsonValue,
         sourceTeamRevision: team.revision,
         createdBy: actor.id,
@@ -299,6 +458,7 @@ export class TeamsService {
       data: {
         id: randomUUID(),
         eventTeamId: row.id,
+        divisionId,
         profile: row.profile as Prisma.InputJsonValue,
         active: true,
         revision: 1,
@@ -315,9 +475,15 @@ export class TeamsService {
       input,
       async (tx, actor) => {
         await this.event(tx, actor, eventId);
-        const body = bodyObject(input, ['teamId']);
+        const body = bodyObject(input, ['teamId', 'divisionId']);
         const team = await this.master(tx, actor, uuid(body.teamId));
-        return this.view(await this.attach(tx, actor, eventId, team), actor);
+        const divisionId = (
+          await this.requireDivision(tx, eventId, body.divisionId)
+        ).id;
+        return this.view(
+          await this.attach(tx, actor, eventId, divisionId, team),
+          actor,
+        );
       },
       { retries: 2, retryUnique: true },
     );
@@ -328,21 +494,70 @@ export class TeamsService {
       'eventTeams.update',
       id,
       {
-        ...bodyObject(input, ['expectedRevision', 'profile', 'active']),
+        ...bodyObject(input, [
+          'expectedRevision',
+          'profile',
+          'active',
+          'divisionId',
+        ]),
         eventId,
       },
       async (tx, actor) => {
         await this.event(tx, actor, eventId);
-        const c = change(input);
+        const body = bodyObject(input, [
+          'expectedRevision',
+          'profile',
+          'active',
+          'divisionId',
+        ]);
+        const c = change({
+          expectedRevision: body.expectedRevision,
+          profile: body.profile,
+          active: body.active,
+        });
         const previous = await tx.eventTeam.findFirst({
           where: { id, eventId },
         });
         if (!previous) deny();
+        const divisionId =
+          body.divisionId === undefined
+            ? previous.divisionId
+            : (await this.requireDivision(tx, eventId, body.divisionId)).id;
+        if (!divisionId && c.active)
+          throw new BadRequestException('参赛球队须先选择组别');
+        if (divisionId && c.active)
+          await this.requireDivision(tx, eventId, divisionId);
+        if (
+          divisionId &&
+          divisionId !== previous.divisionId &&
+          previous.divisionId
+        ) {
+          const schedule = await tx.eventSchedule.findUnique({
+            where: { eventId },
+            select: { matches: true },
+          });
+          const matches = Array.isArray(schedule?.matches)
+            ? schedule.matches
+            : [];
+          if (
+            matches.some(
+              (match) =>
+                match &&
+                typeof match === 'object' &&
+                !Array.isArray(match) &&
+                (match.homeEventTeamId === id || match.awayEventTeamId === id),
+            )
+          )
+            throw new ConflictException(
+              '球队已进入当前赛程，请先处理赛程再改组',
+            );
+        }
         const changed = await tx.eventTeam.updateMany({
           where: { id, eventId, revision: c.expectedRevision },
           data: {
             profile: json(c.profile),
             active: c.active,
+            divisionId,
             revision: { increment: 1 },
             updatedBy: actor.id,
             updatedAt: new Date(),
@@ -354,6 +569,7 @@ export class TeamsService {
           data: {
             id: randomUUID(),
             eventTeamId: id,
+            divisionId,
             profile: json(c.profile),
             active: c.active,
             revision: c.expectedRevision + 1,

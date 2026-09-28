@@ -68,6 +68,27 @@ export function captureUsage(raw: unknown) {
   }
 }
 
+function isSerializationConflict(error: unknown) {
+  const databaseError = error as {
+    code?: string;
+    cause?: { originalCode?: string; kind?: string };
+    meta?: {
+      code?: string;
+      driverAdapterError?: { cause?: { originalCode?: string } };
+    };
+  } | null;
+  const sqlState =
+    databaseError?.meta?.code ??
+    databaseError?.meta?.driverAdapterError?.cause?.originalCode ??
+    databaseError?.cause?.originalCode;
+  return (
+    databaseError?.code === 'P2034' ||
+    sqlState === '40001' ||
+    sqlState === '40P01' ||
+    databaseError?.cause?.kind === 'TransactionWriteConflict'
+  );
+}
+
 export class UsageService {
   private readonly db;
   constructor(
@@ -184,7 +205,10 @@ export class UsageService {
           timeout: 10000,
         });
       } catch (e) {
-        if ((e as { code?: string }).code !== 'P2034' || attempt >= 5) throw e;
+        if (!isSerializationConflict(e) || attempt >= 5) throw e;
+        await new Promise((resolve) =>
+          setTimeout(resolve, 5 + Math.floor(Math.random() * 25)),
+        );
       }
     }
   }

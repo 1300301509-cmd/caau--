@@ -5,7 +5,15 @@ import type {
   ScheduleMatchDto,
 } from './scheduling.dto.js';
 
-type Team = { id: string; name: string; active: boolean };
+export type ScheduleTeam = {
+  id: string;
+  name: string;
+  active: boolean;
+  divisionId: string | null;
+  divisionName?: string;
+  divisionActive?: boolean;
+};
+type Team = ScheduleTeam;
 type Slot = { startAt: string; venue: string; time: number };
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
@@ -98,9 +106,13 @@ function emptyMatch(
   id: string,
   round: number,
   order: number,
+  divisionId: string,
+  divisionLabel: string,
 ): ScheduleMatchDto {
   return {
     id,
+    divisionId,
+    divisionLabel,
     round,
     order,
     homeEventTeamId: '',
@@ -114,7 +126,14 @@ function emptyMatch(
   };
 }
 
-export function roundRobin(teams: Team[], ids: () => string) {
+export function roundRobin(
+  teams: Team[],
+  ids: () => string,
+  divisionId = teams[0]?.divisionId,
+  orderOffset = 0,
+  divisionLabel = teams[0]?.divisionName ?? '',
+) {
+  if (!divisionId) throw new BadRequestException('Teams require a division');
   const values: (Team | null)[] = [...teams];
   if (values.length % 2) values.push(null);
   const matches: ScheduleMatchDto[] = [];
@@ -123,7 +142,13 @@ export function roundRobin(teams: Team[], ids: () => string) {
       const first = values[index];
       const second = values[values.length - 1 - index];
       if (!first || !second) continue;
-      const match = emptyMatch(ids(), round, matches.length + 1);
+      const match = emptyMatch(
+        ids(),
+        round,
+        orderOffset + matches.length + 1,
+        divisionId,
+        divisionLabel,
+      );
       const home = round % 2 === 0 && index === 0 ? second : first;
       const away = home === first ? second : first;
       match.homeEventTeamId = home.id;
@@ -137,7 +162,13 @@ export function roundRobin(teams: Team[], ids: () => string) {
   return matches;
 }
 
-function elimination(teams: Team[], ids: () => string) {
+function elimination(
+  teams: Team[],
+  ids: () => string,
+  divisionId: string,
+  orderOffset: number,
+  divisionLabel: string,
+) {
   if (![2, 4, 8, 16, 32].includes(teams.length))
     throw new BadRequestException(
       'Single elimination requires 2/4/8/16/32 teams',
@@ -146,7 +177,13 @@ function elimination(teams: Team[], ids: () => string) {
   const byRound: ScheduleMatchDto[][] = [];
   const first: ScheduleMatchDto[] = [];
   for (let index = 0; index < teams.length; index += 2) {
-    const match = emptyMatch(ids(), 1, first.length + 1);
+    const match = emptyMatch(
+      ids(),
+      1,
+      orderOffset + first.length + 1,
+      divisionId,
+      divisionLabel,
+    );
     match.homeEventTeamId = teams[index]!.id;
     match.awayEventTeamId = teams[index + 1]!.id;
     match.homeLabel = teams[index]!.name;
@@ -161,7 +198,9 @@ function elimination(teams: Team[], ids: () => string) {
       const match = emptyMatch(
         ids(),
         round,
-        byRound.flat().length + current.length + 1,
+        orderOffset + byRound.flat().length + current.length + 1,
+        divisionId,
+        divisionLabel,
       );
       match.homeSourceMatchId = previous[index]!.id;
       match.awaySourceMatchId = previous[index + 1]!.id;
@@ -172,6 +211,53 @@ function elimination(teams: Team[], ids: () => string) {
     byRound.push(current);
   }
   return byRound.flat();
+}
+
+export function groupTeamsByDivision(teams: Team[]) {
+  const groups = new Map<string, Team[]>();
+  for (const team of teams) {
+    if (!team.divisionId || team.divisionActive === false)
+      throw new BadRequestException('Selected team has no active division');
+    const group = groups.get(team.divisionId) ?? [];
+    group.push(team);
+    groups.set(team.divisionId, group);
+  }
+  for (const group of groups.values())
+    if (group.length < 2)
+      throw new BadRequestException(
+        'Each selected division requires at least two teams',
+      );
+  return groups;
+}
+
+export function roundRobinByDivision(teams: Team[], ids: () => string) {
+  const matches: ScheduleMatchDto[] = [];
+  for (const [divisionId, group] of groupTeamsByDivision(teams))
+    matches.push(
+      ...roundRobin(
+        group,
+        ids,
+        divisionId,
+        matches.length,
+        group[0]?.divisionName ?? '',
+      ),
+    );
+  return matches;
+}
+
+function eliminationByDivision(teams: Team[], ids: () => string) {
+  const matches: ScheduleMatchDto[] = [];
+  for (const [divisionId, group] of groupTeamsByDivision(teams))
+    matches.push(
+      ...elimination(
+        group,
+        ids,
+        divisionId,
+        matches.length,
+        group[0]?.divisionName ?? '',
+      ),
+    );
+  return matches;
 }
 
 function schedule(matches: ScheduleMatchDto[], config: ScheduleConfigDto) {
@@ -228,7 +314,60 @@ export function validateSchedule(
         '参赛球队已退出或当前不可用，请重新生成赛程。',
         [],
       );
+    else if (!teamMap.get(id)?.divisionId)
+      add('DIVISION_UNASSIGNED', '参赛球队尚未归组，请先确认组别。', []);
+    else if (teamMap.get(id)?.divisionActive === false)
+      add('DIVISION_UNAVAILABLE', '参赛组别已停用，请重新确认组别。', []);
   for (const match of matches) {
+    if (!match.divisionId)
+      add(
+        'DIVISION_UNASSIGNED',
+        `第${match.order}场缺少竞赛组别，不能重新发布。`,
+        [match.id],
+      );
+    const currentDivisionName = teams.find(
+      (team) => team.divisionId === match.divisionId,
+    )?.divisionName;
+    if (
+      match.divisionId &&
+      currentDivisionName &&
+      match.divisionLabel !== currentDivisionName
+    )
+      add(
+        'DIVISION_LABEL_STALE',
+        `第${match.order}场组别名称已变化，请重新生成赛程。`,
+        [match.id],
+      );
+    for (const teamId of [match.homeEventTeamId, match.awayEventTeamId].filter(
+      Boolean,
+    )) {
+      const team = teamMap.get(teamId);
+      if (!team || !config.teamIds.includes(teamId)) {
+        add(
+          'TEAM_REFERENCE_INVALID',
+          `第${match.order}场引用的参赛球队不属于当前赛程。`,
+          [match.id],
+        );
+        continue;
+      }
+      if (!team.divisionId || team.divisionActive === false) continue;
+      if (team.divisionId !== match.divisionId)
+        add('DIVISION_MISMATCH', `第${match.order}场球队与场次组别不一致。`, [
+          match.id,
+        ]);
+    }
+    for (const sourceId of [
+      match.homeSourceMatchId,
+      match.awaySourceMatchId,
+    ].filter(Boolean)) {
+      const source = matchMap.get(sourceId);
+      if (!source || source.divisionId !== match.divisionId)
+        add(
+          'DIVISION_MISMATCH',
+          `第${match.order}场前置比赛与场次组别不一致。`,
+          [sourceId, match.id],
+        );
+    }
     if (!match.startAt || !match.venue) {
       add('UNSCHEDULED', `第${match.order}场没有可用的时间和场地。`, [
         match.id,
@@ -341,8 +480,8 @@ export function generateSchedule(
   );
   const matches =
     format === 'ROUND_ROBIN'
-      ? roundRobin(selected, ids)
-      : elimination(selected, ids);
+      ? roundRobinByDivision(selected, ids)
+      : eliminationByDivision(selected, ids);
   schedule(matches, config);
   return { matches, issues: validateSchedule(config, matches, teams) };
 }

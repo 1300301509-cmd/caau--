@@ -86,6 +86,12 @@ async function main() {
       name: 'CAAU063临时规划赛事',
       description: 'Temporary synthetic data',
     });
+    const division = await request(
+      token,
+      'POST',
+      `events/${event.id}/divisions`,
+      { id: randomUUID(), name: 'U12 男子组' },
+    );
     // Opt-in general dialogue regression. No browser or development DB access.
     if (process.env.CAAU_CHAT_ONLY === '1') {
       const counts = async () =>
@@ -171,6 +177,7 @@ async function main() {
         id: randomUUID(),
         organizationId: organization,
         eventId: event.id,
+        divisionId: division.id,
         profile: {
           name,
           contactName: 'Synthetic contact',

@@ -42,6 +42,10 @@ export async function schedulingIntegration(t, context) {
     name: '合成赛程赛事',
     description: 'scheduling test',
   });
+  const division = await call('super', 'POST', `events/${event.id}/divisions`, {
+    id: randomUUID(),
+    name: 'U12 男子组',
+  });
   await t.test(
     'agent skills are versioned admin instructions, not executable tools',
     async () => {
@@ -130,6 +134,7 @@ export async function schedulingIntegration(t, context) {
       id: randomUUID(),
       organizationId: orgA,
       eventId: event.id,
+      divisionId: division.id,
       profile: profile(index),
     });
     teams.push(master);
@@ -150,6 +155,323 @@ export async function schedulingIntegration(t, context) {
   await sql.query(
     'INSERT INTO "EventGrant" (id,"eventId","memberId",active) VALUES ($1,$2,$3,true)',
     [randomUUID(), event.id, members.manager],
+  );
+
+  await t.test(
+    'scheduling: divisions keep pairings separate and block reassignment after pairing',
+    async () => {
+      const groupedEvent = await call('super', 'POST', 'events', {
+        name: '双组赛程校验',
+        description: 'division isolation',
+      });
+      const groupIds = [];
+      for (const name of ['U12 男子组', 'U14 女子组']) {
+        const group = await call(
+          'super',
+          'POST',
+          `events/${groupedEvent.id}/divisions`,
+          {
+            id: randomUUID(),
+            name,
+          },
+        );
+        groupIds.push(group.id);
+      }
+      for (let index = 0; index < 4; index += 1)
+        await call('super', 'POST', 'teams', {
+          id: randomUUID(),
+          organizationId: orgA,
+          eventId: groupedEvent.id,
+          divisionId: groupIds[Math.floor(index / 2)],
+          profile: profile(index + 5),
+        });
+      const roster = await call(
+        'super',
+        'GET',
+        `events/${groupedEvent.id}/teams`,
+      );
+      const grouped = await call(
+        'super',
+        'POST',
+        `events/${groupedEvent.id}/schedule/generate`,
+        {
+          commandId: randomUUID(),
+          format: 'ROUND_ROBIN',
+          config: { ...config, teamIds: roster.map((team) => team.id) },
+        },
+      );
+      assert.equal(grouped.matches.length, 2);
+      assert.equal(grouped.issues.length, 0);
+      assert.deepEqual(
+        new Set(grouped.matches.map((match) => match.divisionId)),
+        new Set(groupIds),
+      );
+      for (const match of grouped.matches) {
+        const home = roster.find((team) => team.id === match.homeEventTeamId);
+        const away = roster.find((team) => team.id === match.awayEventTeamId);
+        assert.equal(home.divisionId, away.divisionId);
+        assert.equal(match.divisionId, home.divisionId);
+        assert.ok(['U12 男子组', 'U14 女子组'].includes(match.divisionLabel));
+      }
+      const moved = roster.find((team) => team.divisionId === groupIds[0]);
+      assert.ok(moved);
+      await call(
+        'super',
+        'PUT',
+        `events/${groupedEvent.id}/teams/${moved.id}`,
+        {
+          expectedRevision: moved.revision,
+          active: true,
+          divisionId: groupIds[1],
+          profile: moved.profile,
+        },
+        409,
+      );
+      const oldDivision = (
+        await call('super', 'GET', `events/${groupedEvent.id}/divisions`)
+      ).find((item) => item.id === groupIds[0]);
+      await call(
+        'super',
+        'PUT',
+        `events/${groupedEvent.id}/divisions/${oldDivision.id}`,
+        {
+          name: 'U12 混合组',
+          active: true,
+          expectedRevision: oldDivision.revision,
+        },
+      );
+      const first = grouped.matches[0];
+      await call(
+        'super',
+        'PUT',
+        `events/${groupedEvent.id}/schedule/matches/${first.id}`,
+        {
+          commandId: randomUUID(),
+          expectedRevision: grouped.revision,
+          startAt: first.startAt,
+          venue: first.venue,
+        },
+        409,
+      );
+      await call(
+        'super',
+        'POST',
+        `events/${groupedEvent.id}/schedule/publish`,
+        { commandId: randomUUID(), expectedRevision: grouped.revision },
+        409,
+      );
+      const renewed = await call(
+        'super',
+        'POST',
+        `events/${groupedEvent.id}/schedule/generate`,
+        {
+          commandId: randomUUID(),
+          format: 'ROUND_ROBIN',
+          config: { ...config, teamIds: roster.map((team) => team.id) },
+        },
+      );
+      assert.ok(
+        renewed.matches.some((match) => match.divisionLabel === 'U12 混合组'),
+      );
+      const published = await call(
+        'super',
+        'POST',
+        `events/${groupedEvent.id}/schedule/publish`,
+        {
+          commandId: randomUUID(),
+          expectedRevision: renewed.revision,
+        },
+      );
+      assert.equal(published.status, 'PUBLISHED');
+    },
+  );
+
+  await t.test(
+    'agent candidate can replan one division while preserving the other division and one DRAFT receipt',
+    async () => {
+      const scopedEvent = await call('super', 'POST', 'events', {
+        name: '单组重排隔离赛事',
+        description: 'one division candidate',
+      });
+      const divisions = [];
+      for (const name of ['U12 男子组', 'U14 女子组'])
+        divisions.push(
+          await call('super', 'POST', `events/${scopedEvent.id}/divisions`, {
+            id: randomUUID(),
+            name,
+          }),
+        );
+      for (let index = 0; index < 4; index += 1)
+        await call('super', 'POST', 'teams', {
+          id: randomUUID(),
+          organizationId: orgA,
+          eventId: scopedEvent.id,
+          divisionId: divisions[Math.floor(index / 2)].id,
+          profile: profile(index + 5),
+        });
+      const roster = await call(
+        'super',
+        'GET',
+        `events/${scopedEvent.id}/teams`,
+      );
+      const cfg = { ...config, teamIds: roster.map((team) => team.id) };
+      const target = roster.find((team) => team.divisionId === divisions[0].id);
+      assert.ok(target);
+      const session = await call('super', 'POST', 'agent/sessions', {
+        currentEventId: scopedEvent.id,
+      });
+      const planningId = randomUUID();
+      const conditions = [
+        {
+          id: randomUUID(),
+          kind: 'DATE_RANGE',
+          eventId: scopedEvent.id,
+          priority: 'MUST',
+          confirmation: 'CONFIRMED',
+          sourceTurnIds: [],
+          scheduleGoal: true,
+          dateSource: 'EVENT_SCHEDULE',
+          from: cfg.startDate,
+          to: cfg.endDate,
+          divisionIds: [divisions[0].id],
+          divisionLabels: [divisions[0].name],
+          divisionRevisions: { [divisions[0].id]: divisions[0].revision },
+          allDivisions: false,
+        },
+        {
+          id: randomUUID(),
+          kind: 'FORMAT',
+          eventId: scopedEvent.id,
+          priority: 'MUST',
+          confirmation: 'CONFIRMED',
+          sourceTurnIds: [],
+          format: 'ROUND_ROBIN',
+        },
+        {
+          id: randomUUID(),
+          kind: 'TEAM_WINDOW',
+          eventId: scopedEvent.id,
+          priority: 'MUST',
+          confirmation: 'CONFIRMED',
+          sourceTurnIds: [],
+          teamId: target.id,
+          teamLabel: target.profile.name,
+          availability: 'ONLY',
+          dates: [cfg.endDate],
+          startTime: '09:00',
+          endTime: '18:00',
+        },
+      ];
+      await sql.query(
+        'INSERT INTO "AgentPlanningRequest" (id,"sessionId","ownerId","eventId",status,revision,"confirmedRevision",conditions) VALUES ($1,$2,$3,$4,$5,1,1,$6::jsonb)',
+        [
+          planningId,
+          session.id,
+          users.super,
+          scopedEvent.id,
+          'CONFIRMED',
+          JSON.stringify(conditions),
+        ],
+      );
+      const candidates = `agent/planning-requests/${planningId}/candidates`;
+      const request = {
+        expectedRevision: 1,
+        baselineRevision: 0,
+        format: 'ROUND_ROBIN',
+        configSource: 'EXPLICIT',
+        config: cfg,
+        fixedMatchIds: [],
+      };
+      await call('super', 'POST', candidates, request, 409);
+      const baseline = await call(
+        'super',
+        'POST',
+        `events/${scopedEvent.id}/schedule/generate`,
+        { commandId: randomUUID(), format: 'ROUND_ROBIN', config: cfg },
+      );
+      await call(
+        'super',
+        'POST',
+        candidates,
+        {
+          ...request,
+          baselineRevision: baseline.revision,
+          config: { ...cfg, dailyEnd: '17:00' },
+        },
+        409,
+      );
+      const preserved = baseline.matches.filter(
+        (match) => match.divisionId === divisions[1].id,
+      );
+      assert.equal(preserved.length, 1);
+      const candidate = await call('super', 'POST', candidates, {
+        ...request,
+        baselineRevision: baseline.revision,
+        configSource: 'EVENT_SCHEDULE',
+      });
+      assert.equal(candidate.status, 'FOUND');
+      assert.equal(candidate.canSave, true);
+      assert.deepEqual(candidate.issues, []);
+      assert.deepEqual(
+        candidate.fixedMatchIds,
+        preserved.map((match) => match.id),
+      );
+      assert.deepEqual(
+        candidate.matches.find((match) => match.id === preserved[0].id),
+        preserved[0],
+      );
+      assert.ok(
+        candidate.matches
+          .find((match) => match.divisionId === divisions[0].id)
+          .startAt.startsWith('2027-06-02'),
+      );
+      const versionsBefore = (
+        await sql.query(
+          'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+          [scopedEvent.id],
+        )
+      ).rows[0].n;
+      const ticket = await call(
+        'super',
+        'POST',
+        `${candidates}/${candidate.id}/save-ticket`,
+        {
+          expectedPlanningRevision: candidate.planningRevision,
+          expectedBaselineRevision: candidate.baselineRevision,
+        },
+      );
+      const confirmRoute = `agent/candidate-save-tickets/${ticket.id}/confirm`;
+      const binding = {
+        candidateId: candidate.id,
+        candidateHash: ticket.candidateHash,
+      };
+      const saved = await call('super', 'POST', confirmRoute, binding);
+      assert.equal(saved.status, 'DRAFT');
+      assert.equal(saved.revision, baseline.revision + 1);
+      assert.equal(
+        (await call('super', 'POST', confirmRoute, binding)).commandId,
+        saved.commandId,
+      );
+      const current = await call(
+        'super',
+        'GET',
+        `events/${scopedEvent.id}/schedule`,
+      );
+      assert.deepEqual(
+        current.matches.find((match) => match.id === preserved[0].id),
+        preserved[0],
+      );
+      assert.equal(current.status, 'DRAFT');
+      assert.equal(
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventScheduleVersion" WHERE "eventId"=$1',
+            [scopedEvent.id],
+          )
+        ).rows[0].n,
+        versionsBefore + 1,
+      );
+    },
   );
 
   let schedule;
@@ -1630,12 +1952,22 @@ export async function schedulingIntegration(t, context) {
       );
       const token = tokens.a;
       try {
+        const miniappDivision = await call(
+          'super',
+          'POST',
+          `events/${eventId}/divisions`,
+          {
+            id: randomUUID(),
+            name: '小程序赛程测试组',
+          },
+        );
         const teamIds = [];
         for (let index = 1; index <= 4; index++) {
           const team = await call('super', 'POST', 'teams', {
             id: randomUUID(),
             organizationId: orgA,
             eventId,
+            divisionId: miniappDivision.id,
             profile: {
               name: `Miniapp agent synthetic team ${index}`,
               contactName: 'Synthetic contact',
@@ -2117,16 +2449,22 @@ export async function schedulingIntegration(t, context) {
         { length: 8 },
         (_, index) => `并发闲聊${index}`,
       );
-      const [parallel, snapshots] = await Promise.all([
-        Promise.all(
+      const [parallelResults, snapshotResults] = await Promise.all([
+        Promise.allSettled(
           incoming.map((message) =>
             call('manager', 'POST', `${path}/messages`, { message }),
           ),
         ),
-        Promise.all(
+        Promise.allSettled(
           Array.from({ length: 8 }, () => call('manager', 'GET', path)),
         ),
       ]);
+      const failure = [...parallelResults, ...snapshotResults].find(
+        (result) => result.status === 'rejected',
+      );
+      if (failure) throw failure.reason;
+      const parallel = parallelResults.map((result) => result.value);
+      const snapshots = snapshotResults.map((result) => result.value);
       for (const snapshot of snapshots) {
         assert.ok(
           snapshot.turns.every(
@@ -2844,6 +3182,7 @@ export async function schedulingIntegration(t, context) {
         id: randomUUID(),
         organizationId: orgA,
         eventId: event.id,
+        divisionId: division.id,
         profile: profile(4),
       });
       const attached = (

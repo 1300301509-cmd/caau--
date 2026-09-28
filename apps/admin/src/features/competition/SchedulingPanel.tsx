@@ -20,6 +20,7 @@ import { useAgentWindow } from '../agent/AgentHost';
 
 type Schedule = components['schemas']['ScheduleViewDto'];
 type EventTeam = components['schemas']['TeamViewDto'];
+type EventDivision = components['schemas']['EventDivisionViewDto'];
 type Match = components['schemas']['ScheduleMatchDto'];
 type Config = components['schemas']['ScheduleConfigDto'];
 type FormValues = Config & {
@@ -31,11 +32,17 @@ type State = {
   error: string;
   schedule?: Schedule;
   teams: EventTeam[];
+  divisions: EventDivision[];
   editor?: Match;
 };
 type Action =
   | { type: 'loading' }
-  | { type: 'loaded'; schedule: Schedule; teams: EventTeam[] }
+  | {
+      type: 'loaded';
+      schedule: Schedule;
+      teams: EventTeam[];
+      divisions: EventDivision[];
+    }
   | { type: 'error'; message: string }
   | { type: 'saving'; value: boolean }
   | { type: 'schedule'; value: Schedule }
@@ -45,6 +52,7 @@ const initial: State = {
   saving: false,
   error: '',
   teams: [],
+  divisions: [],
 };
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -125,13 +133,33 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
               throw cause;
             })
         : [];
-      dispatch({ type: 'loaded', schedule, teams });
+      const divisions = await client
+        .request('listEventDivisions', { token, path: { eventId } })
+        .catch((cause) => {
+          if (cause instanceof ApiError && cause.status === 403) return [];
+          throw cause;
+        });
+      dispatch({ type: 'loaded', schedule, teams, divisions });
+      const activeDivisions = new Set(
+        divisions.filter((item) => item.active).map((item) => item.id),
+      );
       const activeIds = teams
-        .filter((item) => item.active)
+        .filter(
+          (item) =>
+            item.active &&
+            item.divisionId &&
+            activeDivisions.has(item.divisionId),
+        )
         .map((item) => item.id);
       form.setFieldsValue(
         schedule.exists
-          ? { ...schedule.config, format: schedule.format }
+          ? {
+              ...schedule.config,
+              teamIds: schedule.config.teamIds.filter((id) =>
+                activeIds.includes(id),
+              ),
+              format: schedule.format,
+            }
           : {
               format: 'ROUND_ROBIN',
               teamIds: activeIds,
@@ -235,9 +263,19 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
       dispatch({ type: 'error', message: errorMessage(cause) });
     }
   }
-  const teamOptions = state.teams
-    .filter((team) => team.active)
-    .map((team) => ({ label: team.profile.name, value: team.id }));
+  const activeTeams = state.teams.filter((team) => team.active);
+  const groupedTeams = state.divisions
+    .filter((division) => division.active)
+    .map((division) => ({
+      ...division,
+      teams: activeTeams.filter((team) => team.divisionId === division.id),
+    }));
+  const unassignedTeams = activeTeams.filter(
+    (team) =>
+      !state.divisions.some(
+        (division) => division.active && division.id === team.divisionId,
+      ),
+  );
   const schedule = state.schedule;
   return (
     <section className="competition-panel schedule-panel">
@@ -301,7 +339,7 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
             </Form.Item>
             <Form.Item
               name="teamIds"
-              label="参赛球队"
+              label="按竞赛组别选择参赛球队"
               rules={[
                 {
                   required: true,
@@ -309,13 +347,44 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
                   min: 2,
                   message: '至少选择两支球队',
                 },
+                {
+                  validator: async (_, selected: string[] | undefined) => {
+                    const ids = new Set(selected ?? []);
+                    for (const group of groupedTeams) {
+                      const count = group.teams.filter((team) =>
+                        ids.has(team.id),
+                      ).length;
+                      if (count === 1)
+                        throw new Error(`${group.name}至少选择两支球队`);
+                    }
+                  },
+                },
               ]}
             >
-              <Checkbox.Group
-                options={teamOptions}
-                className="schedule-team-options"
-              />
+              <Checkbox.Group className="schedule-team-options">
+                {groupedTeams.map((division) => (
+                  <div key={division.id} className="schedule-team-group">
+                    <strong>{division.name}</strong>
+                    {division.teams.length ? (
+                      division.teams.map((team) => (
+                        <Checkbox key={team.id} value={team.id}>
+                          {team.profile.name}
+                        </Checkbox>
+                      ))
+                    ) : (
+                      <p>本组暂无有效参赛球队</p>
+                    )}
+                  </div>
+                ))}
+              </Checkbox.Group>
             </Form.Item>
+            {!!unassignedTeams.length && (
+              <Alert
+                type="warning"
+                showIcon
+                title={`${unassignedTeams.length} 支球队待归组或所属组别已停用，请先在球队管理中处理。`}
+              />
+            )}
             <Form.Item
               name="venues"
               label="比赛场地"
@@ -446,7 +515,9 @@ export function SchedulingPanel({ eventId }: { eventId: string }) {
           )}
           {schedule?.exists ? (
             <ScheduleWeek
+              key={eventId}
               schedule={schedule}
+              divisions={state.divisions}
               disabled={state.loading || state.saving || !canDraftAdjust}
               onEdit={edit}
             />
