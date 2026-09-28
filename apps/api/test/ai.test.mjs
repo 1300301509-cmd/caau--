@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  chatPrompt,
   createAgentModel,
   intentSchema,
   modelFailureMetadata,
   qwenIntentSystemPrompt,
   routeSchema,
+  teamProposalSchema,
   QwenAgentModelAdapter,
   routePrompt,
   RuleAgentModelAdapter,
 } from '../dist/modules/ai/model-adapter.js';
+import { agentSkillKeys } from '../dist/modules/ai/skill.service.js';
 import { AiService, mergeAgentIntent } from '../dist/modules/ai/ai.service.js';
 import {
   agentToolCatalog,
@@ -231,6 +234,90 @@ test('conversation router separates chat, task continuation and unsupported oper
   assert.match(routePrompt(waiting), /编排整套赛程/);
 });
 
+test('team training consultation uses the chat route and versioned advisory skill', async () => {
+  assert.ok(agentSkillKeys.includes('TEAM_TRAINING'));
+  const route = routePrompt({
+    history: [],
+    planning: {
+      id: 'planning-1',
+      eventId: 'event-1',
+      revision: 1,
+      status: 'COLLECTING',
+      conditions: [],
+      pending: ['场地'],
+    },
+    teamAction: {
+      id: 'team-action-1',
+      eventId: 'event-1',
+      revision: 1,
+      state: 'COLLECTING',
+      mode: 'REAL',
+      profiles: [],
+      missing: ['contactName'],
+    },
+  });
+  assert.match(route, /“我应该怎么训练球队”是 CHAT，不是创建球队的 TEAM/);
+  assert.match(route, /补充年龄、训练目标、频率等资料仍是 CHAT/);
+
+  const defaultPrompt = chatPrompt({ history: [] }, 'CHAT');
+  assert.match(defaultPrompt, /最多三组/);
+  assert.match(defaultPrompt, /每周训练与休息/);
+  assert.match(defaultPrompt, /不创建球队、不修改资料或赛程/);
+  const customPrompt = chatPrompt(
+    {
+      history: [],
+      skills: {
+        TEAM_TRAINING: {
+          id: 'skill-1',
+          version: 2,
+          instructions: '用教练指定的训练问题清单。',
+        },
+      },
+    },
+    'CHAT',
+  );
+  assert.match(customPrompt, /球队训练咨询 Skill v2：用教练指定的训练问题清单/);
+  assert.match(customPrompt, /普通聊天及其它业务问题照常回答/);
+  assert.doesNotMatch(customPrompt, /最多三组/);
+  assert.match(customPrompt, /不授予球队或赛程读写能力/);
+
+  const model = new QwenAgentModelAdapter(
+    'synthetic-key',
+    'synthetic-model',
+    'http://localhost',
+  );
+  let sent;
+  model.chatModel = {
+    invoke: async (messages) => {
+      sent = messages;
+      return { content: '按已补充资料安排四周训练。' };
+    },
+  };
+  assert.equal(
+    await model.chat(
+      '每周练三次，每次九十分钟',
+      {
+        history: [
+          { role: 'USER', content: '我应该怎么训练球队？' },
+          { role: 'ASSISTANT', content: '请补充项目、年龄和训练目标。' },
+        ],
+        skills: {
+          TEAM_TRAINING: {
+            id: 'skill-1',
+            version: 2,
+            instructions: '用教练指定的训练问题清单。',
+          },
+        },
+      },
+      'CHAT',
+    ),
+    '按已补充资料安排四周训练。',
+  );
+  assert.equal(sent.at(-1).content, '每周练三次，每次九十分钟');
+  assert.equal(sent[1].content, '我应该怎么训练球队？');
+  assert.match(sent[0].content, /球队训练咨询 Skill v2/);
+});
+
 test('Qwen structured route, not a production keyword matcher, proposes confirmation', async () => {
   const model = new QwenAgentModelAdapter(
     'synthetic-key',
@@ -262,6 +349,130 @@ test('Qwen structured route, not a production keyword matcher, proposes confirma
     'CONFIRM',
   );
   assert.match(routePrompt(context), /pendingConfirmation/);
+});
+
+test('Qwen keeps team creation separate from an active scheduling requirement', async () => {
+  const model = new QwenAgentModelAdapter(
+    'synthetic-key',
+    'synthetic-model',
+    'http://localhost',
+  );
+  const seen = [];
+  model.routeModel = {
+    invoke: async (messages) => {
+      seen.push(messages);
+      return { parsed: { kind: 'TEAM' }, raw: {} };
+    },
+  };
+  model.teamModel = {
+    invoke: async (messages) => {
+      seen.push(messages);
+      return {
+        parsed: { action: 'START', mode: 'REAL', profile: {} },
+        raw: {},
+      };
+    },
+  };
+  const context = {
+    history: [],
+    planning: {
+      id: 'planning-1',
+      eventId: 'event-1',
+      revision: 2,
+      status: 'COLLECTING',
+      conditions: [],
+      pending: ['场地'],
+    },
+  };
+  assert.equal(routeSchema.parse({ kind: 'TEAM' }).kind, 'TEAM');
+  assert.equal(await model.route('帮我添加一支球队吧', context), 'TEAM');
+  assert.equal(
+    AiService.prototype.resolveDialogueRoute.call(
+      { model },
+      'TEAM',
+      undefined,
+      { message: '帮我添加一支球队吧' },
+      undefined,
+      context.planning,
+    ),
+    'TEAM',
+  );
+  assert.deepEqual(await model.planTeam('帮我添加一支球队吧', context), {
+    action: 'START',
+    mode: 'REAL',
+    profile: {},
+  });
+  assert.match(JSON.stringify(seen[0]), /“帮我添加一支球队”是 TEAM/);
+  assert.match(JSON.stringify(seen[1]), /缺失字段全部省略/);
+});
+
+test('team proposal accepts explicit test generation without fabricated real profile', async () => {
+  assert.deepEqual(
+    teamProposalSchema.parse({ action: 'START', mode: 'TEST', count: 3 }),
+    { action: 'START', mode: 'TEST', count: 3 },
+  );
+  assert.equal(
+    teamProposalSchema.safeParse({
+      action: 'START',
+      mode: 'TEST',
+      count: 0,
+    }).success,
+    false,
+  );
+  const model = new QwenAgentModelAdapter(
+    'synthetic-key',
+    'synthetic-model',
+    'http://localhost',
+  );
+  model.teamModel = {
+    invoke: async () => ({
+      parsed: { action: 'START', mode: 'TEST', count: 3 },
+      raw: {},
+    }),
+  };
+  assert.deepEqual(
+    await model.planTeam('我在做测试，随机生成三支球队', { history: [] }),
+    { action: 'START', mode: 'TEST', count: 3 },
+  );
+});
+
+test('explicit retry of an executed team action stays on the team receipt path', async () => {
+  const model = new QwenAgentModelAdapter(
+    'synthetic-key',
+    'synthetic-model',
+    'http://localhost',
+  );
+  const seen = [];
+  model.routeModel = {
+    invoke: async (messages) => {
+      seen.push(messages);
+      return { parsed: { kind: 'TEAM' }, raw: {} };
+    },
+  };
+  model.teamModel = {
+    invoke: async (messages) => {
+      seen.push(messages);
+      return { parsed: { action: 'CONFIRM' }, raw: {} };
+    },
+  };
+  const context = {
+    history: [],
+    teamAction: {
+      id: 'team-action-1',
+      eventId: 'event-1',
+      revision: 2,
+      state: 'EXECUTED',
+      mode: 'TEST',
+      profiles: [],
+      missing: [],
+    },
+  };
+  assert.equal(await model.route('重试刚才创建球队的操作', context), 'TEAM');
+  assert.deepEqual(await model.planTeam('重试刚才创建球队的操作', context), {
+    action: 'CONFIRM',
+  });
+  assert.match(JSON.stringify(seen[0]), /已执行的最近球队行动/);
+  assert.match(JSON.stringify(seen[1]), /EXECUTED.*回放原行动/);
 });
 
 test('planning routing, extraction and date expansion remain separate from execution', async () => {

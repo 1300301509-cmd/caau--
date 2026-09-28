@@ -474,6 +474,81 @@
   background: #f4faf7;
   overflow-wrap: anywhere;
 }
+.agent-drawer .agent-team {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+.agent-drawer .agent-team header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.agent-drawer .agent-team p {
+  margin: 0;
+  line-height: 1.55;
+}
+.agent-drawer .agent-team-profiles {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.agent-drawer .agent-team-profile {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--agent-border);
+  border-radius: 10px;
+  background: var(--agent-soft);
+}
+.agent-drawer .agent-team-profile > strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.agent-drawer .agent-team-profile dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 10px 0 0;
+}
+.agent-drawer .agent-team-profile dt {
+  color: var(--agent-muted);
+  font-size: 12px;
+}
+.agent-drawer .agent-team-profile dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.agent-drawer .agent-team-missing {
+  color: #8c551b;
+}
+.agent-drawer .agent-team-guidance,
+.agent-drawer .agent-team-receipt {
+  padding: 12px;
+  border-radius: 10px;
+  background: #f3f6ff;
+  color: #30416d;
+}
+.agent-drawer .agent-team-receipt {
+  display: grid;
+  gap: 8px;
+  background: #f2f8f5;
+  color: #245547;
+}
+.agent-drawer .agent-team-receipt span {
+  display: block;
+}
+.agent-drawer .agent-team-receipt summary {
+  cursor: pointer;
+}
+.agent-drawer .agent-team-receipt ol {
+  padding-inline-start: 20px;
+  overflow-wrap: anywhere;
+}
 .agent-drawer .agent-planning header {
   display: flex;
   flex-wrap: wrap;
@@ -545,6 +620,9 @@
     padding: 5px;
   }
   .agent-drawer .schedule-agent-diff {
+    grid-template-columns: 1fr;
+  }
+  .agent-drawer .agent-team-profile dl {
     grid-template-columns: 1fr;
   }
 }

@@ -948,7 +948,8 @@
               "QUERY",
               "PLAN",
               "NEED_TEAM",
-              "EXECUTED"
+              "EXECUTED",
+              "TEAM"
             ],
             "type": "string"
           },
@@ -961,6 +962,15 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/AgentTaskViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "teamAction": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentTeamActionViewDto"
               }
             ],
             "nullable": true,
@@ -1169,6 +1179,15 @@
             "nullable": true,
             "type": "object"
           },
+          "teamAction": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentTeamActionViewDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
           "turns": {
             "items": {
               "$ref": "#/components/schemas/AgentTurnViewDto"
@@ -1189,7 +1208,12 @@
             "type": "string"
           },
           "skillKey": {
-            "enum": ["INTENT_ROUTING", "TOOL_SELECTION", "SCHEDULE_PLANNING"],
+            "enum": [
+              "INTENT_ROUTING",
+              "TOOL_SELECTION",
+              "SCHEDULE_PLANNING",
+              "TEAM_TRAINING"
+            ],
             "type": "string"
           }
         },
@@ -1213,7 +1237,12 @@
             "type": "string"
           },
           "skillKey": {
-            "enum": ["INTENT_ROUTING", "TOOL_SELECTION", "SCHEDULE_PLANNING"],
+            "enum": [
+              "INTENT_ROUTING",
+              "TOOL_SELECTION",
+              "SCHEDULE_PLANNING",
+              "TEAM_TRAINING"
+            ],
             "type": "string"
           },
           "state": {
@@ -1332,6 +1361,111 @@
           }
         },
         "required": ["id", "goal", "step", "parameters", "pendingFields"],
+        "type": "object"
+      },
+      "AgentTeamActionViewDto": {
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "enum": ["REAL", "TEST"],
+            "type": "string"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/AgentTeamProfileDto"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "number"
+          },
+          "state": {
+            "enum": ["COLLECTING", "PREVIEW_READY", "EXECUTED", "CANCELLED"],
+            "type": "string"
+          },
+          "teamIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "eventId",
+          "eventName",
+          "revision",
+          "state",
+          "mode",
+          "profiles",
+          "missing",
+          "teamIds"
+        ],
+        "type": "object"
+      },
+      "AgentTeamProfileDto": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "clubName": {
+            "type": "string"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "district": {
+            "type": "string"
+          },
+          "introduction": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "province": {
+            "type": "string"
+          },
+          "shortName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "contactName",
+          "contactPhone",
+          "province",
+          "city",
+          "district",
+          "address",
+          "shortName",
+          "clubName",
+          "introduction",
+          "notes"
+        ],
         "type": "object"
       },
       "AgentToolDefinitionDto": {

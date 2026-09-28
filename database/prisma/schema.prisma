@@ -402,6 +402,7 @@ model AgentSession {
   scheduleCandidates AgentScheduleCandidate[]
   memories AgentMemory[]
   pendingQuestion AgentPendingQuestion?
+  teamActions AgentTeamAction[]
 
   @@index([ownerId, updatedAt])
 }
@@ -498,6 +499,28 @@ model AgentTask {
 
   @@index([ownerId, updatedAt])
   @@index([sessionId, updatedAt])
+}
+
+// A conversation-owned team creation draft. Business teams are written only
+// through TeamsService after the user confirms this exact revision.
+model AgentTeamAction {
+  id String @id @db.Uuid
+  sessionId String @db.Uuid
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  ownerId String @db.Uuid
+  eventId String @db.Uuid
+  organizationId String @db.Uuid
+  state String @default("COLLECTING") @db.VarChar(24)
+  mode String @default("REAL") @db.VarChar(8)
+  profiles Json @default("[]")
+  missing Json @default("[]")
+  teamIds Json @default("[]")
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([sessionId, updatedAt])
+  @@index([ownerId, eventId])
 }
 
 // Deliberately distinct from AgentTask: requirements are not executable

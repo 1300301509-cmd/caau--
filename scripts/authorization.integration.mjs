@@ -134,6 +134,7 @@ export async function authorizationIntegration(t) {
                   '202609270005_agent_memory',
                   '202609280001_agent_skill_runtime',
                   '202609290001_agent_candidate_draft_confirmation',
+                  '202609290002_agent_team_action',
                 ],
               ],
             )
@@ -278,6 +279,18 @@ export async function authorizationIntegration(t) {
           if (message === '__CAAU_SYNTHETIC_MODEL_TIMEOUT__')
             throw agentModelUnavailable();
           if (message === '__CAAU_SYNTHETIC_QUERY_TIMEOUT__') return 'QUERY';
+          // Explicit synthetic fixtures exercise team routing without adding
+          // production text matching or relying on the simulated adapter.
+          if (
+            [
+              '帮我添加一支球队吧',
+              '球队叫内测青云队，负责人张测试，电话13800000000，省份北京市，城市北京市',
+              '确认添加这支球队',
+              '我在做测试，请随机生成3支球队',
+              '确认添加这些球队',
+            ].includes(message)
+          )
+            return 'TEAM';
           if (
             message === '__CAAU_SYNTHETIC_CHAT_TIMEOUT__' ||
             message === '__CAAU_SYNTHETIC_HISTORY__' ||
@@ -309,6 +322,31 @@ export async function authorizationIntegration(t) {
               })),
             };
           return result;
+        },
+        planTeam(message) {
+          agentModelCalls += 1;
+          switch (message) {
+            case '帮我添加一支球队吧':
+              return { action: 'START', profile: {} };
+            case '球队叫内测青云队，负责人张测试，电话13800000000，省份北京市，城市北京市':
+              return {
+                action: 'UPDATE',
+                profile: {
+                  name: '内测青云队',
+                  contactName: '张测试',
+                  contactPhone: '13800000000',
+                  province: '北京市',
+                  city: '北京市',
+                },
+              };
+            case '确认添加这支球队':
+            case '确认添加这些球队':
+              return { action: 'CONFIRM' };
+            case '我在做测试，请随机生成3支球队':
+              return { action: 'START', mode: 'TEST', count: 3 };
+            default:
+              return { action: 'START', profile: {} };
+          }
         },
         chat(message, context, kind) {
           agentModelCalls += 1;
@@ -1001,7 +1039,7 @@ export async function authorizationIntegration(t) {
               'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
             )
           ).rows[0].n,
-          30, // Includes the forward-only candidate draft confirmation migration.
+          31, // Includes the forward-only agent team action migration.
         );
       },
     );

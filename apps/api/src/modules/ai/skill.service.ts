@@ -18,6 +18,7 @@ export const agentSkillKeys = [
   'INTENT_ROUTING',
   'TOOL_SELECTION',
   'SCHEDULE_PLANNING',
+  'TEAM_TRAINING',
 ] as const;
 export type AgentSkillKey = (typeof agentSkillKeys)[number];
 export type RuntimeSkills = Partial<

@@ -375,6 +375,36 @@ export class AgentPendingQuestionDto {
   @ApiProperty() expiresAt!: string;
 }
 
+export class AgentTeamProfileDto {
+  @ApiProperty() name!: string;
+  @ApiProperty() contactName!: string;
+  @ApiProperty() contactPhone!: string;
+  @ApiProperty() province!: string;
+  @ApiProperty() city!: string;
+  @ApiProperty() district!: string;
+  @ApiProperty() address!: string;
+  @ApiProperty() shortName!: string;
+  @ApiProperty() clubName!: string;
+  @ApiProperty() introduction!: string;
+  @ApiProperty() notes!: string;
+}
+
+export class AgentTeamActionViewDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() eventId!: string;
+  @ApiProperty() eventName!: string;
+  @ApiProperty() revision!: number;
+  @ApiProperty({
+    enum: ['COLLECTING', 'PREVIEW_READY', 'EXECUTED', 'CANCELLED'],
+  })
+  state!: 'COLLECTING' | 'PREVIEW_READY' | 'EXECUTED' | 'CANCELLED';
+  @ApiProperty({ enum: ['REAL', 'TEST'] }) mode!: 'REAL' | 'TEST';
+  @ApiProperty({ type: [AgentTeamProfileDto] })
+  profiles!: AgentTeamProfileDto[];
+  @ApiProperty({ type: [String] }) missing!: string[];
+  @ApiProperty({ type: [String] }) teamIds!: string[];
+}
+
 export class AgentSessionViewDto {
   @ApiProperty() id!: string;
   @ApiProperty() summary!: string;
@@ -394,6 +424,8 @@ export class AgentSessionViewDto {
   pendingQuestion!: AgentPendingQuestionDto | null;
   @ApiPropertyOptional({ type: AgentExecutionReceiptDto, nullable: true })
   lastExecution!: AgentExecutionReceiptDto | null;
+  @ApiPropertyOptional({ type: AgentTeamActionViewDto, nullable: true })
+  teamAction!: AgentTeamActionViewDto | null;
 }
 
 export class AgentReplyDto {
@@ -415,6 +447,7 @@ export class AgentReplyDto {
       'PLAN',
       'NEED_TEAM',
       'EXECUTED',
+      'TEAM',
     ],
   })
   status!:
@@ -430,7 +463,8 @@ export class AgentReplyDto {
     | 'QUERY'
     | 'PLAN'
     | 'NEED_TEAM'
-    | 'EXECUTED';
+    | 'EXECUTED'
+    | 'TEAM';
   @ApiPropertyOptional({
     type: AgentScheduleAdjustmentResultDto,
     nullable: true,
@@ -444,4 +478,6 @@ export class AgentReplyDto {
   planningRequest!: AgentPlanningRequestViewDto | null;
   @ApiPropertyOptional({ type: AgentPendingQuestionDto, nullable: true })
   pendingQuestion?: AgentPendingQuestionDto | null;
+  @ApiPropertyOptional({ type: AgentTeamActionViewDto, nullable: true })
+  teamAction?: AgentTeamActionViewDto | null;
 }

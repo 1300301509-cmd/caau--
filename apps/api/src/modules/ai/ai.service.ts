@@ -27,6 +27,7 @@ import {
 import {
   deny,
   eventOperationsScope,
+  eventOperations,
   isHeadquartersSuperAdmin,
   scheduleDraftAdjust,
   scheduleRead,
@@ -34,6 +35,7 @@ import {
   type Actor,
 } from '../authorization/policy.js';
 import { SchedulingService } from '../scheduling/scheduling.service.js';
+import { TeamsService } from '../teams/teams.service.js';
 import { PlanningService } from './planning.service.js';
 import { personalMemoryContent } from './memory-policy.js';
 import { AgentSkillService, type RuntimeSkills } from './skill.service.js';
@@ -59,11 +61,16 @@ import type {
   AgentTaskParameters,
   ConversationContext,
   ConversationRoute,
+  TeamProposal,
 } from './model-adapter.js';
+import { teamProposalSchema } from './model-adapter.js';
 
 type Tx = Prisma.TransactionClient;
 type AgentTaskRow = Prisma.AgentTaskGetPayload<Record<string, never>>;
 type AgentTicketRow = Prisma.AgentConfirmationTicketGetPayload<
+  Record<string, never>
+>;
+type AgentTeamActionRow = Prisma.AgentTeamActionGetPayload<
   Record<string, never>
 >;
 type TaskStep =
@@ -88,7 +95,8 @@ type ReplyStatus =
   | 'QUERY'
   | 'PLAN'
   | 'NEED_TEAM'
-  | 'EXECUTED';
+  | 'EXECUTED'
+  | 'TEAM';
 type Candidate = { id: string; label: string; detail?: string };
 type MessageBody = {
   message: string;
@@ -112,6 +120,66 @@ type RuntimeContext = {
   signal?: AbortSignal;
 };
 const json = (value: unknown) => value as Prisma.InputJsonValue;
+const teamFields = [
+  'name',
+  'contactName',
+  'contactPhone',
+  'province',
+  'city',
+  'district',
+  'address',
+  'shortName',
+  'clubName',
+  'introduction',
+  'notes',
+] as const;
+type TeamField = (typeof teamFields)[number];
+type TeamProfile = Record<TeamField, string>;
+const requiredTeamFields: TeamField[] = [
+  'name',
+  'contactName',
+  'contactPhone',
+  'province',
+  'city',
+];
+const teamFieldLabels: Record<TeamField, string> = {
+  name: '球队名称',
+  contactName: '负责人',
+  contactPhone: '联系电话',
+  province: '省份',
+  city: '城市',
+  district: '区县',
+  address: '地址',
+  shortName: '简称',
+  clubName: '所属俱乐部',
+  introduction: '简介',
+  notes: '备注',
+};
+const emptyTeamProfile = (): TeamProfile =>
+  Object.fromEntries(teamFields.map((field) => [field, ''])) as TeamProfile;
+const teamProfiles = (value: Prisma.JsonValue): TeamProfile[] =>
+  Array.isArray(value)
+    ? (value.map((item) => ({
+        ...emptyTeamProfile(),
+        ...(item && typeof item === 'object' && !Array.isArray(item)
+          ? item
+          : {}),
+      })) as TeamProfile[])
+    : [];
+const teamMissing = (profile: TeamProfile) =>
+  requiredTeamFields.filter((field) => !profile[field]?.trim());
+const teamSummary = (profiles: TeamProfile[]) =>
+  profiles.map((profile) => profile.name).join('、');
+const testTeamProfiles = (count: number, actionId: string): TeamProfile[] =>
+  Array.from({ length: count }, (_, index) => ({
+    ...emptyTeamProfile(),
+    name: `CAAU内测队-${actionId.slice(0, 8)}-${String(index + 1).padStart(2, '0')}`,
+    contactName: '内测联系人',
+    contactPhone: '10000000000',
+    province: '测试省',
+    city: '测试市',
+    introduction: '团队内测合成资料',
+  }));
 type QuerySource = {
   eventId: string;
   matchId?: string;
@@ -336,6 +404,7 @@ export class AiService implements OnModuleDestroy {
     private readonly planning = new PlanningService(),
     private readonly candidates?: CandidateService,
     private readonly skills?: AgentSkillService,
+    private readonly teams?: TeamsService,
   ) {
     this.checkpoint = databaseUrl
       ? createAgentCheckpointer(databaseUrl)
@@ -384,6 +453,7 @@ export class AiService implements OnModuleDestroy {
           state.kind === 'CONTINUE' ||
           state.kind === 'QUERY' ||
           state.kind === 'PLAN' ||
+          state.kind === 'TEAM' ||
           state.kind === 'CONFIRM'
             ? 'other'
             : 'chat',
@@ -490,6 +560,7 @@ export class AiService implements OnModuleDestroy {
       include: {
         tasks: { orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] },
         planningRequests: { orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] },
+        teamActions: { orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] },
       },
     });
     if (!session) deny();
@@ -536,6 +607,10 @@ export class AiService implements OnModuleDestroy {
         deny();
       await this.planning.view(tx, actor, request);
     }
+    for (const action of session.teamActions) {
+      if (action.ownerId !== actor.id) deny();
+      await eventOperations(tx, actor, action.eventId);
+    }
     const task = taskId
       ? session.tasks.find((candidate) => candidate.id === taskId)
       : session.tasks[0];
@@ -545,6 +620,7 @@ export class AiService implements OnModuleDestroy {
       session,
       task,
       planning: session.planningRequests[0],
+      teamAction: session.teamActions[0],
       lastQuery: recentQuery
         ? {
             eventId: recentQuery.eventId,
@@ -864,8 +940,31 @@ export class AiService implements OnModuleDestroy {
     );
   }
 
+  private async teamActionView(tx: Tx, action?: AgentTeamActionRow | null) {
+    if (!action) return null;
+    const event = await tx.event.findUnique({
+      where: { id: action.eventId },
+      select: { name: true },
+    });
+    return {
+      id: action.id,
+      eventId: action.eventId,
+      eventName: event?.name ?? '当前赛事',
+      revision: action.revision,
+      state: action.state as
+        | 'COLLECTING'
+        | 'PREVIEW_READY'
+        | 'EXECUTED'
+        | 'CANCELLED',
+      mode: action.mode as 'REAL' | 'TEST',
+      profiles: teamProfiles(action.profiles),
+      missing: strings(action.missing),
+      teamIds: strings(action.teamIds),
+    };
+  }
+
   private async sessionView(tx: Tx, actor: Actor, id: string) {
-    const { session, planning } = await this.validateSessionAccess(
+    const { session, planning, teamAction } = await this.validateSessionAccess(
       tx,
       actor,
       id,
@@ -975,6 +1074,7 @@ export class AiService implements OnModuleDestroy {
             result: receipt.result,
           }
         : null,
+      teamAction: await this.teamActionView(tx, teamAction),
     };
   }
 
@@ -1055,6 +1155,17 @@ export class AiService implements OnModuleDestroy {
         )
           task = undefined;
         if (!task) {
+          await tx.agentTeamAction.updateMany({
+            where: {
+              sessionId,
+              state: { in: ['COLLECTING', 'PREVIEW_READY'] },
+            },
+            data: {
+              state: 'CANCELLED',
+              revision: { increment: 1 },
+              updatedAt: new Date(),
+            },
+          });
           await tx.agentConfirmationTicket.updateMany({
             where: { task: { sessionId }, state: 'PENDING' },
             data: { state: 'CANCELLED', consumedAt: new Date() },
@@ -1096,7 +1207,7 @@ export class AiService implements OnModuleDestroy {
       sessionId,
       {},
       async (tx, actor) => {
-        const { session, task, planning, lastQuery } =
+        const { session, task, planning, lastQuery, teamAction } =
           await this.validateSessionAccess(tx, actor, sessionId, body.taskId);
         if (
           body.planningId &&
@@ -1155,6 +1266,7 @@ export class AiService implements OnModuleDestroy {
             : null;
         return {
           task,
+          teamAction,
           pendingTicket,
           pendingQuestion,
           context: {
@@ -1168,6 +1280,22 @@ export class AiService implements OnModuleDestroy {
               content: modelContextExcerpt(turn.content),
             })),
             ...(lastQuery ? { lastQuery } : {}),
+            ...(teamAction &&
+            ['COLLECTING', 'PREVIEW_READY', 'EXECUTED'].includes(
+              teamAction.state,
+            )
+              ? {
+                  teamAction: {
+                    id: teamAction.id,
+                    eventId: teamAction.eventId,
+                    revision: teamAction.revision,
+                    state: teamAction.state,
+                    mode: teamAction.mode as 'REAL' | 'TEST',
+                    profiles: teamProfiles(teamAction.profiles),
+                    missing: strings(teamAction.missing),
+                  },
+                }
+              : {}),
             ...(planning
               ? {
                   planning: {
@@ -1364,6 +1492,408 @@ export class AiService implements OnModuleDestroy {
         };
       },
       { retries: 24 },
+    );
+  }
+
+  private async teamReply(
+    tx: Tx,
+    actor: Actor,
+    sessionId: string,
+    message: string,
+    candidates: Candidate[] = [],
+    status: 'TEAM' | 'NEED_EVENT' | 'CLARIFY' = 'TEAM',
+  ) {
+    const session = await this.sessionView(tx, actor, sessionId);
+    return {
+      sessionId,
+      status,
+      message,
+      candidates,
+      task: session.task,
+      planningRequest: session.planningRequest,
+      teamAction: session.teamAction,
+    };
+  }
+
+  private async teamOrganization(tx: Tx, actor: Actor, eventId: string) {
+    const appointments = await tx.eventOrganizerAppointment.findMany({
+      where: { eventId, active: true },
+      select: { organizationId: true },
+    });
+    const eligible = [
+      ...new Set(appointments.map((row) => row.organizationId)),
+    ].filter(
+      (organizationId) =>
+        isHeadquartersSuperAdmin(actor) ||
+        actor.memberships.some(
+          (membership) =>
+            membership.active &&
+            membership.organizationId === organizationId &&
+            ['ORGANIZER', 'EVENT_MANAGER'].includes(membership.role),
+        ),
+    );
+    return eligible.length === 1 ? eligible[0] : null;
+  }
+
+  private async teamMessage(
+    token: string,
+    sessionId: string,
+    body: MessageBody,
+    skills?: RuntimeSkills,
+  ) {
+    const checked = await this.checkedDialogueContext(token, sessionId, body);
+    const proposed = await this.model.planTeam(body.message, {
+      ...checked.context,
+      skills,
+    });
+    const parsed = teamProposalSchema.safeParse(proposed);
+    if (!parsed.success) throw new BadGatewayException('Invalid team proposal');
+    const proposal: TeamProposal = parsed.data;
+    if (proposal.action === 'CONFIRM')
+      return this.confirmTeamMessage(
+        token,
+        sessionId,
+        body,
+        checked.teamAction,
+      );
+    return this.auth.run(
+      token,
+      'agent.team.collect',
+      sessionId,
+      {},
+      async (tx, actor) => {
+        const { session, teamAction: latest } =
+          await this.validateSessionAccess(tx, actor, sessionId, body.taskId);
+        if (
+          checked.teamAction &&
+          (latest?.id !== checked.teamAction.id ||
+            latest.revision !== checked.teamAction.revision)
+        )
+          throw new ConflictException('Team action changed; refresh and retry');
+        if (proposal.action === 'CANCEL') {
+          if (
+            !latest ||
+            !['COLLECTING', 'PREVIEW_READY'].includes(latest.state)
+          )
+            return this.teamReply(
+              tx,
+              actor,
+              sessionId,
+              '当前没有待取消的球队草稿。',
+              [],
+              'CLARIFY',
+            );
+          await tx.agentTeamAction.update({
+            where: { id: latest.id },
+            data: {
+              state: 'CANCELLED',
+              revision: { increment: 1 },
+              updatedAt: new Date(),
+            },
+          });
+          const answer = '已取消当前球队草稿，没有创建球队。';
+          await this.appendTurns(
+            tx,
+            sessionId,
+            body.message,
+            answer,
+            json({ kind: 'TEAM' }),
+            json({ kind: 'TEAM', actionId: latest.id }),
+          );
+          return this.teamReply(tx, actor, sessionId, answer);
+        }
+
+        const continuing =
+          proposal.action === 'UPDATE' &&
+          latest &&
+          ['COLLECTING', 'PREVIEW_READY'].includes(latest.state) &&
+          (!body.eventId || body.eventId === latest.eventId) &&
+          !body.newTask;
+        const eventId =
+          body.eventId ??
+          (continuing ? latest.eventId : undefined) ??
+          session.currentEventId;
+        if (!eventId) {
+          const events = await tx.event.findMany({
+            where: eventOperationsScope(actor),
+            orderBy: { name: 'asc' },
+            take: 9,
+            select: { id: true, name: true },
+          });
+          const answer =
+            events.length > 1
+              ? '要把球队加入哪场赛事？请选择当前赛事。'
+              : events.length === 0
+                ? '当前账号没有可管理的赛事，请先选择有承办权限的赛事。'
+                : '请确认要加入的赛事。';
+          await this.appendTurns(
+            tx,
+            sessionId,
+            body.message,
+            answer,
+            json({ kind: 'TEAM' }),
+            json({ kind: 'TEAM' }),
+          );
+          return this.teamReply(
+            tx,
+            actor,
+            sessionId,
+            answer,
+            events
+              .slice(0, 8)
+              .map((event) => ({ id: event.id, label: event.name })),
+            'NEED_EVENT',
+          );
+        }
+        await eventOperations(tx, actor, eventId);
+        const organizationId = await this.teamOrganization(tx, actor, eventId);
+        if (!organizationId) {
+          const answer =
+            '当前赛事没有唯一可用的承办机构，请在球队管理页核对赛事承办关系。';
+          await this.appendTurns(
+            tx,
+            sessionId,
+            body.message,
+            answer,
+            json({ kind: 'TEAM' }),
+            json({ kind: 'TEAM' }),
+          );
+          return this.teamReply(tx, actor, sessionId, answer, [], 'CLARIFY');
+        }
+        const id = continuing ? latest.id : randomUUID();
+        const mode = proposal.mode ?? (continuing ? latest.mode : 'REAL');
+        const patch = proposal.profile ?? {};
+        let profiles: TeamProfile[];
+        let missing: string[];
+        let teamIds: string[];
+        if (mode === 'TEST') {
+          const count =
+            proposal.count ??
+            (continuing ? teamProfiles(latest.profiles).length : 0);
+          if (count > 12) {
+            profiles = [];
+            missing = ['球队数量须在 1 至 12 之间'];
+          } else if (count < 1) {
+            profiles = [];
+            missing = ['测试球队数量'];
+          } else {
+            profiles = testTeamProfiles(count, id);
+            missing = [];
+          }
+          teamIds =
+            continuing && strings(latest.teamIds).length === profiles.length
+              ? strings(latest.teamIds)
+              : profiles.map(() => randomUUID());
+        } else {
+          const profile = {
+            ...(continuing
+              ? teamProfiles(latest.profiles)[0]
+              : emptyTeamProfile()),
+          } as TeamProfile;
+          for (const field of teamFields)
+            if (patch[field] !== undefined)
+              profile[field] = patch[field]!.trim();
+          profiles = [profile];
+          missing = teamMissing(profile).map((field) => teamFieldLabels[field]);
+          if (
+            profile.contactPhone &&
+            !/^[+\d][\d\s()-]{5,39}$/.test(profile.contactPhone) &&
+            !missing.includes(teamFieldLabels.contactPhone)
+          )
+            missing.push('有效联系电话');
+          teamIds =
+            continuing && strings(latest.teamIds).length === 1
+              ? strings(latest.teamIds)
+              : [randomUUID()];
+        }
+        const state = missing.length ? 'COLLECTING' : 'PREVIEW_READY';
+        if (!continuing) {
+          await tx.agentPendingQuestion.deleteMany({ where: { sessionId } });
+          await tx.agentConfirmationTicket.updateMany({
+            where: { task: { sessionId }, state: 'PENDING' },
+            data: { state: 'CANCELLED', consumedAt: new Date() },
+          });
+          await tx.agentTask.updateMany({
+            where: {
+              sessionId,
+              step: {
+                in: [
+                  'LOCATE_EVENT',
+                  'LOCATE_MATCH',
+                  'WAITING_PARAMETERS',
+                  'PREVIEW_READY',
+                ],
+              },
+            },
+            data: {
+              step: 'CANCELLED',
+              preview: json({}),
+              previewExpiresAt: null,
+              revision: { increment: 1 },
+              updatedAt: new Date(),
+            },
+          });
+        }
+        const action = continuing
+          ? await tx.agentTeamAction.update({
+              where: { id },
+              data: {
+                mode,
+                state,
+                profiles: json(profiles),
+                missing: json(missing),
+                teamIds: json(teamIds),
+                revision: { increment: 1 },
+                updatedAt: new Date(),
+              },
+            })
+          : await tx.agentTeamAction.create({
+              data: {
+                id,
+                sessionId,
+                ownerId: actor.id,
+                eventId,
+                organizationId,
+                mode,
+                state,
+                profiles: json(profiles),
+                missing: json(missing),
+                teamIds: json(teamIds),
+              },
+            });
+        await tx.agentSession.update({
+          where: { id: sessionId },
+          data: { currentEventId: eventId, updatedAt: new Date() },
+        });
+        let answer: string;
+        if (missing.length)
+          answer =
+            mode === 'TEST'
+              ? '可以生成内测球队。请告诉我需要几支，单次最多 12 支。'
+              : `我可以帮你建队。请先补充${missing[0]}；也可以一次告诉我${missing.join('、')}。`;
+        else if (mode === 'TEST')
+          answer = `已准备 ${profiles.length} 支标记为内测的球队：${teamSummary(profiles)}。请核对后明确回复“确认添加这些球队”，我才会加入当前赛事。`;
+        else {
+          const duplicate = await tx.eventTeam.findFirst({
+            where: {
+              eventId,
+              active: true,
+              profile: { path: ['name'], equals: profiles[0]!.name },
+            },
+            select: { id: true },
+          });
+          answer = `已整理球队“${profiles[0]!.name}”的档案，负责人 ${profiles[0]!.contactName}，电话 ${profiles[0]!.contactPhone}，所在地 ${profiles[0]!.province}${profiles[0]!.city}。${duplicate ? '当前赛事已有同名球队，请先核对；继续确认会新增另一支。' : ''}请核对后明确回复“确认添加这支球队”，我才会加入当前赛事。`;
+        }
+        await this.appendTurns(
+          tx,
+          sessionId,
+          body.message,
+          answer,
+          json({ kind: 'TEAM' }),
+          json({
+            kind: 'TEAM',
+            actionId: action.id,
+            revision: action.revision,
+          }),
+        );
+        return this.teamReply(tx, actor, sessionId, answer);
+      },
+      { retries: 5 },
+    );
+  }
+
+  private confirmTeamMessage(
+    token: string,
+    sessionId: string,
+    body: MessageBody,
+    expected?: AgentTeamActionRow | null,
+  ) {
+    requireAgentTool('team.create', 'BUSINESS_WRITE');
+    if (!this.teams) throw new BadGatewayException('Team tool unavailable');
+    return this.auth.run(
+      token,
+      'agent.team.create',
+      sessionId,
+      {},
+      async (tx, actor) => {
+        if (!expected)
+          return this.teamReply(
+            tx,
+            actor,
+            sessionId,
+            '当前没有待确认的球队草稿。',
+            [],
+            'CLARIFY',
+          );
+        await tx.$queryRaw`SELECT "id" FROM "AgentTeamAction" WHERE "id"=${expected.id}::uuid FOR UPDATE`;
+        const { teamAction: current } = await this.validateSessionAccess(
+          tx,
+          actor,
+          sessionId,
+          body.taskId,
+        );
+        if (
+          !current ||
+          current.id !== expected.id ||
+          current.ownerId !== actor.id
+        )
+          throw new ConflictException('Team action changed; refresh and retry');
+        if (current.state === 'EXECUTED')
+          return this.teamReply(
+            tx,
+            actor,
+            sessionId,
+            `已创建 ${strings(current.teamIds).length} 支球队并加入赛事：${teamSummary(teamProfiles(current.profiles))}。这是原执行结果，没有重复创建。`,
+          );
+        if (
+          current.revision !== expected.revision ||
+          current.state !== 'PREVIEW_READY'
+        )
+          throw new ConflictException(
+            'Team preview changed; review before confirming',
+          );
+        await eventOperations(tx, actor, current.eventId);
+        if (
+          (await this.teamOrganization(tx, actor, current.eventId)) !==
+          current.organizationId
+        )
+          deny();
+        const profiles = teamProfiles(current.profiles);
+        const teamIds = strings(current.teamIds);
+        if (
+          !profiles.length ||
+          profiles.length !== teamIds.length ||
+          profiles.some((profile) => teamMissing(profile).length > 0)
+        )
+          throw new ConflictException('Team preview is incomplete');
+        for (let index = 0; index < profiles.length; index++) {
+          await this.teams!.createInTransaction(tx, actor, {
+            id: teamIds[index],
+            eventId: current.eventId,
+            organizationId: current.organizationId,
+            profile: profiles[index],
+          });
+        }
+        await tx.agentTeamAction.update({
+          where: { id: current.id },
+          data: {
+            state: 'EXECUTED',
+            revision: { increment: 1 },
+            updatedAt: new Date(),
+          },
+        });
+        const answer = `已创建 ${profiles.length} 支球队并加入赛事：${teamSummary(profiles)}。球队管理中可以查看。`;
+        await this.appendTurns(
+          tx,
+          sessionId,
+          body.message,
+          answer,
+          json({ kind: 'TEAM' }),
+          json({ kind: 'TEAM', actionId: current.id, teamIds }),
+        );
+        return this.teamReply(tx, actor, sessionId, answer);
+      },
+      { retries: 5, retryUnique: true, timeout: 20000 },
     );
   }
 
@@ -1812,6 +2342,17 @@ export class AiService implements OnModuleDestroy {
           proposal,
           sourceTurnId,
         );
+        await tx.agentTeamAction.updateMany({
+          where: {
+            sessionId,
+            state: { in: ['COLLECTING', 'PREVIEW_READY'] },
+          },
+          data: {
+            state: 'CANCELLED',
+            revision: { increment: 1 },
+            updatedAt: new Date(),
+          },
+        });
         const pendingQuestion = await this.syncPlanningQuestion(
           tx,
           sessionId,
@@ -2510,6 +3051,8 @@ export class AiService implements OnModuleDestroy {
         },
       );
     }
+    if (kind === 'TEAM')
+      return this.teamMessage(token, sessionId, body, skills);
     if (kind === 'PLAN') {
       const proposal = await this.planRequirements(
         token,

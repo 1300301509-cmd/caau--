@@ -1284,6 +1284,12 @@ export const operations = {
               type: 'object',
               properties: {},
             },
+            teamAction: {
+              allOf: [{ $ref: '#/components/schemas/AgentTeamActionViewDto' }],
+              nullable: true,
+              type: 'object',
+              properties: {},
+            },
             turns: {
               items: {
                 properties: {
@@ -1343,6 +1349,12 @@ export const operations = {
           summary: { type: 'string' },
           task: {
             allOf: [{ $ref: '#/components/schemas/AgentTaskViewDto' }],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
+          teamAction: {
+            allOf: [{ $ref: '#/components/schemas/AgentTeamActionViewDto' }],
             nullable: true,
             type: 'object',
             properties: {},
@@ -1407,6 +1419,12 @@ export const operations = {
           summary: { type: 'string' },
           task: {
             allOf: [{ $ref: '#/components/schemas/AgentTaskViewDto' }],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
+          teamAction: {
+            allOf: [{ $ref: '#/components/schemas/AgentTeamActionViewDto' }],
             nullable: true,
             type: 'object',
             properties: {},
@@ -1500,12 +1518,19 @@ export const operations = {
               'PLAN',
               'NEED_TEAM',
               'EXECUTED',
+              'TEAM',
             ],
             type: 'string',
           },
           suggestedMemory: { maxLength: 300, nullable: true, type: 'string' },
           task: {
             allOf: [{ $ref: '#/components/schemas/AgentTaskViewDto' }],
+            nullable: true,
+            type: 'object',
+            properties: {},
+          },
+          teamAction: {
+            allOf: [{ $ref: '#/components/schemas/AgentTeamActionViewDto' }],
             nullable: true,
             type: 'object',
             properties: {},
@@ -9558,7 +9583,12 @@ export const operations = {
             id: { type: 'string' },
             instructions: { maxLength: 8000, type: 'string' },
             skillKey: {
-              enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+              enum: [
+                'INTENT_ROUTING',
+                'TOOL_SELECTION',
+                'SCHEDULE_PLANNING',
+                'TEAM_TRAINING',
+              ],
               type: 'string',
             },
             state: { enum: ['DRAFT', 'ACTIVE', 'RETIRED'], type: 'string' },
@@ -9594,7 +9624,12 @@ export const operations = {
           id: { type: 'string' },
           instructions: { maxLength: 8000, type: 'string' },
           skillKey: {
-            enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+            enum: [
+              'INTENT_ROUTING',
+              'TOOL_SELECTION',
+              'SCHEDULE_PLANNING',
+              'TEAM_TRAINING',
+            ],
             type: 'string',
           },
           state: { enum: ['DRAFT', 'ACTIVE', 'RETIRED'], type: 'string' },
@@ -9618,7 +9653,12 @@ export const operations = {
       properties: {
         instructions: { maxLength: 8000, type: 'string' },
         skillKey: {
-          enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+          enum: [
+            'INTENT_ROUTING',
+            'TOOL_SELECTION',
+            'SCHEDULE_PLANNING',
+            'TEAM_TRAINING',
+          ],
           type: 'string',
         },
       },
@@ -9666,7 +9706,12 @@ export const operations = {
           id: { type: 'string' },
           instructions: { maxLength: 8000, type: 'string' },
           skillKey: {
-            enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+            enum: [
+              'INTENT_ROUTING',
+              'TOOL_SELECTION',
+              'SCHEDULE_PLANNING',
+              'TEAM_TRAINING',
+            ],
             type: 'string',
           },
           state: { enum: ['DRAFT', 'ACTIVE', 'RETIRED'], type: 'string' },

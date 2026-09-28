@@ -11,6 +11,8 @@ import { createAgentModel, type AgentModelAdapter } from './model-adapter.js';
 import { SchedulingModule } from '../scheduling/scheduling.module.js';
 import { SchedulingService } from '../scheduling/scheduling.service.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
+import { TeamsModule } from '../teams/teams.module.js';
+import { TeamsService } from '../teams/teams.service.js';
 
 @Module({})
 export class AiModule {
@@ -20,7 +22,7 @@ export class AiModule {
   ): DynamicModule {
     return {
       module: AiModule,
-      imports: [SchedulingModule],
+      imports: [SchedulingModule, TeamsModule],
       controllers: [AiController, AgentSkillController],
       providers: [
         PlanningService,
@@ -42,6 +44,7 @@ export class AiModule {
             PlanningService,
             CandidateService,
             AgentSkillService,
+            TeamsService,
           ],
           useFactory: (
             auth: AuthorizationService,
@@ -50,6 +53,7 @@ export class AiModule {
             planning: PlanningService,
             candidates: CandidateService,
             skills: AgentSkillService,
+            teams: TeamsService,
           ) =>
             new AiService(
               auth,
@@ -59,6 +63,7 @@ export class AiModule {
               planning,
               candidates,
               skills,
+              teams,
             ),
         },
       ],

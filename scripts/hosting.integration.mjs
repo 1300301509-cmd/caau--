@@ -363,6 +363,135 @@ export async function hostingIntegration(t, context) {
     },
   );
 
+  await t.test(
+    'agent creates an organizer team after clarification and replays one execution; explicit test batch creates three',
+    async () => {
+      const source = await call(
+        'a',
+        'GET',
+        `hosting-applications/${approvedId}`,
+      );
+      const eventId = source.approvedEventId;
+      assert.ok(eventId);
+      const conversation = await call('a', 'POST', 'agent/sessions', {
+        currentEventId: eventId,
+      });
+      const route = `agent/sessions/${conversation.id}/messages`;
+      await call(
+        'b',
+        'GET',
+        `agent/sessions/${conversation.id}`,
+        undefined,
+        403,
+      );
+
+      const collecting = await call('a', 'POST', route, {
+        eventId,
+        message: '帮我添加一支球队吧',
+      });
+      assert.equal(collecting.status, 'TEAM');
+      assert.equal(collecting.teamAction.state, 'COLLECTING');
+      assert.deepEqual(collecting.teamAction.missing, [
+        '球队名称',
+        '负责人',
+        '联系电话',
+        '省份',
+        '城市',
+      ]);
+
+      const preview = await call('a', 'POST', route, {
+        eventId,
+        message:
+          '球队叫内测青云队，负责人张测试，电话13800000000，省份北京市，城市北京市',
+      });
+      assert.equal(preview.status, 'TEAM');
+      assert.equal(preview.teamAction.id, collecting.teamAction.id);
+      assert.equal(preview.teamAction.state, 'PREVIEW_READY');
+      assert.deepEqual(preview.teamAction.missing, []);
+      assert.equal(preview.teamAction.profiles[0].name, '内测青云队');
+      const teamId = preview.teamAction.teamIds[0];
+      assert.ok(teamId);
+      const countTeam = async (ids) =>
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "Team" WHERE id=ANY($1::uuid[])',
+            [ids],
+          )
+        ).rows[0].n;
+      const countEventTeam = async (ids) =>
+        (
+          await sql.query(
+            'SELECT count(*)::int n FROM "EventTeam" WHERE "eventId"=$1 AND "teamId"=ANY($2::uuid[])',
+            [eventId, ids],
+          )
+        ).rows[0].n;
+      assert.equal(await countTeam([teamId]), 0);
+      assert.equal(await countEventTeam([teamId]), 0);
+
+      const vague = await call('a', 'POST', route, {
+        eventId,
+        message: '好的',
+      });
+      assert.equal(vague.status, 'CHAT');
+      assert.equal(await countTeam([teamId]), 0);
+      const confirmed = await call('a', 'POST', route, {
+        eventId,
+        message: '确认添加这支球队',
+      });
+      assert.equal(confirmed.teamAction.id, preview.teamAction.id);
+      assert.equal(confirmed.teamAction.state, 'EXECUTED');
+      assert.deepEqual(confirmed.teamAction.teamIds, [teamId]);
+      assert.equal(await countTeam([teamId]), 1);
+      assert.equal(await countEventTeam([teamId]), 1);
+      const replay = await call('a', 'POST', route, {
+        eventId,
+        message: '确认添加这支球队',
+      });
+      assert.equal(replay.teamAction.id, confirmed.teamAction.id);
+      assert.deepEqual(replay.teamAction.teamIds, [teamId]);
+      assert.equal(await countTeam([teamId]), 1);
+      assert.equal(await countEventTeam([teamId]), 1);
+      const restored = await call(
+        'a',
+        'GET',
+        `agent/sessions/${conversation.id}`,
+      );
+      assert.equal(restored.teamAction.state, 'EXECUTED');
+      assert.deepEqual(restored.teamAction.teamIds, [teamId]);
+
+      const testPreview = await call('a', 'POST', route, {
+        eventId,
+        message: '我在做测试，请随机生成3支球队',
+      });
+      assert.equal(testPreview.teamAction.mode, 'TEST');
+      assert.equal(testPreview.teamAction.state, 'PREVIEW_READY');
+      assert.equal(testPreview.teamAction.profiles.length, 3);
+      assert.equal(new Set(testPreview.teamAction.teamIds).size, 3);
+      assert.ok(
+        testPreview.teamAction.profiles.every((profile) =>
+          profile.name.startsWith('CAAU内测队-'),
+        ),
+      );
+      const testIds = testPreview.teamAction.teamIds;
+      assert.equal(await countTeam(testIds), 0);
+      const testConfirmed = await call('a', 'POST', route, {
+        eventId,
+        message: '确认添加这些球队',
+      });
+      assert.equal(testConfirmed.teamAction.state, 'EXECUTED');
+      assert.deepEqual(testConfirmed.teamAction.teamIds, testIds);
+      assert.equal(await countTeam(testIds), 3);
+      assert.equal(await countEventTeam(testIds), 3);
+      const testReplay = await call('a', 'POST', route, {
+        eventId,
+        message: '确认添加这些球队',
+      });
+      assert.deepEqual(testReplay.teamAction.teamIds, testIds);
+      assert.equal(await countTeam(testIds), 3);
+      assert.equal(await countEventTeam(testIds), 3);
+    },
+  );
+
   let materialsId = '';
   await t.test(
     'CAAU-033 seven required fields, bundle return/resubmit, isolation and no duplicate event',

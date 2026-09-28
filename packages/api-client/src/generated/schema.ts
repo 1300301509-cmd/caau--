@@ -2754,9 +2754,11 @@ export interface components {
         | 'QUERY'
         | 'PLAN'
         | 'NEED_TEAM'
-        | 'EXECUTED';
+        | 'EXECUTED'
+        | 'TEAM';
       suggestedMemory?: string | null;
       task?: components['schemas']['AgentTaskViewDto'] | null;
+      teamAction?: components['schemas']['AgentTeamActionViewDto'] | null;
     };
     AgentScheduleAdjustmentResultDto: {
       commandId: string;
@@ -2805,13 +2807,18 @@ export interface components {
         | null;
       summary: string;
       task?: components['schemas']['AgentTaskViewDto'] | null;
+      teamAction?: components['schemas']['AgentTeamActionViewDto'] | null;
       turns: components['schemas']['AgentTurnViewDto'][];
       updatedAt: string;
     };
     AgentSkillInputDto: {
       instructions: string;
       /** @enum {string} */
-      skillKey: 'INTENT_ROUTING' | 'TOOL_SELECTION' | 'SCHEDULE_PLANNING';
+      skillKey:
+        | 'INTENT_ROUTING'
+        | 'TOOL_SELECTION'
+        | 'SCHEDULE_PLANNING'
+        | 'TEAM_TRAINING';
     };
     AgentSkillVersionDto: {
       activatedAt?: string | null;
@@ -2819,7 +2826,11 @@ export interface components {
       id: string;
       instructions: string;
       /** @enum {string} */
-      skillKey: 'INTENT_ROUTING' | 'TOOL_SELECTION' | 'SCHEDULE_PLANNING';
+      skillKey:
+        | 'INTENT_ROUTING'
+        | 'TOOL_SELECTION'
+        | 'SCHEDULE_PLANNING'
+        | 'TEAM_TRAINING';
       /** @enum {string} */
       state: 'DRAFT' | 'ACTIVE' | 'RETIRED';
       version: number;
@@ -2858,6 +2869,32 @@ export interface components {
         | 'FAILED'
         | 'EXECUTED'
         | 'CANCELLED';
+    };
+    AgentTeamActionViewDto: {
+      eventId: string;
+      eventName: string;
+      id: string;
+      missing: string[];
+      /** @enum {string} */
+      mode: 'REAL' | 'TEST';
+      profiles: components['schemas']['AgentTeamProfileDto'][];
+      revision: number;
+      /** @enum {string} */
+      state: 'COLLECTING' | 'PREVIEW_READY' | 'EXECUTED' | 'CANCELLED';
+      teamIds: string[];
+    };
+    AgentTeamProfileDto: {
+      address: string;
+      city: string;
+      clubName: string;
+      contactName: string;
+      contactPhone: string;
+      district: string;
+      introduction: string;
+      name: string;
+      notes: string;
+      province: string;
+      shortName: string;
     };
     AgentToolDefinitionDto: {
       confirmation: string;

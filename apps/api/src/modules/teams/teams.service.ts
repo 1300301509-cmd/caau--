@@ -165,65 +165,66 @@ export class TeamsService {
       'teams.create',
       undefined,
       input,
-      async (tx, actor) => {
-        const body = bodyObject(input, [
-          'id',
-          'organizationId',
-          'eventId',
-          'profile',
-        ]);
-        const id = uuid(body.id),
-          organizationId = uuid(body.organizationId),
-          p = profile(body.profile);
-        const eventId =
-          body.eventId === undefined ? undefined : uuid(body.eventId);
-        if (
-          !isHeadquartersSuperAdmin(actor) &&
-          !this.organizations(actor).includes(organizationId)
-        )
-          deny();
-        if (eventId) await this.event(tx, actor, eventId);
-        const creationHash = createHash('sha256')
-          .update(JSON.stringify({ organizationId, eventId, profile: p }))
-          .digest('hex');
-        const previous = await tx.team.findUnique({
-          where: { id },
-          include: { members: true },
-        });
-        if (previous) {
-          if (
-            previous.createdBy !== actor.id ||
-            previous.creationHash !== creationHash
-          )
-            throw new ConflictException('Creation conflict');
-          return this.view(previous, actor);
-        }
-        const row = await tx.team.create({
-          data: {
-            id,
-            organizationId,
-            profile: json(p),
-            creationHash,
-            createdBy: actor.id,
-            updatedBy: actor.id,
-          },
-          include: { members: true },
-        });
-        await tx.teamVersion.create({
-          data: {
-            id: randomUUID(),
-            teamId: id,
-            profile: json(p),
-            active: true,
-            revision: 1,
-            actorId: actor.id,
-          },
-        });
-        if (eventId) await this.attach(tx, actor, eventId, row);
-        return this.view(row, actor);
-      },
+      (tx, actor) => this.createInTransaction(tx, actor, input),
       { retries: 2, retryUnique: true },
     );
+  }
+  /** Reuse the existing create policy inside a caller's authorized transaction. */
+  async createInTransaction(tx: Tx, actor: Actor, input: unknown) {
+    const body = bodyObject(input, [
+      'id',
+      'organizationId',
+      'eventId',
+      'profile',
+    ]);
+    const id = uuid(body.id),
+      organizationId = uuid(body.organizationId),
+      p = profile(body.profile);
+    const eventId = body.eventId === undefined ? undefined : uuid(body.eventId);
+    if (
+      !isHeadquartersSuperAdmin(actor) &&
+      !this.organizations(actor).includes(organizationId)
+    )
+      deny();
+    if (eventId) await this.event(tx, actor, eventId);
+    const creationHash = createHash('sha256')
+      .update(JSON.stringify({ organizationId, eventId, profile: p }))
+      .digest('hex');
+    const previous = await tx.team.findUnique({
+      where: { id },
+      include: { members: true },
+    });
+    if (previous) {
+      if (
+        previous.createdBy !== actor.id ||
+        previous.creationHash !== creationHash
+      )
+        throw new ConflictException('Creation conflict');
+      return this.view(previous, actor);
+    }
+    const row = await tx.team.create({
+      data: {
+        id,
+        organizationId,
+        profile: json(p),
+        creationHash,
+        createdBy: actor.id,
+        updatedBy: actor.id,
+      },
+      include: { members: true },
+    });
+    await tx.teamVersion.create({
+      data: {
+        id: randomUUID(),
+        teamId: id,
+        profile: json(p),
+        active: true,
+        revision: 1,
+        actorId: actor.id,
+      },
+    });
+    if (eventId) await this.attach(tx, actor, eventId, row);
+    return this.view(row, actor);
   }
   update(token: string, id: string, input: unknown) {
     return this.auth.run(

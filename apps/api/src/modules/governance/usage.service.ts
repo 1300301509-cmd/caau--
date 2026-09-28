@@ -196,6 +196,7 @@ export class UsageService {
       parse: 'intent',
       planQuery: 'query_plan',
       planPlanning: 'planning',
+      planTeam: 'team',
       chatStream: 'chat',
       testConnection: 'connection',
     };

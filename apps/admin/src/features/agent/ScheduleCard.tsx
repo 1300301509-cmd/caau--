@@ -18,6 +18,7 @@ type Reply = S['AgentReplyDto'];
 type Candidate = S['AgentCandidateDto'];
 type Receipt = S['AgentScheduleAdjustmentResultDto'];
 type Planning = S['AgentPlanningRequestViewDto'];
+type TeamAction = S['AgentTeamActionViewDto'];
 const localTime = (value: string) =>
   value
     ? new Date(Date.parse(value) + 8 * 3600000)
@@ -140,6 +141,114 @@ function PlanningCard({
   );
 }
 
+function TeamActionCard({
+  action,
+  blocked,
+  currentCount,
+}: {
+  action: TeamAction;
+  blocked: boolean;
+  currentCount?: number;
+}) {
+  return (
+    <section className="agent-team" aria-label="球队建档行动">
+      <header>
+        <strong>球队建档 · V{action.revision}</strong>
+        <Tag
+          color={
+            action.state === 'EXECUTED'
+              ? 'green'
+              : action.state === 'CANCELLED'
+                ? 'default'
+                : action.state === 'COLLECTING'
+                  ? 'gold'
+                  : 'blue'
+          }
+        >
+          {action.state === 'EXECUTED'
+            ? '已创建'
+            : action.state === 'PREVIEW_READY'
+              ? '待确认'
+              : action.state === 'CANCELLED'
+                ? '已取消'
+                : '资料待补'}
+        </Tag>
+      </header>
+      <p>
+        赛事：{action.eventName} ·{' '}
+        {action.mode === 'TEST' ? '内测合成球队' : '真实球队'} ·{' '}
+        {action.profiles.length ? `${action.profiles.length} 支` : '数量待补'}
+      </p>
+      {action.profiles.length > 0 && (
+        <div className="agent-team-profiles" aria-label="球队资料">
+          {action.profiles.map((profile, index) => (
+            <article className="agent-team-profile" key={index}>
+              <strong>
+                {profile.name || `第 ${index + 1} 支球队 · 名称待补`}
+              </strong>
+              <dl>
+                <div>
+                  <dt>负责人</dt>
+                  <dd>{profile.contactName || '待补'}</dd>
+                </div>
+                <div>
+                  <dt>联系电话</dt>
+                  <dd>{profile.contactPhone || '待补'}</dd>
+                </div>
+                <div>
+                  <dt>省份</dt>
+                  <dd>{profile.province || '待补'}</dd>
+                </div>
+                <div>
+                  <dt>城市</dt>
+                  <dd>{profile.city || '待补'}</dd>
+                </div>
+              </dl>
+            </article>
+          ))}
+        </div>
+      )}
+      {action.missing.length > 0 && (
+        <p className="agent-team-missing" role="status">
+          待补：{action.missing.join('、')}
+        </p>
+      )}
+      {action.state === 'PREVIEW_READY' && (
+        <p className="agent-team-guidance" role="status">
+          {blocked
+            ? '资料可能已变化。请刷新会话后重新核对。'
+            : `资料已齐全，尚未创建。请核对以上内容，然后在对话中明确回复“确认添加${action.profiles.length > 1 ? '这些' : '这支'}球队”。`}
+        </p>
+      )}
+      {action.state === 'EXECUTED' && (
+        <div className="agent-team-receipt">
+          <strong role="status">
+            已创建 {action.teamIds.length} 支球队并加入「{action.eventName}」
+          </strong>
+          {currentCount !== undefined && (
+            <span>本赛事当前参赛球队：{currentCount} 支</span>
+          )}
+          <details>
+            <summary>查看创建记录</summary>
+            <p>行动编号：{action.id}</p>
+            <ol>
+              {action.teamIds.map((teamId, index) => (
+                <li key={teamId}>
+                  {action.profiles[index]?.name ?? `第 ${index + 1} 支球队`}：
+                  {teamId}
+                </li>
+              ))}
+            </ol>
+          </details>
+        </div>
+      )}
+      {action.state === 'CANCELLED' && (
+        <p role="status">已取消本次建队，未据此创建球队。</p>
+      )}
+    </section>
+  );
+}
+
 export function ScheduleCard({
   pageEventId,
   visible,
@@ -160,6 +269,11 @@ export function ScheduleCard({
   const [events, setEvents] = useState<{ id: string; name: string }[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [schedule, setSchedule] = useState<S['ScheduleViewDto']>();
+  const [eventTeamCount, setEventTeamCount] = useState<{
+    actionId: string;
+    revision: number;
+    count: number;
+  }>();
   const [result, setResult] = useState<Receipt>();
   const [modelStatus, setModelStatus] = useState<S['AgentModelStatusDto']>();
   const [error, setError] = useState('');
@@ -177,7 +291,10 @@ export function ScheduleCard({
   const messageEnd = useRef<HTMLDivElement>(null);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const teamAction = session ? session.teamAction : reply?.teamAction;
   const eventId =
+    session?.currentEventId ??
+    teamAction?.eventId ??
     session?.task?.eventId ??
     session?.planningRequest?.eventId ??
     selectedEvent;
@@ -203,9 +320,14 @@ export function ScheduleCard({
       return;
     }
     if (
-      ['PREVIEW', 'PLAN', 'NEED_EVENT', 'NEED_MATCH', 'NEED_TEAM'].includes(
-        reply?.status ?? '',
-      ) ||
+      [
+        'PREVIEW',
+        'PLAN',
+        'TEAM',
+        'NEED_EVENT',
+        'NEED_MATCH',
+        'NEED_TEAM',
+      ].includes(reply?.status ?? '') ||
       result
     ) {
       pane.scrollTop = pane.scrollHeight;
@@ -228,6 +350,7 @@ export function ScheduleCard({
     setLastMessage('');
     setSelectedEvent('');
     setSchedule(undefined);
+    setEventTeamCount(undefined);
     setSessions([]);
     setLoading(false);
     setStreamingUser('');
@@ -323,7 +446,9 @@ export function ScheduleCard({
       items.some((item) => item.id === latest.id) ? items : [latest, ...items],
     );
     setSelectedEvent(
-      latest.task?.eventId ??
+      latest.currentEventId ??
+        latest.teamAction?.eventId ??
+        latest.task?.eventId ??
         latest.planningRequest?.eventId ??
         latest.currentEventId ??
         pageEventId,
@@ -366,6 +491,37 @@ export function ScheduleCard({
   useEffect(() => {
     if (visible) void refreshSchedule(eventId);
   }, [eventId, visible, token]);
+  useEffect(() => {
+    if (!visible || teamAction?.state !== 'EXECUTED') return;
+    const action = teamAction;
+    let alive = true;
+    void client
+      .request('listEventTeams', {
+        token,
+        path: { eventId: action.eventId },
+      })
+      .then((rows) => {
+        if (alive)
+          setEventTeamCount({
+            actionId: action.id,
+            revision: action.revision,
+            count: rows.filter((item) => item.active).length,
+          });
+      })
+      .catch(() => {
+        if (alive) setEventTeamCount(undefined);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [
+    visible,
+    token,
+    teamAction?.id,
+    teamAction?.revision,
+    teamAction?.state,
+    teamAction?.eventId,
+  ]);
 
   async function switchEvent(id: string) {
     if (id === eventId) return;
@@ -419,7 +575,9 @@ export function ScheduleCard({
       if (!valid()) return;
       setSession(next);
       setSelectedEvent(
-        next.task?.eventId ??
+        next.currentEventId ??
+          next.teamAction?.eventId ??
+          next.task?.eventId ??
           next.planningRequest?.eventId ??
           next.currentEventId ??
           '',
@@ -488,6 +646,8 @@ export function ScheduleCard({
       setInput('');
       setLastMessage(message);
       if (next.task?.eventId) setSelectedEvent(next.task.eventId);
+      else if (next.teamAction?.eventId)
+        setSelectedEvent(next.teamAction.eventId);
       else if (next.planningRequest?.eventId)
         setSelectedEvent(next.planningRequest.eventId);
       if (next.status === 'STALE') setError('预览已过期，请重新生成。');
@@ -615,7 +775,7 @@ export function ScheduleCard({
           value={session?.id}
           options={sessions.map((item) => ({
             value: item.id,
-            label: `${events.find((event) => event.id === (item.planningRequest?.eventId ?? item.task?.eventId ?? item.currentEventId))?.name ?? '自由对话'} · ${item.planningRequest ? `需求 V${item.planningRequest.revision}` : (item.task?.goal?.slice(0, 24) ?? item.turns.find((turn) => turn.role === 'USER')?.content.slice(0, 24) ?? '新对话')}`,
+            label: `${events.find((event) => event.id === (item.currentEventId ?? item.teamAction?.eventId ?? item.planningRequest?.eventId ?? item.task?.eventId))?.name ?? '自由对话'} · ${item.teamAction && ['COLLECTING', 'PREVIEW_READY'].includes(item.teamAction.state) ? `球队资料 V${item.teamAction.revision}` : item.planningRequest ? `需求 V${item.planningRequest.revision}` : (item.task?.goal?.slice(0, 24) ?? item.turns.find((turn) => turn.role === 'USER')?.content.slice(0, 24) ?? '新对话')}`,
           }))}
           onChange={(id) => void selectHistory(id)}
           className="agent-history-select"
@@ -785,7 +945,7 @@ export function ScheduleCard({
                 </span>
               )}
               <div
-                className={`agent-message-body${turn.id === latestAnswer?.id && reply?.message === latestAnswer?.content && ['QUERY', 'PLAN', 'NEED_TEAM'].includes(reply?.status ?? '') ? ' schedule-agent-query-answer' : ''}`}
+                className={`agent-message-body${turn.id === latestAnswer?.id && reply?.message === latestAnswer?.content && ['QUERY', 'PLAN', 'TEAM', 'NEED_TEAM'].includes(reply?.status ?? '') ? ' schedule-agent-query-answer' : ''}`}
               >
                 {turn.role === 'ASSISTANT' && <strong>CAAU 智能助手</strong>}
                 <p>{turn.content}</p>
@@ -835,7 +995,9 @@ export function ScheduleCard({
           <p
             role="status"
             className={`agent-action-message ${
-              ['QUERY', 'PLAN', 'NEED_TEAM'].includes(reply?.status ?? '')
+              ['QUERY', 'PLAN', 'TEAM', 'NEED_TEAM'].includes(
+                reply?.status ?? '',
+              )
                 ? 'schedule-agent-query-answer'
                 : ''
             }`}
@@ -902,6 +1064,39 @@ export function ScheduleCard({
                 onSaved={() => refreshSchedule(planning.eventId)}
               />
             )}
+          </details>
+        )}
+        {teamAction && (
+          <details
+            className="agent-workspace-section agent-team-section"
+            key={`${teamAction.id}:${teamAction.revision}`}
+            ref={(element) => {
+              if (element && !element.dataset.agentInitialized) {
+                element.open = teamAction.state !== 'CANCELLED';
+                element.dataset.agentInitialized = 'true';
+              }
+            }}
+          >
+            <summary>
+              球队建档 ·{' '}
+              {teamAction.state === 'EXECUTED'
+                ? `已创建 ${teamAction.teamIds.length} 支`
+                : teamAction.state === 'PREVIEW_READY'
+                  ? '待确认'
+                  : teamAction.state === 'CANCELLED'
+                    ? '已取消'
+                    : '资料待补'}
+            </summary>
+            <TeamActionCard
+              action={teamAction}
+              blocked={blocked}
+              currentCount={
+                eventTeamCount?.actionId === teamAction.id &&
+                eventTeamCount.revision === teamAction.revision
+                  ? eventTeamCount.count
+                  : undefined
+              }
+            />
           </details>
         )}
         {execution && (

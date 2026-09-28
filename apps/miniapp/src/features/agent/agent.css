@@ -268,6 +268,14 @@
   color: #67539c;
   background: #eae1ff;
 }
+.agent-panel .agent-mobile-shortcut-team {
+  color: #5b431c;
+  background: #fff8ed;
+}
+.agent-mobile-shortcut-team .agent-shortcut-mark {
+  color: #94611d;
+  background: #fce9c4;
+}
 .agent-shortcut-title,
 .agent-shortcut-note {
   display: block;
@@ -369,6 +377,75 @@
 .agent-panel .competition-agent-receipt,
 .agent-panel .agent-mobile-workflow {
   margin: 24rpx 28rpx;
+}
+.agent-team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-bottom: 24rpx;
+  padding: 24rpx;
+  border: 1px solid #e8eaf0;
+  border-radius: 24rpx;
+  background: #f9fafc;
+}
+.agent-team-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+.agent-team-title {
+  min-width: 0;
+  color: var(--agent-ink);
+  font-size: 29rpx;
+  font-weight: 700;
+}
+.agent-team-status {
+  flex: none;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  color: #3754c5;
+  background: #eaf0ff;
+  font-size: 22rpx;
+}
+.agent-team-event,
+.agent-team-detail,
+.agent-team-hint {
+  color: var(--agent-muted);
+  font-size: 24rpx;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.agent-team-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 18rpx 20rpx;
+  border: 1px solid #e8eaf0;
+  border-radius: 18rpx;
+  background: #fff;
+}
+.agent-team-name {
+  color: var(--agent-ink);
+  font-size: 27rpx;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.agent-team-missing,
+.agent-team-success {
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.agent-team-missing {
+  color: #7b5114;
+  background: #fff3d9;
+}
+.agent-team-success {
+  color: #164f40;
+  background: #e6f4ed;
 }
 .agent-panel .competition-agent-receipt button {
   width: 100%;

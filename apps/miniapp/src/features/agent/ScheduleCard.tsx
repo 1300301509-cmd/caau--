@@ -24,6 +24,7 @@ import assistantIcon from '../../assets/caau-assistant.svg';
 import sendIcon from '../../assets/agent-send.svg';
 import './agent.css';
 
+type TeamAction = S['AgentTeamActionViewDto'];
 type AgentSession = S['AgentSessionViewDto'];
 type Reply = S['AgentReplyDto'];
 type Receipt = S['AgentScheduleAdjustmentResultDto'];
@@ -49,7 +50,102 @@ const assistantSkills = [
     note: '预览后人工确认',
     prompt: '我想调整一场比赛的时间',
   },
+  {
+    title: '添加球队',
+    description: '口述球队资料，补齐必填信息后核对并加入当前赛事。',
+    note: '核对后确认',
+    prompt: '帮我添加一支球队',
+  },
+  {
+    title: '球队训练方案',
+    description: '先聊球队目标与训练条件，再给出适合的训练安排。',
+    note: '对话建议',
+    prompt: '我应该怎么训练球队？请先了解我的球队情况，再帮我制定训练方案',
+  },
 ] as const;
+
+const teamFieldNames: Record<string, string> = {
+  eventId: '赛事',
+  organizationId: '所属机构',
+  name: '球队名称',
+  contactName: '负责人',
+  contactPhone: '联系电话',
+  province: '省份',
+  city: '城市',
+};
+
+function TeamActionCard({
+  action,
+  registeredTeams,
+}: {
+  action: TeamAction;
+  registeredTeams?: number;
+}) {
+  const status =
+    action.state === 'EXECUTED'
+      ? '已创建'
+      : action.state === 'CANCELLED'
+        ? '已取消'
+        : action.state === 'PREVIEW_READY'
+          ? '待确认'
+          : '资料待补';
+  return (
+    <View className="agent-team-card" aria-label="球队建档">
+      <View className="agent-team-header">
+        <Text className="agent-team-title">
+          {action.mode === 'TEST' ? '测试球队' : '球队建档'} · V
+          {action.revision}
+        </Text>
+        <Text className="agent-team-status">{status}</Text>
+      </View>
+      <Text className="agent-team-event">赛事：{action.eventName}</Text>
+      {action.profiles.map((profile, index) => (
+        <View className="agent-team-profile" key={`${action.id}-${index}`}>
+          <Text className="agent-team-name">
+            {index + 1}. {profile.name || '球队名称待补'}
+          </Text>
+          <Text className="agent-team-detail">
+            {profile.province || '省份待补'} · {profile.city || '城市待补'}
+          </Text>
+          <Text className="agent-team-detail">
+            负责人：{profile.contactName || '待补'} · 电话：
+            {profile.contactPhone || '待补'}
+          </Text>
+        </View>
+      ))}
+      {!!action.missing.length && action.state === 'COLLECTING' && (
+        <Text className="agent-team-missing">
+          还需补充：
+          {action.missing
+            .map((field) => teamFieldNames[field] ?? field)
+            .join('、')}
+        </Text>
+      )}
+      {action.state === 'COLLECTING' && (
+        <Text className="agent-team-hint">直接在下方对话补充资料即可。</Text>
+      )}
+      {action.state === 'PREVIEW_READY' && (
+        <Text className="agent-team-hint">
+          请核对以上资料。确认前不会创建球队；可继续在对话中修改，或回复“确认添加
+          {action.mode === 'TEST' ? '这些球队' : '这支球队'}”。
+        </Text>
+      )}
+      {action.state === 'EXECUTED' && (
+        <View className="agent-team-success" role="status">
+          <Text>
+            已加入当前赛事 {action.teamIds.length} 支球队
+            {registeredTeams === undefined
+              ? '。'
+              : `，当前赛事共有 ${registeredTeams} 支参赛球队。`}
+          </Text>
+        </View>
+      )}
+      {action.mode === 'TEST' && action.state !== 'CANCELLED' && (
+        <Text className="agent-team-hint">这些是团队内测资料。</Text>
+      )}
+    </View>
+  );
+}
 
 function PlanningCard({
   planning,
@@ -158,6 +254,31 @@ const pendingLabel: Record<string, string> = {
   targetTime: '请说明调整后的北京时间',
 };
 
+function sessionEventId(session: AgentSession, fallback = '') {
+  if (
+    session.teamAction &&
+    ['COLLECTING', 'PREVIEW_READY'].includes(session.teamAction.state)
+  )
+    return session.teamAction.eventId;
+  if (
+    session.task?.eventId &&
+    [
+      'LOCATE_EVENT',
+      'LOCATE_MATCH',
+      'WAITING_PARAMETERS',
+      'PREVIEW_READY',
+    ].includes(session.task.step)
+  )
+    return session.task.eventId;
+  return (
+    session.currentEventId ||
+    session.planningRequest?.eventId ||
+    session.teamAction?.eventId ||
+    session.task?.eventId ||
+    fallback
+  );
+}
+
 let volatile:
   | {
       token: string;
@@ -190,11 +311,18 @@ export function AgentPage() {
   const [events, setEvents] = useState<{ id: string; name: string }[]>([]);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [schedule, setSchedule] = useState<S['ScheduleViewDto']>();
+  const [registeredTeams, setRegisteredTeams] = useState<{
+    eventId: string;
+    count: number;
+  }>();
   const [forceNew, setForceNew] = useState(false);
   const eventId =
-    current?.task?.eventId ??
-    current?.planningRequest?.eventId ??
-    selectedEvent;
+    selectedEvent ||
+    current?.currentEventId ||
+    current?.teamAction?.eventId ||
+    current?.task?.eventId ||
+    current?.planningRequest?.eventId ||
+    '';
   const [busy, setBusy] = useState(!!cached?.current);
   const [streamingUser, setStreamingUser] = useState('');
   const [streamingText, setStreamingText] = useState('');
@@ -223,23 +351,30 @@ export function AgentPage() {
         selectedEvent,
       };
   }, [current, reply, receipt, input, lastMessage, selectedEvent]);
-  async function onSaved() {
-    if (!eventId || !login.token) return;
+  async function onSaved(teamEventId?: string) {
+    if (!(teamEventId ?? eventId) || !login.token) return;
     const token = login.token,
       epoch = login.epoch,
-      id = eventId;
+      id = teamEventId ?? eventId;
     try {
       const next = await client.request('getEventSchedule', {
         token,
         path: { eventId: id },
       });
-      if (
-        alive.current &&
-        login.token === token &&
-        login.epoch === epoch &&
-        event.current === id
-      )
-        setSchedule(next);
+      const teams = teamEventId
+        ? await client.request('listEventTeams', {
+            token,
+            path: { eventId: id },
+          })
+        : undefined;
+      if (alive.current && login.token === token && login.epoch === epoch) {
+        if (event.current === id) setSchedule(next);
+        if (teams)
+          setRegisteredTeams({
+            eventId: id,
+            count: teams.filter((team) => team.active).length,
+          });
+      }
     } catch (cause) {
       if (cause instanceof ApiError && [401, 403].includes(cause.status)) {
         volatile = undefined;
@@ -260,6 +395,7 @@ export function AgentPage() {
     setNotice('');
     setBlocked(false);
     setSessions([]);
+    setRegisteredTeams(undefined);
     setSkillsOpen(false);
     setOptionsOpen(false);
     serial.current++;
@@ -363,12 +499,7 @@ export function AgentPage() {
     setSessions((items) =>
       items.some((item) => item.id === latest.id) ? items : [latest, ...items],
     );
-    setSelectedEvent(
-      latest.task?.eventId ??
-        latest.planningRequest?.eventId ??
-        latest.currentEventId ??
-        pageEventId,
-    );
+    setSelectedEvent(sessionEventId(latest, pageEventId));
     if (latest.id !== current?.id) {
       setReply(undefined);
       setReceipt(undefined);
@@ -465,12 +596,7 @@ export function AgentPage() {
       });
       if (!valid()) return;
       setCurrent(latest);
-      setSelectedEvent(
-        latest.task?.eventId ??
-          latest.planningRequest?.eventId ??
-          latest.currentEventId ??
-          '',
-      );
+      setSelectedEvent(sessionEventId(latest));
       setReply(undefined);
       setReceipt(undefined);
       setInput('');
@@ -540,8 +666,11 @@ export function AgentPage() {
       if (next.execution) {
         setReceipt(next.execution);
         await onSaved();
+      } else if (next.teamAction?.state === 'EXECUTED') {
+        await onSaved(next.teamAction.eventId);
       }
-      if (next.task?.eventId) setSelectedEvent(next.task.eventId);
+      if (next.teamAction?.eventId) setSelectedEvent(next.teamAction.eventId);
+      else if (next.task?.eventId) setSelectedEvent(next.task.eventId);
       else if (next.planningRequest?.eventId)
         setSelectedEvent(next.planningRequest.eventId);
       setForceNew(false);
@@ -576,6 +705,7 @@ export function AgentPage() {
   }
   const task = forceNew ? undefined : reply ? reply.task : current?.task;
   const planning = reply?.planningRequest ?? current?.planningRequest;
+  const teamAction = reply?.teamAction ?? current?.teamAction;
   const preview = task?.preview;
   const ticket = task?.confirmation;
   const execution = receipt ?? current?.lastExecution?.result;
@@ -860,6 +990,20 @@ export function AgentPage() {
                         </Text>
                       </View>
                     </Button>
+                    <Button
+                      className="agent-mobile-shortcut agent-mobile-shortcut-team"
+                      onClick={() => setInput(assistantSkills[3].prompt)}
+                    >
+                      <Text className="agent-shortcut-mark" aria-hidden="true">
+                        队
+                      </Text>
+                      <View>
+                        <Text className="agent-shortcut-title">添加球队</Text>
+                        <Text className="agent-shortcut-note">
+                          口述资料，边聊边补齐
+                        </Text>
+                      </View>
+                    </Button>
                   </View>
                   <Text className="agent-suggestion-heading">你可能想问</Text>
                   <View className="agent-mobile-suggestions">
@@ -867,6 +1011,7 @@ export function AgentPage() {
                       '你能帮我做些什么？',
                       '单循环和淘汰赛有什么区别？',
                       '我想调整一场比赛的时间',
+                      '我在做团队内测，随机生成 3 支测试球队加入当前赛事',
                       '帮我整理一份赛事筹备清单',
                     ].map((suggestion) => (
                       <Button
@@ -978,6 +1123,17 @@ export function AgentPage() {
             )}
             {current && (
               <View className="agent-mobile-workflow">
+                {teamAction && (
+                  <TeamActionCard
+                    action={teamAction}
+                    registeredTeams={
+                      registeredTeams &&
+                      registeredTeams.eventId === teamAction.eventId
+                        ? registeredTeams.count
+                        : undefined
+                    }
+                  />
+                )}
                 {task?.step === 'WAITING_PARAMETERS' && (
                   <Text className="competition-line">
                     待补充：

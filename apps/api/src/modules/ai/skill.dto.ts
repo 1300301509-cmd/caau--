@@ -2,9 +2,18 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AgentSkillInputDto {
   @ApiProperty({
-    enum: ['INTENT_ROUTING', 'TOOL_SELECTION', 'SCHEDULE_PLANNING'],
+    enum: [
+      'INTENT_ROUTING',
+      'TOOL_SELECTION',
+      'SCHEDULE_PLANNING',
+      'TEAM_TRAINING',
+    ],
   })
-  skillKey!: 'INTENT_ROUTING' | 'TOOL_SELECTION' | 'SCHEDULE_PLANNING';
+  skillKey!:
+    | 'INTENT_ROUTING'
+    | 'TOOL_SELECTION'
+    | 'SCHEDULE_PLANNING'
+    | 'TEAM_TRAINING';
   @ApiProperty({ maxLength: 8000 }) instructions!: string;
 }
 
