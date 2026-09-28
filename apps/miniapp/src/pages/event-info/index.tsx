@@ -29,6 +29,7 @@ type EventProfile = {
 function EventInfo() {
   const router = useRouter();
   const id = router.params.id ?? '';
+  const fromCompetition = router.params.from === 'competition';
   const [event, setEvent] = useState<S['EventViewDto']>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -97,12 +98,14 @@ function EventInfo() {
           className="text-button compact-button"
           onClick={() => void Taro.navigateBack()}
         >
-          返回申请
+          {fromCompetition ? '返回比赛' : '返回申请'}
         </Button>
       </View>
       <Text className="title">赛事基本信息</Text>
       <Text className="description">
-        由获批承办申请生成的只读信息；此权限不包含赛事修改、审核或材料任务办理。
+        {fromCompetition
+          ? '当前赛事的只读基本资料。球队、赛程和现场安排请返回我的比赛办理。'
+          : '由获批承办申请生成的只读信息；此权限不包含赛事修改、审核或材料任务办理。'}
       </Text>
       {loading && (
         <View className="card">
