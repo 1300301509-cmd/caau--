@@ -438,9 +438,6 @@ export default function TeamsPage() {
     .filter((t) =>
       `${t.profile.name} ${t.profile.contactName}`.includes(query.trim()),
     );
-  const source = mode === 'master' ? masters : teams;
-  const activeCount = source.filter((team) => team.active).length;
-  const inactiveCount = source.length - activeCount;
   const hasActiveDivision = divisions.some((group) => group.active);
   const modeTitle = {
     event: '本赛事球队',
@@ -721,19 +718,11 @@ export default function TeamsPage() {
                   <View className="teams-filters">
                     {(
                       [
-                        [
-                          'active',
-                          mode === 'master' ? '在用' : '参赛中',
-                          activeCount,
-                        ],
-                        [
-                          'inactive',
-                          mode === 'master' ? '已归档' : '已退出',
-                          inactiveCount,
-                        ],
-                        ['all', '全部', source.length],
+                        ['active', mode === 'master' ? '在用' : '参赛中'],
+                        ['inactive', mode === 'master' ? '已归档' : '已退出'],
+                        ['all', '全部'],
                       ] as const
-                    ).map(([status, label, count]) => (
+                    ).map(([status, label]) => (
                       <Button
                         key={status}
                         className={
@@ -741,10 +730,10 @@ export default function TeamsPage() {
                             ? 'teams-filter selected'
                             : 'teams-filter'
                         }
-                        ariaLabel={`${label} ${count} 支球队`}
+                        ariaLabel={label}
                         onClick={() => setStatusFilter(status)}
                       >
-                        {label} {status === 'all' ? '' : count}
+                        {label}
                       </Button>
                     ))}
                     <Button
