@@ -196,6 +196,102 @@ async function main() {
       'SELECT (SELECT count(*)::int FROM "EventScheduleVersion") versions, (SELECT count(*)::int FROM "AgentConfirmationTicket") tickets, (SELECT count(*)::int FROM "AgentTask") tasks',
     );
     if (process.env.CAAU_DAYPART_ONLY === '1') {
+      // Start with the exact reported utterance in a fresh conversation. The
+      // counts are collected as requirements, not silently treated as caps.
+      const openingChat = await request(token, 'POST', 'agent/sessions', {
+        currentEventId: event.id,
+      });
+      const openingRoute = `agent/sessions/${openingChat.id}/messages`;
+      const sendOpening = (message, plan) =>
+        request(token, 'POST', openingRoute, {
+          message,
+          eventId: event.id,
+          ...(plan
+            ? { planningId: plan.id, planningRevision: plan.revision }
+            : {}),
+        });
+      const assertDaypartCounts = (plan, countMode) => {
+        const dayparts = plan.conditions.filter(
+          (item) => item.kind === 'DAYPART_CAPACITY',
+        );
+        assert.equal(dayparts.length, 3);
+        assert.deepEqual(
+          Object.fromEntries(
+            dayparts.map((item) => [
+              item.daypart,
+              { count: item.maxMatchesPerDay, mode: item.countMode },
+            ]),
+          ),
+          {
+            MORNING: { count: 1, mode: countMode },
+            AFTERNOON: { count: 2, mode: countMode },
+            EVENING: { count: 1, mode: countMode },
+          },
+        );
+      };
+      stage = 'reported daypart opening in fresh session';
+      let openingReply = await sendOpening(
+        '按照早上1场，下午2场，晚上1场的时间给我编排赛程',
+      );
+      assert.equal(openingReply.status, 'PLAN');
+      let openingPlan = openingReply.planningRequest;
+      assert.ok(openingPlan);
+      assert.equal(
+        openingPlan.conditions.find((item) => item.kind === 'DATE_RANGE')
+          ?.scheduleGoal,
+        true,
+      );
+      assertDaypartCounts(openingPlan, 'UNRESOLVED');
+      assert.ok(openingPlan.pending.some((item) => item.includes('确切场数')));
+      assert.ok(
+        openingPlan.pending.some((item) => item.includes('几点到几点')),
+      );
+      assert.ok(openingPlan.pending.some((item) => item.includes('整个赛事')));
+      assert.deepEqual(
+        (
+          await sql.query(
+            'SELECT (SELECT count(*)::int FROM "EventScheduleVersion") versions, (SELECT count(*)::int FROM "AgentConfirmationTicket") tickets, (SELECT count(*)::int FROM "AgentTask") tasks',
+          )
+        ).rows,
+        before.rows,
+      );
+      stage = 'reported daypart clarification';
+      openingReply = await sendOpening(
+        '这三个数字都是每天最多，按整个赛事合计。早上09:00到12:00，下午13:00到17:00，晚上18:00到21:00。',
+        openingPlan,
+      );
+      assert.equal(openingReply.status, 'PLAN');
+      openingPlan = openingReply.planningRequest;
+      assertDaypartCounts(openingPlan, 'MAXIMUM');
+      for (const [daypart, startTime, endTime] of [
+        ['MORNING', '09:00', '12:00'],
+        ['AFTERNOON', '13:00', '17:00'],
+        ['EVENING', '18:00', '21:00'],
+      ]) {
+        const condition = openingPlan.conditions.find(
+          (item) =>
+            item.kind === 'DAYPART_CAPACITY' && item.daypart === daypart,
+        );
+        assert.equal(condition.startTime, startTime);
+        assert.equal(condition.endTime, endTime);
+        assert.equal(condition.capacityScope, 'EVENT');
+      }
+      assert.equal(
+        openingPlan.pending.some((item) => item.includes('确切场数')),
+        false,
+      );
+      assert.deepEqual(
+        (
+          await sql.query(
+            'SELECT (SELECT count(*)::int FROM "EventScheduleVersion") versions, (SELECT count(*)::int FROM "AgentConfirmationTicket") tickets, (SELECT count(*)::int FROM "AgentTask") tasks',
+          )
+        ).rows,
+        before.rows,
+      );
+      console.log(
+        'PASS: reported QWEN daypart opening and clarification; unresolved semantics preserved until answered, no schedule write.',
+      );
+
       const chat = await request(token, 'POST', 'agent/sessions', {
         currentEventId: event.id,
       });
@@ -209,9 +305,7 @@ async function main() {
             : {}),
         });
       stage = 'ten-day whole-schedule request';
-      let reply = await send(
-        '帮我重新编排赛程，从2027-06-01开始，10天完成，所有队伍都比过一场',
-      );
+      let reply = await send('帮我重新编排赛程，从2027-06-01开始，10天完成');
       console.log('Qwen daypart stage', {
         status: reply.status,
         conditions:
@@ -231,7 +325,7 @@ async function main() {
       assert.ok(plan.pending.some((item) => item.includes('对阵规则')));
       stage = 'natural-language round robin and three daily capacities';
       reply = await send(
-        '每两只队伍各交手一次，上午最多排一场，下午可以排两场，晚上可以排一场',
+        '每两只队伍各交手一次，上午最多排一场，下午最多排两场，晚上最多排一场',
         plan,
       );
       assert.equal(reply.status, 'PLAN');
@@ -252,11 +346,20 @@ async function main() {
       assert.ok(plan.pending.some((item) => item.includes('从几点到几点')));
       stage = 'time boundaries and event-wide scope';
       reply = await send(
-        '按整个赛事每天统计。上午09:00到12:00，下午13:00到17:00，晚上18:00到21:00。',
+        '按整个赛事每天统计。上午09:00到12:00，下午13:00到17:00，晚上18:00到21:00。每天比赛时间09:00到21:00，场地是合成一号场，单场60分钟，换场缓冲0分钟，同队最短休息0分钟。',
         plan,
       );
       assert.equal(reply.status, 'PLAN');
       plan = reply.planningRequest;
+      if (plan.pending.length) {
+        stage = 'clarify daypart count semantics after a long message';
+        reply = await send(
+          '上午最多1场、下午最多2场、晚上最多1场，三个时段都按整个赛事每天合计。',
+          plan,
+        );
+        assert.equal(reply.status, 'PLAN');
+        plan = reply.planningRequest;
+      }
       assert.deepEqual(plan.pending, []);
       assert.equal(
         plan.conditions.find((item) => item.daypart === 'MORNING')
@@ -296,7 +399,7 @@ async function main() {
             dailyEnd: '21:00',
             durationMinutes: 60,
             bufferMinutes: 0,
-            minRestMinutes: 60,
+            minRestMinutes: 0,
           },
           fixedMatchIds: [],
         },

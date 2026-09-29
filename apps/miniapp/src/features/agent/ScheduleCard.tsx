@@ -30,6 +30,7 @@ type Reply = S['AgentReplyDto'];
 type Receipt = S['AgentScheduleAdjustmentResultDto'];
 type Candidate = S['AgentCandidateDto'];
 type Planning = S['AgentPlanningRequestViewDto'];
+type PlanningCondition = Planning['conditions'][number];
 
 const assistantSkills = [
   {
@@ -150,6 +151,36 @@ function TeamActionCard({
   );
 }
 
+function planningCountLabel(condition: PlanningCondition) {
+  const scope =
+    condition.capacityScope === 'EVENT'
+      ? '整个赛事合计'
+      : condition.capacityScope === 'VENUE'
+        ? '每个场地分别'
+        : '统计范围待确认';
+  const count = condition.maxMatchesPerDay ?? '待确认';
+  if (condition.countMode === 'EXACT')
+    return `${scope}每天必须安排 ${count} 场`;
+  if (!condition.countMode || condition.countMode === 'MAXIMUM')
+    return `${scope}每天最多安排 ${count} 场`;
+  return `${scope}每天安排 ${count} 场（确切场数或上限待确认）`;
+}
+
+function planningConditionLabel(condition: PlanningCondition) {
+  if (condition.kind === 'DATE_RANGE')
+    return `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `（共 ${condition.durationDays} 天）` : ''}；组别：${condition.divisionLabels?.join('、') || '待明确'}${condition.allDivisions ? '（全部组别）' : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`;
+  if (condition.kind === 'FORMAT') return '单循环：每两支参赛球队各交手一次';
+  if (condition.kind === 'SCHEDULE_CONFIG')
+    return `每天比赛时间 ${condition.dailyStart ?? '待确认'}—${condition.dailyEnd ?? '待确认'}；场地 ${condition.venues?.join('、') || '待确认'}；单场 ${condition.durationMinutes ?? '待确认'} 分钟；换场缓冲 ${condition.bufferMinutes ?? '待确认'} 分钟；同队最短休息 ${condition.minRestMinutes ?? '待确认'} 分钟${condition.configSource === 'EVENT_SCHEDULE' ? '（取自现有赛程配置）' : condition.configSource === 'MIXED' ? '（现有配置和对话修订）' : ''}`;
+  if (condition.kind === 'DAILY_COUNT')
+    return `每日总场数：${planningCountLabel(condition)}`;
+  if (condition.kind === 'DAYPART_CAPACITY')
+    return `${condition.daypart ? { MORNING: '上午', AFTERNOON: '下午', EVENING: '晚上' }[condition.daypart] : '时段待确认'} ${condition.startTime ?? '时间待确认'}—${condition.endTime ?? '时间待确认'}，${planningCountLabel(condition)}`;
+  if (condition.kind === 'TEAM_WINDOW')
+    return `${condition.teamLabel}：${condition.availability === 'ONLY' ? '只在' : condition.availability === 'BLOCK' ? '不在' : '可在'} ${condition.dates?.join('、')} ${condition.startTime}—${condition.endTime} 安排`;
+  return `${condition.teamLabel} 与 ${condition.opponentLabel}：${condition.matchup === 'PREFER' ? '倾向相遇' : '尽量避免相遇'}（不新增比赛）`;
+}
+
 function PlanningCard({
   planning,
   busy,
@@ -182,17 +213,7 @@ function PlanningCard({
       </Text>
       {planning.conditions.map((item) => (
         <View className="agent-planning-condition" key={item.id}>
-          <Text>
-            {item.kind === 'DATE_RANGE'
-              ? `赛事日期 ${item.from ?? '待明确'} 至 ${item.to ?? '待明确'}${item.durationDays ? `（共 ${item.durationDays} 天）` : ''}；组别：${item.divisionLabels?.join('、') || '待明确'}${item.allDivisions ? '（全部组别）' : ''}${item.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : item.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
-              : item.kind === 'FORMAT'
-                ? '单循环：每两支参赛球队各交手一次'
-                : item.kind === 'DAYPART_CAPACITY'
-                  ? `${{ MORNING: '上午', AFTERNOON: '下午', EVENING: '晚上' }[item.daypart ?? 'MORNING']} ${item.startTime ?? '时间待补'}—${item.endTime ?? '时间待补'}，${item.capacityScope === 'VENUE' ? '每个场地' : item.capacityScope === 'EVENT' ? '整个赛事' : '统计范围待补'}每天最多 ${item.maxMatchesPerDay ?? '待补'} 场`
-                  : item.kind === 'TEAM_WINDOW'
-                    ? `${item.teamLabel}：${item.availability === 'ONLY' ? '只在' : item.availability === 'BLOCK' ? '不在' : '可在'} ${item.dates?.join('、')} ${item.startTime}—${item.endTime} 安排`
-                    : `${item.teamLabel} 与 ${item.opponentLabel}：${item.matchup === 'PREFER' ? '倾向相遇' : '尽量避免相遇'}（不新增比赛）`}
-          </Text>
+          <Text>{planningConditionLabel(item)}</Text>
           <Text className="competition-note">
             {item.priority === 'MUST' ? '必须满足' : '尽量满足'} ·{' '}
             {item.confirmation === 'CONFIRMED' ? '已确认' : '待确认'} · 来源对话{' '}
@@ -476,12 +497,14 @@ export function AgentPage() {
       void onSaved();
     } else if (cause instanceof ApiError && cause.status === 502) {
       setError(
-        '回答超过单次 4000 字上限，本轮未保存；请缩小问题范围或分段提问。',
+        '本轮处理失败，输入已保留。可缩小问题范围后重试；如刚确认执行，请先刷新会话和赛程核对回执。',
       );
     } else if (cause instanceof ApiError && cause.status === 429) {
       setError('AI额度不足或已暂停，请联系管理员；输入已保留。');
     } else if (cause instanceof ApiError && cause.status === 503) {
-      setError('模型或智能体服务暂时不可用，未修改赛程。请稍后重试。');
+      setError(
+        '本轮处理结果暂时无法确认，输入已保留。请刷新会话和赛程核对回执后再重试。',
+      );
     } else if (cause instanceof AgentStreamInterruptedError) {
       setError('连接中断，请刷新会话核对本轮是否已保存；输入已保留。');
     } else {

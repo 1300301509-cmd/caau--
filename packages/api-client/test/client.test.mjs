@@ -193,6 +193,44 @@ test('Taro stream can cancel its native request task without AbortController', a
   }
 });
 
+test('Taro stream reports an error after provisional text without a saved result', async () => {
+  const body = { message: '按照早上 1 场、下午 2 场、晚上 1 场编排赛程' };
+  const deltas = [];
+  const response = streamAgentMessageTaro(
+    {
+      baseUrl: 'http://localhost',
+      sessionId: '00000000-0000-4000-8000-000000000001',
+      body,
+      token: 'synthetic-token',
+      onDelta: (part) => deltas.push(part),
+    },
+    (options) => {
+      assert.deepEqual(options.data, body);
+      let rejectRequest;
+      const task = new Promise((_, reject) => {
+        rejectRequest = reject;
+      });
+      task.onChunkReceived = (callback) => {
+        queueMicrotask(() =>
+          callback({
+            data: new TextEncoder().encode(
+              '{"type":"delta","text":"正在整理"}\n{"type":"error","status":503}\n',
+            ).buffer,
+          }),
+        );
+      };
+      task.abort = () => rejectRequest(new Error('request:fail abort'));
+      return task;
+    },
+  );
+  await assert.rejects(
+    response,
+    (error) => error instanceof ApiError && error.status === 503,
+  );
+  assert.deepEqual(deltas, ['正在整理']);
+  assert.equal(body.message, '按照早上 1 场、下午 2 场、晚上 1 场编排赛程');
+});
+
 test('known 503 has a typed stable code; unknown errors never echo server bodies', async () => {
   const client = createApiClient('http://localhost', async () => ({
     status: 503,

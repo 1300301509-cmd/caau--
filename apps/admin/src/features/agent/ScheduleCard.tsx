@@ -18,6 +18,7 @@ type Reply = S['AgentReplyDto'];
 type Candidate = S['AgentCandidateDto'];
 type Receipt = S['AgentScheduleAdjustmentResultDto'];
 type Planning = S['AgentPlanningRequestViewDto'];
+type PlanningCondition = Planning['conditions'][number];
 type TeamAction = S['AgentTeamActionViewDto'];
 const localTime = (value: string) =>
   value
@@ -39,6 +40,36 @@ const active = (step?: string) =>
     'WAITING_PARAMETERS',
     'PREVIEW_READY',
   ].includes(step ?? '');
+
+function planningCountLabel(condition: PlanningCondition) {
+  const scope =
+    condition.capacityScope === 'EVENT'
+      ? '整个赛事合计'
+      : condition.capacityScope === 'VENUE'
+        ? '每个场地分别'
+        : '统计范围待确认';
+  const count = condition.maxMatchesPerDay ?? '待确认';
+  if (condition.countMode === 'EXACT')
+    return `${scope}每天必须安排 ${count} 场`;
+  if (!condition.countMode || condition.countMode === 'MAXIMUM')
+    return `${scope}每天最多安排 ${count} 场`;
+  return `${scope}每天安排 ${count} 场（确切场数或上限待确认）`;
+}
+
+function planningConditionLabel(condition: PlanningCondition) {
+  if (condition.kind === 'DATE_RANGE')
+    return `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `（共 ${condition.durationDays} 天）` : ''}；组别：${condition.divisionLabels?.join('、') || '待明确'}${condition.allDivisions ? '（全部组别）' : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`;
+  if (condition.kind === 'FORMAT') return '单循环：每两支参赛球队各交手一次';
+  if (condition.kind === 'SCHEDULE_CONFIG')
+    return `每天比赛时间 ${condition.dailyStart ?? '待确认'}—${condition.dailyEnd ?? '待确认'}；场地 ${condition.venues?.join('、') || '待确认'}；单场 ${condition.durationMinutes ?? '待确认'} 分钟；换场缓冲 ${condition.bufferMinutes ?? '待确认'} 分钟；同队最短休息 ${condition.minRestMinutes ?? '待确认'} 分钟${condition.configSource === 'EVENT_SCHEDULE' ? '（取自现有赛程配置）' : condition.configSource === 'MIXED' ? '（现有配置和对话修订）' : ''}`;
+  if (condition.kind === 'DAILY_COUNT')
+    return `每日总场数：${planningCountLabel(condition)}`;
+  if (condition.kind === 'DAYPART_CAPACITY')
+    return `${condition.daypart ? { MORNING: '上午', AFTERNOON: '下午', EVENING: '晚上' }[condition.daypart] : '时段待确认'} ${condition.startTime ?? '时间待确认'}—${condition.endTime ?? '时间待确认'}，${planningCountLabel(condition)}`;
+  if (condition.kind === 'TEAM_WINDOW')
+    return `${condition.teamLabel}：${condition.availability === 'ONLY' ? '只在' : condition.availability === 'BLOCK' ? '不在' : '可在'} ${condition.dates?.join('、')} ${condition.startTime}—${condition.endTime} 安排`;
+  return `${condition.teamLabel} 与 ${condition.opponentLabel}：${condition.matchup === 'PREFER' ? '倾向交手' : '尽量避免交手'}（不新增比赛）`;
+}
 
 function PlanningCard({
   planning,
@@ -73,15 +104,7 @@ function PlanningCard({
       <ol>
         {planning.conditions.map((condition) => (
           <li key={condition.id}>
-            {condition.kind === 'DATE_RANGE'
-              ? `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `（共 ${condition.durationDays} 天）` : ''}；组别：${condition.divisionLabels?.join('、') || '待明确'}${condition.allDivisions ? '（全部组别）' : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}`
-              : condition.kind === 'FORMAT'
-                ? '单循环：每两支参赛球队各交手一次'
-                : condition.kind === 'DAYPART_CAPACITY'
-                  ? `${{ MORNING: '上午', AFTERNOON: '下午', EVENING: '晚上' }[condition.daypart ?? 'MORNING']} ${condition.startTime ?? '时间待补'}—${condition.endTime ?? '时间待补'}，${condition.capacityScope === 'VENUE' ? '每个场地' : condition.capacityScope === 'EVENT' ? '整个赛事' : '统计范围待补'}每天最多 ${condition.maxMatchesPerDay ?? '待补'} 场`
-                  : condition.kind === 'TEAM_WINDOW'
-                    ? `${condition.teamLabel}：${condition.availability === 'ONLY' ? '只在' : condition.availability === 'BLOCK' ? '不在' : '可在'} ${condition.dates?.join('、')} ${condition.startTime}—${condition.endTime} 安排`
-                    : `${condition.teamLabel} 与 ${condition.opponentLabel}：${condition.matchup === 'PREFER' ? '倾向交手' : '尽量避免交手'}（不新增比赛）`}
+            {planningConditionLabel(condition)}
             <small>
               {' '}
               · {condition.priority === 'MUST' ? '必须满足' : '尽量满足'} ·{' '}
@@ -370,9 +393,7 @@ export function ScheduleCard({
       );
       void refreshSchedule(eventId);
     } else if (cause instanceof ApiError && cause.status === 502)
-      setError(
-        '回答超过单次 4000 字上限，本轮未保存；请缩小问题范围或分段提问。',
-      );
+      setError('本次模型回复无法可靠处理，输入已保留；请稍后重试或换种说法。');
     else if (cause instanceof ApiError && cause.status === 429)
       setError('AI额度不足或已暂停，请联系管理员；输入已保留。');
     else if (cause instanceof ApiError && cause.status === 503)

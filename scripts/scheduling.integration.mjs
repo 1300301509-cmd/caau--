@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { schedulingBrowserTest } from './scheduling-browser.integration.mjs';
 import { createApiClient } from '../packages/api-client/dist/index.js';
 import { createTaroTransport } from '../packages/api-client/dist/taro.js';
@@ -321,6 +321,16 @@ export async function schedulingIntegration(t, context) {
         currentEventId: scopedEvent.id,
       });
       const planningId = randomUUID();
+      const participantFingerprint = createHash('sha256')
+        .update(
+          JSON.stringify(
+            roster
+              .filter((team) => team.divisionId === divisions[0].id)
+              .map((team) => [team.id, team.divisionId])
+              .sort(([left], [right]) => left.localeCompare(right)),
+          ),
+        )
+        .digest('hex');
       const conditions = [
         {
           id: randomUUID(),
@@ -337,6 +347,7 @@ export async function schedulingIntegration(t, context) {
           divisionLabels: [divisions[0].name],
           divisionRevisions: { [divisions[0].id]: divisions[0].revision },
           allDivisions: false,
+          participantFingerprint,
         },
         {
           id: randomUUID(),
@@ -346,6 +357,32 @@ export async function schedulingIntegration(t, context) {
           confirmation: 'CONFIRMED',
           sourceTurnIds: [],
           format: 'ROUND_ROBIN',
+        },
+        {
+          id: randomUUID(),
+          kind: 'SCHEDULE_CONFIG',
+          eventId: scopedEvent.id,
+          priority: 'MUST',
+          confirmation: 'CONFIRMED',
+          sourceTurnIds: [],
+          dailyStart: cfg.dailyStart,
+          dailyEnd: cfg.dailyEnd,
+          venues: cfg.venues,
+          durationMinutes: cfg.durationMinutes,
+          bufferMinutes: cfg.bufferMinutes,
+          minRestMinutes: cfg.minRestMinutes,
+          configSource: 'USER',
+        },
+        {
+          id: randomUUID(),
+          kind: 'DAILY_COUNT',
+          eventId: scopedEvent.id,
+          priority: 'MUST',
+          confirmation: 'CONFIRMED',
+          sourceTurnIds: [],
+          maxMatchesPerDay: 6,
+          countMode: 'MAXIMUM',
+          capacityScope: 'EVENT',
         },
         {
           id: randomUUID(),
@@ -3313,6 +3350,16 @@ export async function schedulingIntegration(t, context) {
         first.planningRequest.conditions[0].dateSource,
         'EVENT_SCHEDULE',
       );
+      const inheritedConfig = first.planningRequest.conditions.find(
+        (item) => item.kind === 'SCHEDULE_CONFIG',
+      );
+      assert.equal(inheritedConfig.configSource, 'EVENT_SCHEDULE');
+      assert.equal(inheritedConfig.configRevision, baseline.revision);
+      assert.deepEqual(inheritedConfig.venues, baseline.config.venues);
+      assert.equal(
+        inheritedConfig.durationMinutes,
+        baseline.config.durationMinutes,
+      );
       assert.ok(
         first.planningRequest.pending.some((item) => item.includes('每两支')),
       );
@@ -3349,18 +3396,29 @@ export async function schedulingIntegration(t, context) {
       });
       assert.equal(clarified.status, 'PLAN');
       assert.equal(clarified.pendingQuestion, null);
-      assert.deepEqual(clarified.planningRequest.pending, []);
+      assert.ok(
+        clarified.planningRequest.pending.some((item) =>
+          item.includes('每天比赛场数'),
+        ),
+      );
       assert.equal(
         clarified.planningRequest.conditions.find(
           (item) => item.kind === 'FORMAT',
         ).format,
         'ROUND_ROBIN',
       );
+      const daily = await call('manager', 'POST', route, {
+        message: '每天最多6场，按整个赛事合计',
+        eventId: event.id,
+        planningId: first.planningRequest.id,
+        planningRevision: clarified.planningRequest.revision,
+      });
+      assert.deepEqual(daily.planningRequest.pending, []);
       const confirmed = await call(
         'manager',
         'POST',
         `agent/planning-requests/${first.planningRequest.id}/confirm`,
-        { expectedRevision: clarified.planningRequest.revision },
+        { expectedRevision: daily.planningRequest.revision },
       );
       assert.equal(confirmed.status, 'CONFIRMED');
       const currentTeams = await call(
@@ -3376,6 +3434,58 @@ export async function schedulingIntegration(t, context) {
         startDate: '2027-06-01',
         endDate: '2027-06-10',
       };
+      const changedTeamId = cfg.teamIds[0];
+      const changedTeam = currentTeams.find(
+        (team) => team.id === changedTeamId,
+      );
+      const inactiveTeam = await call(
+        'manager',
+        'PUT',
+        `events/${event.id}/teams/${changedTeamId}`,
+        {
+          expectedRevision: changedTeam.revision,
+          active: false,
+          profile: changedTeam.profile,
+        },
+      );
+      try {
+        const stale = await call(
+          'manager',
+          'GET',
+          `agent/sessions/${session.id}`,
+        );
+        assert.equal(stale.planningRequest.status, 'STALE');
+        assert.ok(
+          stale.planningRequest.issues.some((issue) =>
+            issue.includes('参赛球队'),
+          ),
+        );
+        await call(
+          'manager',
+          'POST',
+          `agent/planning-requests/${first.planningRequest.id}/candidates`,
+          {
+            expectedRevision: confirmed.revision,
+            baselineRevision: baseline.revision,
+            format: 'ROUND_ROBIN',
+            configSource: 'EXPLICIT',
+            config: cfg,
+            fixedMatchIds: [],
+          },
+          409,
+        );
+      } finally {
+        await call(
+          'manager',
+          'PUT',
+          `events/${event.id}/teams/${changedTeamId}`,
+          {
+            expectedRevision: inactiveTeam.revision,
+            active: true,
+            profile: changedTeam.profile,
+          },
+        );
+      }
       const candidate = await call(
         'manager',
         'POST',
@@ -3390,6 +3500,20 @@ export async function schedulingIntegration(t, context) {
         },
       );
       assert.equal(candidate.status, 'FOUND');
+      await call(
+        'manager',
+        'POST',
+        `agent/planning-requests/${first.planningRequest.id}/candidates`,
+        {
+          expectedRevision: confirmed.revision,
+          baselineRevision: baseline.revision,
+          format: 'ROUND_ROBIN',
+          configSource: 'EXPLICIT',
+          config: { ...cfg, durationMinutes: cfg.durationMinutes + 10 },
+          fixedMatchIds: [],
+        },
+        409,
+      );
       assert.equal(
         candidate.matches.length,
         (cfg.teamIds.length * (cfg.teamIds.length - 1)) / 2,

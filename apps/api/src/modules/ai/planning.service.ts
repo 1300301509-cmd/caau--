@@ -1,6 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma } from '@caau/database';
+import type { ScheduleConfigDto } from '../scheduling/scheduling.dto.js';
 import {
   deny,
   eventOperations,
@@ -77,6 +78,22 @@ const weekdaysIn = (message: string) =>
 const periodOf = (conditions: PlanningCondition[]) =>
   conditions.find((item) => item.kind === 'DATE_RANGE');
 const uniqueIds = (ids: string[]) => [...new Set(ids)];
+const participantFingerprint = (
+  teams: { id: string; divisionId: string | null }[],
+  divisionIds: string[],
+) =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(
+        teams
+          .filter(
+            (team) => team.divisionId && divisionIds.includes(team.divisionId),
+          )
+          .map((team) => [team.id, team.divisionId])
+          .sort(([left], [right]) => String(left).localeCompare(String(right))),
+      ),
+    )
+    .digest('hex');
 // A model-supplied hint is not a user's explicit selection merely because a
 // short substring (e.g. "063" in a team name) happens to occur in the message.
 const literalParticipantId = (id: string | undefined, message: string) =>
@@ -177,6 +194,51 @@ export class PlanningService {
         `有 ${inactive.length} 条参赛记录已停用：确认不再代表当前参赛名单，请移除相应要求或联系赛事管理员。`,
       );
     const pending = planningPending(conditions, unresolvedOf(row));
+    if (period?.scheduleGoal) {
+      const activeTeams = await tx.eventTeam.findMany({
+        where: { eventId: row.eventId, active: true },
+        select: { id: true, divisionId: true },
+      });
+      if (
+        row.status === 'CONFIRMED' &&
+        (!period.participantFingerprint ||
+          period.participantFingerprint !==
+            participantFingerprint(activeTeams, period.divisionIds ?? []))
+      )
+        issues.push(
+          '参赛球队或所属组别已变化，请重新核对参赛名单并确认排程需求。',
+        );
+      if (activeTeams.length < 2)
+        pending.push('本赛事当前有效参赛球队不足两支；请先补齐参赛球队。');
+      if (activeTeams.some((team) => !team.divisionId))
+        pending.push('有参赛球队尚未分配竞赛组别；请先完成分组。');
+      if (period.divisionIds?.length) {
+        const counts = period.divisionIds.map(
+          (divisionId) =>
+            activeTeams.filter((team) => team.divisionId === divisionId).length,
+        );
+        if (counts.some((count) => count < 2))
+          pending.push(
+            '所选竞赛组别中有组别少于两支有效球队，无法形成组内对阵。',
+          );
+      }
+      const schedule = conditions.find(
+        (item) => item.kind === 'SCHEDULE_CONFIG',
+      );
+      if (
+        schedule?.configRevision !== undefined &&
+        schedule.configSource !== 'USER'
+      ) {
+        const current = await tx.eventSchedule.findUnique({
+          where: { eventId: row.eventId },
+          select: { revision: true },
+        });
+        if (current?.revision !== schedule.configRevision)
+          issues.push(
+            '所引用的现有赛程配置已变化，请重新核对每日时间、场地和单场时长。',
+          );
+      }
+    }
     const sources = uniqueIds([
       ...conditions.flatMap((condition) => condition.sourceTurnIds),
       ...unresolvedOf(row).flatMap((item) => item.sourceTurnIds),
@@ -241,6 +303,15 @@ export class PlanningService {
       throw new ConflictException(
         'Planning request has missing or conflicting requirements',
       );
+    const period = current.conditions.find(
+      (condition) => condition.kind === 'DATE_RANGE',
+    );
+    const activeTeams = period?.scheduleGoal
+      ? await tx.eventTeam.findMany({
+          where: { eventId: row.eventId, active: true },
+          select: { id: true, divisionId: true },
+        })
+      : [];
     const changed = await tx.agentPlanningRequest.updateMany({
       where: { id, revision: expectedRevision, status: 'COLLECTING' },
       data: {
@@ -250,6 +321,14 @@ export class PlanningService {
           current.conditions.map((condition) => ({
             ...condition,
             confirmation: 'CONFIRMED',
+            ...(condition.kind === 'DATE_RANGE' && condition.scheduleGoal
+              ? {
+                  participantFingerprint: participantFingerprint(
+                    activeTeams,
+                    condition.divisionIds ?? [],
+                  ),
+                }
+              : {}),
           })),
         ),
         updatedAt: new Date(),
@@ -494,10 +573,10 @@ export class PlanningService {
         | undefined;
       const baseline = await tx.eventSchedule.findUnique({
         where: { eventId: chosenId },
-        select: { config: true },
+        select: { config: true, revision: true },
       });
       const currentConfig = baseline?.config as
-        | { startDate?: unknown; endDate?: unknown }
+        | Partial<ScheduleConfigDto>
         | undefined;
       const start =
         explicitDates[0] ??
@@ -547,6 +626,27 @@ export class PlanningService {
           sourceTurnIds: [sourceTurnId],
         }),
       );
+      if (
+        baseline &&
+        currentConfig &&
+        !conditions.some((item) => item.kind === 'SCHEDULE_CONFIG')
+      )
+        conditions.push(
+          newCondition({
+            kind: 'SCHEDULE_CONFIG',
+            eventId: chosenId,
+            priority: 'MUST',
+            dailyStart: currentConfig.dailyStart,
+            dailyEnd: currentConfig.dailyEnd,
+            venues: currentConfig.venues,
+            durationMinutes: currentConfig.durationMinutes,
+            bufferMinutes: currentConfig.bufferMinutes,
+            minRestMinutes: currentConfig.minRestMinutes,
+            configSource: 'EVENT_SCHEDULE',
+            configRevision: baseline.revision,
+            sourceTurnIds: [sourceTurnId],
+          }),
+        );
     }
     if (!wholeRequest && (proposal.allDivisions || proposal.divisionName))
       conditions = conditions.map((condition) =>
@@ -659,7 +759,9 @@ export class PlanningService {
       if (
         changes.length > 1 &&
         change.kind !== 'FORMAT' &&
-        change.kind !== 'DAYPART_CAPACITY'
+        change.kind !== 'DAYPART_CAPACITY' &&
+        change.kind !== 'DAILY_COUNT' &&
+        change.kind !== 'SCHEDULE_CONFIG'
       ) {
         const candidates = clauses.filter((part) => {
           if (change.kind === 'DATE_RANGE')
@@ -769,6 +871,10 @@ export class PlanningService {
         const endTime = change.endTime ?? previous?.endTime;
         const maxMatchesPerDay =
           change.maxMatchesPerDay ?? previous?.maxMatchesPerDay;
+        const countMode =
+          change.countMode ??
+          previous?.countMode ??
+          (previous?.maxMatchesPerDay !== undefined ? 'MAXIMUM' : 'UNRESOLVED');
         const capacityScope = change.capacityScope ?? previous?.capacityScope;
         if (startTime && endTime && startTime >= endTime)
           return answer('CLARIFY', '时段的结束时间必须晚于开始时间。');
@@ -781,7 +887,103 @@ export class PlanningService {
             ...(startTime ? { startTime } : {}),
             ...(endTime ? { endTime } : {}),
             ...(maxMatchesPerDay !== undefined ? { maxMatchesPerDay } : {}),
+            countMode,
             ...(capacityScope ? { capacityScope } : {}),
+            sourceTurnIds: uniqueIds([
+              ...(previous?.sourceTurnIds ?? []),
+              sourceTurnId,
+            ]),
+          }),
+        );
+        continue;
+      }
+      if (change.kind === 'DAILY_COUNT') {
+        const previous = conditions.find((item) => item.kind === 'DAILY_COUNT');
+        conditions = conditions.filter((item) => item.kind !== 'DAILY_COUNT');
+        if (change.operation === 'REMOVE') continue;
+        const maxMatchesPerDay =
+          change.maxMatchesPerDay ?? previous?.maxMatchesPerDay;
+        const countMode =
+          change.countMode ??
+          previous?.countMode ??
+          (previous?.maxMatchesPerDay !== undefined ? 'MAXIMUM' : 'UNRESOLVED');
+        conditions.push(
+          newCondition({
+            kind: 'DAILY_COUNT',
+            eventId: chosenId,
+            priority: 'MUST',
+            ...(maxMatchesPerDay !== undefined ? { maxMatchesPerDay } : {}),
+            countMode,
+            ...((change.capacityScope ?? previous?.capacityScope)
+              ? {
+                  capacityScope:
+                    change.capacityScope ?? previous?.capacityScope,
+                }
+              : {}),
+            sourceTurnIds: uniqueIds([
+              ...(previous?.sourceTurnIds ?? []),
+              sourceTurnId,
+            ]),
+          }),
+        );
+        continue;
+      }
+      if (change.kind === 'SCHEDULE_CONFIG') {
+        const previous = conditions.find(
+          (item) => item.kind === 'SCHEDULE_CONFIG',
+        );
+        conditions = conditions.filter(
+          (item) => item.kind !== 'SCHEDULE_CONFIG',
+        );
+        if (change.operation === 'REMOVE') continue;
+        const venues = change.venues ?? previous?.venues;
+        const dailyStart = change.dailyStart ?? previous?.dailyStart;
+        const dailyEnd = change.dailyEnd ?? previous?.dailyEnd;
+        if (dailyStart && dailyEnd && dailyStart >= dailyEnd)
+          return answer('CLARIFY', '每日比赛结束时间必须晚于开始时间。');
+        const fromExisting =
+          previous?.configSource === 'EVENT_SCHEDULE' ||
+          previous?.configSource === 'MIXED';
+        const fullySpecifiedByUser =
+          change.dailyStart !== undefined &&
+          change.dailyEnd !== undefined &&
+          change.venues !== undefined &&
+          change.durationMinutes !== undefined &&
+          change.bufferMinutes !== undefined &&
+          change.minRestMinutes !== undefined;
+        const stillUsesExisting = fromExisting && !fullySpecifiedByUser;
+        conditions.push(
+          newCondition({
+            kind: 'SCHEDULE_CONFIG',
+            eventId: chosenId,
+            priority: 'MUST',
+            ...(dailyStart ? { dailyStart } : {}),
+            ...(dailyEnd ? { dailyEnd } : {}),
+            ...(venues ? { venues } : {}),
+            ...((change.durationMinutes ?? previous?.durationMinutes) !==
+            undefined
+              ? {
+                  durationMinutes:
+                    change.durationMinutes ?? previous?.durationMinutes,
+                }
+              : {}),
+            ...((change.bufferMinutes ?? previous?.bufferMinutes) !== undefined
+              ? {
+                  bufferMinutes:
+                    change.bufferMinutes ?? previous?.bufferMinutes,
+                }
+              : {}),
+            ...((change.minRestMinutes ?? previous?.minRestMinutes) !==
+            undefined
+              ? {
+                  minRestMinutes:
+                    change.minRestMinutes ?? previous?.minRestMinutes,
+                }
+              : {}),
+            configSource: stillUsesExisting ? 'MIXED' : 'USER',
+            ...(stillUsesExisting
+              ? { configRevision: previous?.configRevision }
+              : {}),
             sourceTurnIds: uniqueIds([
               ...(previous?.sourceTurnIds ?? []),
               sourceTurnId,

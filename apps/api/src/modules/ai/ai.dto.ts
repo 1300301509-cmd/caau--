@@ -202,6 +202,8 @@ export class AgentPlanningConditionDto {
       'MATCHUP',
       'FORMAT',
       'DAYPART_CAPACITY',
+      'DAILY_COUNT',
+      'SCHEDULE_CONFIG',
     ],
   })
   kind!:
@@ -209,7 +211,9 @@ export class AgentPlanningConditionDto {
     | 'TEAM_WINDOW'
     | 'MATCHUP'
     | 'FORMAT'
-    | 'DAYPART_CAPACITY';
+    | 'DAYPART_CAPACITY'
+    | 'DAILY_COUNT'
+    | 'SCHEDULE_CONFIG';
   @ApiProperty() eventId!: string;
   @ApiProperty({ enum: ['MUST', 'PREFER'] }) priority!: 'MUST' | 'PREFER';
   @ApiProperty({ enum: ['PENDING', 'CONFIRMED'] }) confirmation!:
@@ -229,8 +233,20 @@ export class AgentPlanningConditionDto {
   @ApiPropertyOptional({ enum: ['MORNING', 'AFTERNOON', 'EVENING'] })
   daypart?: 'MORNING' | 'AFTERNOON' | 'EVENING';
   @ApiPropertyOptional() maxMatchesPerDay?: number;
+  @ApiPropertyOptional({ enum: ['EXACT', 'MAXIMUM', 'UNRESOLVED'] })
+  countMode?: 'EXACT' | 'MAXIMUM' | 'UNRESOLVED';
   @ApiPropertyOptional({ enum: ['EVENT', 'VENUE'] })
   capacityScope?: 'EVENT' | 'VENUE';
+  @ApiPropertyOptional() dailyStart?: string;
+  @ApiPropertyOptional() dailyEnd?: string;
+  @ApiPropertyOptional({ type: [String] }) venues?: string[];
+  @ApiPropertyOptional() durationMinutes?: number;
+  @ApiPropertyOptional() bufferMinutes?: number;
+  @ApiPropertyOptional() minRestMinutes?: number;
+  @ApiPropertyOptional({ enum: ['USER', 'EVENT_SCHEDULE', 'MIXED'] })
+  configSource?: 'USER' | 'EVENT_SCHEDULE' | 'MIXED';
+  @ApiPropertyOptional() configRevision?: number;
+  @ApiPropertyOptional() participantFingerprint?: string;
   @ApiPropertyOptional() teamId?: string;
   @ApiPropertyOptional() teamLabel?: string;
   @ApiPropertyOptional() opponentId?: string;

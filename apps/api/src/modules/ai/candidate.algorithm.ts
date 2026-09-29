@@ -10,7 +10,7 @@ import {
   validateSchedule,
   type ScheduleTeam,
 } from '../scheduling/scheduling.algorithm.js';
-import type { PlanningCondition } from './planning.js';
+import { periodDates, type PlanningCondition } from './planning.js';
 
 type Team = ScheduleTeam;
 type Slot = { time: number; startAt: string; venue: string };
@@ -42,6 +42,10 @@ const capacityConditions = (conditions: PlanningCondition[]) =>
   conditions.filter(
     (item) => item.kind === 'DAYPART_CAPACITY' && item.priority === 'MUST',
   );
+const dailyCount = (conditions: PlanningCondition[]) =>
+  conditions.find(
+    (item) => item.kind === 'DAILY_COUNT' && item.priority === 'MUST',
+  );
 const completeDayparts = (conditions: PlanningCondition[]) =>
   new Set(capacityConditions(conditions).map((item) => item.daypart)).size ===
   3;
@@ -65,6 +69,23 @@ function capacityAllowed(
   used: ScheduleMatchDto[],
 ) {
   const capacities = capacityConditions(conditions);
+  const daily = dailyCount(conditions);
+  if (daily) {
+    if (daily.maxMatchesPerDay === undefined || !daily.capacityScope)
+      return false;
+    const day = dayOf(slot);
+    const count = used.filter(
+      (match) =>
+        !!match.startAt &&
+        dayOf({
+          time: Date.parse(match.startAt),
+          startAt: match.startAt,
+          venue: match.venue,
+        }) === day &&
+        (daily.capacityScope === 'EVENT' || match.venue === slot.venue),
+    ).length;
+    if (count >= daily.maxMatchesPerDay) return false;
+  }
   // A complete three-part daily plan cannot spill matches into gaps between
   // its windows. A partial limit constrains its named window only.
   if (
@@ -100,6 +121,49 @@ function capacityAllowed(
     }).length;
     return count < condition.maxMatchesPerDay;
   });
+}
+function exactCountIssues(
+  config: ScheduleConfigDto,
+  matches: ScheduleMatchDto[],
+  conditions: PlanningCondition[],
+): ScheduleIssueDto[] {
+  const exact = conditions.filter(
+    (item) =>
+      (item.kind === 'DAYPART_CAPACITY' || item.kind === 'DAILY_COUNT') &&
+      item.priority === 'MUST' &&
+      item.countMode === 'EXACT',
+  );
+  if (!exact.length) return [];
+  const dates = periodDates(config.startDate, config.endDate) ?? [];
+  const issues: ScheduleIssueDto[] = [];
+  for (const condition of exact) {
+    for (const date of dates) {
+      const venues =
+        condition.capacityScope === 'VENUE' ? config.venues : [null];
+      for (const venue of venues) {
+        const count = matches.filter((match) => {
+          if (!match.startAt || (venue && match.venue !== venue)) return false;
+          const slot = {
+            time: Date.parse(match.startAt),
+            startAt: match.startAt,
+            venue: match.venue,
+          };
+          return (
+            dayOf(slot) === date &&
+            (condition.kind === 'DAILY_COUNT' ||
+              inDaypart(slot, config, condition))
+          );
+        }).length;
+        if (count !== condition.maxMatchesPerDay)
+          issues.push({
+            code: 'DAILY_EXACT_COUNT',
+            message: `${date}${venue ? ` ${venue}` : ''}${condition.kind === 'DAILY_COUNT' ? '全天' : `${condition.daypart === 'MORNING' ? '上午' : condition.daypart === 'AFTERNOON' ? '下午' : '晚上'}`}要求恰好 ${condition.maxMatchesPerDay} 场，当前为 ${count} 场。`,
+            matchIds: [],
+          });
+      }
+    }
+  }
+  return issues;
 }
 function windowContains(
   slot: Slot,
@@ -260,6 +324,7 @@ export function auditCandidate(
       );
     capacityMatches.push(match);
   }
+  issues.push(...exactCountIssues(config, matches, conditions));
   for (let i = 0; i < matches.length; i++)
     for (const other of matches.slice(i + 1)) {
       const match = matches[i]!;
@@ -380,6 +445,63 @@ export function calculateCandidate(
       ],
       0,
     );
+  const exactDayparts = capacityConditions(conditions).filter(
+    (item) => item.countMode === 'EXACT',
+  );
+  const exactDaily = dailyCount(conditions);
+  const days = periodDates(config.startDate, config.endDate)?.length ?? 0;
+  const countAcrossEvent = (item: PlanningCondition) =>
+    (item.maxMatchesPerDay ?? 0) *
+    (item.capacityScope === 'VENUE' ? config.venues.length : 1);
+  const exactDaypartsPerDay = exactDayparts.reduce(
+    (sum, item) => sum + countAcrossEvent(item),
+    0,
+  );
+  const dailyLimit = exactDaily && countAcrossEvent(exactDaily);
+  const completeDaypartLimit = completeDayparts(conditions)
+    ? capacityConditions(conditions).reduce(
+        (sum, item) => sum + countAcrossEvent(item),
+        0,
+      )
+    : null;
+  if (
+    exactDaily &&
+    dailyLimit !== undefined &&
+    (exactDaypartsPerDay > dailyLimit ||
+      (exactDaily.countMode === 'EXACT' &&
+        completeDaypartLimit !== null &&
+        dailyLimit > completeDaypartLimit))
+  )
+    return empty(
+      'PROVEN_CONFLICT',
+      [
+        {
+          code: 'DAILY_EXACT_COUNT',
+          message: '每日总场数与分时段场数相互冲突，条件必然无法同时满足。',
+          matchIds: [],
+        },
+      ],
+      0,
+    );
+  const requiredDaypartMatches = days * exactDaypartsPerDay;
+  const requiredDailyMatches =
+    exactDaily?.countMode === 'EXACT' ? days * countAcrossEvent(exactDaily) : 0;
+  if (
+    requiredDaypartMatches > matches.length ||
+    requiredDailyMatches > matches.length
+  )
+    return empty(
+      'PROVEN_CONFLICT',
+      [
+        {
+          code: 'DAILY_EXACT_COUNT',
+          message:
+            '逐日必须安排的场数超过所选组别单循环的总场次，条件必然冲突。',
+          matchIds: [],
+        },
+      ],
+      0,
+    );
   if (available.length < matches.length)
     return empty(
       'PROVEN_CONFLICT',
@@ -415,7 +537,10 @@ export function calculateCandidate(
       fixed,
       conditions,
       fixed,
-    ).filter((issue) => issue.code !== 'FORMAT_COUNT');
+    ).filter(
+      (issue) =>
+        issue.code !== 'FORMAT_COUNT' && issue.code !== 'DAILY_EXACT_COUNT',
+    );
     if (issues.length) return empty('PROVEN_CONFLICT', issues, 0);
   }
   const ordered = [...generated].sort(
@@ -454,7 +579,8 @@ export function calculateCandidate(
       limited = true;
       return false;
     }
-    if (index === ordered.length) return true;
+    if (index === ordered.length)
+      return exactCountIssues(config, used, conditions).length === 0;
     const match = ordered[index]!;
     if (match.startAt) {
       const slot = {

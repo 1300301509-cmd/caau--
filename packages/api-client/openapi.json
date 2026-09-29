@@ -707,12 +707,32 @@
             "enum": ["AVAILABLE", "ONLY", "BLOCK"],
             "type": "string"
           },
+          "bufferMinutes": {
+            "type": "number"
+          },
           "capacityScope": {
             "enum": ["EVENT", "VENUE"],
             "type": "string"
           },
+          "configRevision": {
+            "type": "number"
+          },
+          "configSource": {
+            "enum": ["USER", "EVENT_SCHEDULE", "MIXED"],
+            "type": "string"
+          },
           "confirmation": {
             "enum": ["PENDING", "CONFIRMED"],
+            "type": "string"
+          },
+          "countMode": {
+            "enum": ["EXACT", "MAXIMUM", "UNRESOLVED"],
+            "type": "string"
+          },
+          "dailyEnd": {
+            "type": "string"
+          },
+          "dailyStart": {
             "type": "string"
           },
           "dateSource": {
@@ -744,6 +764,9 @@
           "durationDays": {
             "type": "number"
           },
+          "durationMinutes": {
+            "type": "number"
+          },
           "endTime": {
             "type": "string"
           },
@@ -766,7 +789,9 @@
               "TEAM_WINDOW",
               "MATCHUP",
               "FORMAT",
-              "DAYPART_CAPACITY"
+              "DAYPART_CAPACITY",
+              "DAILY_COUNT",
+              "SCHEDULE_CONFIG"
             ],
             "type": "string"
           },
@@ -777,10 +802,16 @@
           "maxMatchesPerDay": {
             "type": "number"
           },
+          "minRestMinutes": {
+            "type": "number"
+          },
           "opponentId": {
             "type": "string"
           },
           "opponentLabel": {
+            "type": "string"
+          },
+          "participantFingerprint": {
             "type": "string"
           },
           "priority": {
@@ -807,6 +838,12 @@
           },
           "to": {
             "type": "string"
+          },
+          "venues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "weekdays": {
             "items": {

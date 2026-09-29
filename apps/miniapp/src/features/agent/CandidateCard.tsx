@@ -10,6 +10,44 @@ type Schedule = S['ScheduleViewDto'];
 type Config = S['ScheduleConfigDto'];
 type Candidate = S['AgentScheduleCandidateViewDto'];
 type SaveTicket = S['AgentCandidateSaveTicketDto'];
+
+function confirmedConfig(planning: Planning, schedule?: Schedule) {
+  const period = planning.conditions.find((item) => item.kind === 'DATE_RANGE');
+  const requested = planning.conditions.find(
+    (item) => item.kind === 'SCHEDULE_CONFIG',
+  );
+  const values: Partial<Config> = {
+    ...(schedule?.exists ? schedule.config : {}),
+    ...(period?.from ? { startDate: period.from } : {}),
+    ...(period?.to ? { endDate: period.to } : {}),
+    ...(requested?.dailyStart ? { dailyStart: requested.dailyStart } : {}),
+    ...(requested?.dailyEnd ? { dailyEnd: requested.dailyEnd } : {}),
+    ...(requested?.venues ? { venues: requested.venues } : {}),
+    ...(requested?.durationMinutes !== undefined
+      ? { durationMinutes: requested.durationMinutes }
+      : {}),
+    ...(requested?.bufferMinutes !== undefined
+      ? { bufferMinutes: requested.bufferMinutes }
+      : {}),
+    ...(requested?.minRestMinutes !== undefined
+      ? { minRestMinutes: requested.minRestMinutes }
+      : {}),
+  };
+  const matchesBaseline =
+    !!schedule?.exists &&
+    schedule.config.startDate === period?.from &&
+    schedule.config.endDate === period?.to &&
+    (!requested ||
+      (schedule.config.dailyStart === requested.dailyStart &&
+        schedule.config.dailyEnd === requested.dailyEnd &&
+        JSON.stringify(schedule.config.venues) ===
+          JSON.stringify(requested.venues) &&
+        schedule.config.durationMinutes === requested.durationMinutes &&
+        schedule.config.bufferMinutes === requested.bufferMinutes &&
+        schedule.config.minRestMinutes === requested.minRestMinutes));
+  return { values, matchesBaseline };
+}
+
 export function CandidateCard({
   planning,
   schedule,
@@ -41,23 +79,15 @@ export function CandidateCard({
     const period = planning.conditions.find(
       (item) => item.kind === 'DATE_RANGE',
     );
-    const from = period?.from;
-    const to = period?.to;
-    const sameDates =
-      schedule?.exists &&
-      schedule.config.startDate === from &&
-      schedule.config.endDate === to;
+    const prefill = confirmedConfig(planning, schedule);
     setCandidate(null);
     setTicket(null);
     setError('');
     setTeams([]);
     setFixed([]);
     setAck(false);
-    setConfig({
-      ...(schedule?.exists ? schedule.config : {}),
-      ...(from && to ? { startDate: from, endDate: to } : {}),
-    });
-    setSource(sameDates ? 'EVENT_SCHEDULE' : 'EXPLICIT');
+    setConfig(prefill.values);
+    setSource(prefill.matchesBaseline ? 'EVENT_SCHEDULE' : 'EXPLICIT');
     if (planning.status === 'CONFIRMED') {
       void client
         .request('getLatestAgentScheduleCandidate', {
@@ -91,13 +121,21 @@ export function CandidateCard({
             if (
               period?.scheduleGoal &&
               planning.conditions.some((item) => item.kind === 'FORMAT')
-            )
+            ) {
+              const teamIds = items
+                .filter((item) => item.active)
+                .map((item) => item.id);
               setConfig((current) => ({
                 ...current,
-                teamIds: items
-                  .filter((item) => item.active)
-                  .map((item) => item.id),
+                teamIds,
               }));
+              if (
+                prefill.matchesBaseline &&
+                JSON.stringify(schedule?.config.teamIds) !==
+                  JSON.stringify(teamIds)
+              )
+                setSource('EXPLICIT');
+            }
           }
         })
         .catch((cause) => {
@@ -141,6 +179,11 @@ export function CandidateCard({
     };
   }, [candidate?.id, planning.id, token]);
   if (planning.status !== 'CONFIRMED') return null;
+  const baselineMatchesRequirements =
+    confirmedConfig(planning, schedule).matchesBaseline &&
+    (!teams.length ||
+      JSON.stringify(schedule?.config.teamIds) ===
+        JSON.stringify(teams.map((team) => team.id)));
   const restoreTicket = async (item: Candidate) => {
     try {
       const next = await client.request(
@@ -292,15 +335,15 @@ export function CandidateCard({
         配置来源：
         {source === 'EVENT_SCHEDULE'
           ? '当前赛程'
-          : '本次逐项核对/修改（未改字段可能预填自现有配置）'}
+          : '已确认需求和本次逐项核对（未改字段可能预填自现有配置）'}
         。不支持淘汰赛候选或自动填充业务缺省。
       </Text>
       {planning.conditions.some((item) => item.scheduleGoal) && (
         <Text className="competition-note">
-          已带入确认的日期与全部当前参赛球队。请核对每日时段、场地、比赛时长、缓冲及休息时间；缺项需补齐后计算。
+          已带入确认的日期、每日比赛时间、场地、单场时长及全部当前参赛球队。请核对缓冲和休息时间；缺项需补齐后计算。
         </Text>
       )}
-      {schedule?.exists && (
+      {baselineMatchesRequirements && schedule?.exists && (
         <Action
           disabled={busy}
           onClick={() => {

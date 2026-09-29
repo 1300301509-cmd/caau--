@@ -301,3 +301,102 @@ test('one-division candidate keeps every other division match unchanged and audi
     ),
   );
 });
+
+test('exact daily counts are enforced in search and checked independently across every date', () => {
+  const twoDays = {
+    ...config,
+    startDate: '2027-06-01',
+    endDate: '2027-06-02',
+  };
+  const daily = {
+    id: 'daily-three',
+    kind: 'DAILY_COUNT',
+    eventId: 'e',
+    priority: 'MUST',
+    confirmation: 'CONFIRMED',
+    sourceTurnIds: ['source'],
+    maxMatchesPerDay: 3,
+    countMode: 'EXACT',
+    capacityScope: 'EVENT',
+  };
+  const result = calculateCandidate(twoDays, teams, [daily], [], []);
+  assert.equal(result.outcome, 'FOUND');
+  assert.equal(result.matches.length, 6);
+  assert.deepEqual(
+    auditCandidate(twoDays, teams, result.matches, [daily], []),
+    [],
+  );
+  const moved = result.matches.map((match) => ({ ...match }));
+  const firstDay = moved.find((match) =>
+    match.startAt.startsWith('2027-06-01'),
+  );
+  const secondDay = moved.find((match) =>
+    match.startAt.startsWith('2027-06-02'),
+  );
+  assert.ok(firstDay && secondDay);
+  secondDay.startAt = firstDay.startAt;
+  secondDay.venue = firstDay.venue === '北场' ? '南场' : '北场';
+  assert.ok(
+    auditCandidate(twoDays, teams, moved, [daily], []).some(
+      (issue) => issue.code === 'DAILY_EXACT_COUNT',
+    ),
+  );
+  const impossible = calculateCandidate(
+    twoDays,
+    teams,
+    [
+      {
+        ...daily,
+        id: 'morning',
+        kind: 'DAYPART_CAPACITY',
+        daypart: 'MORNING',
+        startTime: '09:00',
+        endTime: '12:00',
+        maxMatchesPerDay: 2,
+      },
+      {
+        ...daily,
+        id: 'afternoon',
+        kind: 'DAYPART_CAPACITY',
+        daypart: 'AFTERNOON',
+        startTime: '12:00',
+        endTime: '16:00',
+        maxMatchesPerDay: 2,
+      },
+    ],
+    [],
+    [],
+  );
+  assert.equal(impossible.outcome, 'PROVEN_CONFLICT');
+  assert.ok(
+    impossible.issues.some((issue) => issue.code === 'DAILY_EXACT_COUNT'),
+  );
+  const contradictoryCounts = calculateCandidate(
+    twoDays,
+    teams,
+    [
+      { ...daily, maxMatchesPerDay: 2 },
+      ...[
+        ['MORNING', '09:00', '11:00'],
+        ['AFTERNOON', '11:00', '13:00'],
+        ['EVENING', '13:00', '16:00'],
+      ].map(([daypart, startTime, endTime]) => ({
+        ...daily,
+        id: daypart,
+        kind: 'DAYPART_CAPACITY',
+        daypart,
+        startTime,
+        endTime,
+        maxMatchesPerDay: 1,
+      })),
+    ],
+    [],
+    [],
+  );
+  assert.equal(contradictoryCounts.outcome, 'PROVEN_CONFLICT');
+  assert.ok(
+    contradictoryCounts.issues.some(
+      (issue) => issue.code === 'DAILY_EXACT_COUNT',
+    ),
+  );
+});

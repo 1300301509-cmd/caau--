@@ -768,6 +768,22 @@ export class CandidateService {
           throw new ConflictException(
             'Confirmed MUST date range and candidate configuration differ; clarify before calculation',
           );
+        const requestedConfig = conditions.find(
+          (condition) => condition.kind === 'SCHEDULE_CONFIG',
+        );
+        if (
+          requestedConfig &&
+          (requestedConfig.dailyStart !== config.dailyStart ||
+            requestedConfig.dailyEnd !== config.dailyEnd ||
+            JSON.stringify(requestedConfig.venues) !==
+              JSON.stringify(config.venues) ||
+            requestedConfig.durationMinutes !== config.durationMinutes ||
+            requestedConfig.bufferMinutes !== config.bufferMinutes ||
+            requestedConfig.minRestMinutes !== config.minRestMinutes)
+        )
+          throw new ConflictException(
+            'Confirmed daily times, venues, match duration or rest requirements differ from candidate configuration; clarify before calculation',
+          );
         if (!period.divisionIds?.length)
           throw new ConflictException(
             'Confirm competition divisions before calculating a schedule',

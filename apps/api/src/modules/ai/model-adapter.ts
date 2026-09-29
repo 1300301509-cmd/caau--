@@ -13,8 +13,7 @@ import {
 } from './schedule-planning.skill.js';
 import { teamTrainingSkill } from './team-training.skill.js';
 import {
-  planningProposalSchema,
-  legacyPlanningProposalSchema,
+  qwenPlanningProposalSchema,
   type PlanningProposal,
   parseUserDates,
   isWholeScheduleRequest,
@@ -441,6 +440,8 @@ export class RuleAgentModelAdapter implements AgentModelAdapter {
       return 'CONFIRM';
     if (isWholeScheduleRequest(value)) return 'PLAN';
     if (context.planning && explicitRoundRobin(value)) return 'PLAN';
+    if (context.planning && /每天(?:最多|恰好|必须)\d{1,2}场/.test(value))
+      return 'PLAN';
     if (
       context.planning?.pending.some((item) =>
         /日期范围|起始日期/.test(item),
@@ -604,6 +605,22 @@ export class RuleAgentModelAdapter implements AgentModelAdapter {
     message: string,
     context?: ConversationContext,
   ): Promise<PlanningProposal> {
+    // The deterministic test adapter supplies explicit fixtures; production
+    // intent extraction uses Qwen's structured tool call below.
+    const dailyCount = /每天(?:最多|恰好|必须)(\d{1,2})场/.exec(message);
+    if (dailyCount)
+      return {
+        goal: 'UPDATE_REQUIREMENTS',
+        changes: [
+          {
+            operation: 'ADD',
+            kind: 'DAILY_COUNT',
+            maxMatchesPerDay: Number(dailyCount[1]),
+            countMode: message.includes('最多') ? 'MAXIMUM' : 'EXACT',
+            capacityScope: message.includes('每个场地') ? 'VENUE' : 'EVENT',
+          },
+        ],
+      };
     if (
       context?.planning?.pending.some((item) =>
         /日期范围|起始日期/.test(item),
@@ -956,7 +973,6 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
   private readonly queryModel;
   private readonly planningModel;
   private readonly teamModel;
-  private readonly legacyPlanningModel;
   private lastConnectionTest: AgentModelConnectionResult = {
     status: 'NOT_TESTED',
     testedAt: null,
@@ -998,9 +1014,13 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
       includeRaw: true,
     });
     this.planningModel = this.rawModel.withStructuredOutput(
-      planningProposalSchema,
+      qwenPlanningProposalSchema,
       {
         name: 'caau_planning_requirement_proposal',
+        // qwen-plus supports forced function calls. LangChain's inferred
+        // default for this model is JSON Schema, which the provider does not
+        // guarantee for qwen-plus.
+        method: 'functionCalling',
         includeRaw: true,
       },
     );
@@ -1008,13 +1028,6 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
       name: 'caau_team_creation_proposal',
       includeRaw: true,
     });
-    this.legacyPlanningModel = this.rawModel.withStructuredOutput(
-      legacyPlanningProposalSchema,
-      {
-        name: 'caau_team_schedule_requirement_proposal',
-        includeRaw: true,
-      },
-    );
   }
   private async measured<T>(
     phase: ModelPhase,
@@ -1042,17 +1055,20 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
         captureFailure('invalid_output');
         throw new BadGatewayException('Agent answer exceeds limit');
       }
-      captureFailure(modelFailureMetadata(error).category);
+      const failure = modelFailureMetadata(error);
+      captureFailure(failure.category);
       console.info(
         'CAAU agent model',
         JSON.stringify({
           phase,
           outcome: 'failure',
           elapsedMs: Math.round(performance.now() - started),
-          ...modelFailureMetadata(error),
+          ...failure,
           tokens: null,
         }),
       );
+      if (error instanceof InvalidModelOutput)
+        throw new BadGatewayException('Agent model response invalid');
       throw agentModelUnavailable();
     }
   }
@@ -1130,7 +1146,14 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
                 'startTime',
                 'endTime',
                 'maxMatchesPerDay',
+                'countMode',
                 'capacityScope',
+                'dailyStart',
+                'dailyEnd',
+                'venues',
+                'durationMinutes',
+                'bufferMinutes',
+                'minRestMinutes',
                 'format',
                 'teamLabel',
                 'opponentLabel',
@@ -1149,85 +1172,35 @@ export class QwenAgentModelAdapter implements AgentModelAdapter {
           pending: context.planning.pending,
         }
       : null;
-    if (!currentRequirements)
-      return this.measured('planning', async () => {
-        const raw = await this.rawModel.invoke([
-          {
-            role: 'system',
-            content: `仅输出一个合法 JSON 对象，不加解释或代码块。对象字段：goal=WHOLE_SCHEDULE 或 UPDATE_REQUIREMENTS；changes 为数组；用户明确指定竞赛组别时可另填 divisionName，明确选择全部组别时可填 allDivisions=true。仅有 DATE_RANGE、FORMAT、TEAM_WINDOW、MATCHUP、DAYPART_CAPACITY 五种 kind。DATE_RANGE 使用 operation=ADD，并仅填写本轮明确的 from/to 或 durationDays；FORMAT 只在用户明确要求每两队各交手一次时使用 format=ROUND_ROBIN。未说出的字段省略。${context.skills?.SCHEDULE_PLANNING?.instructions ?? schedulePlanningOpeningSkill}`,
-          },
-          { role: 'user', content: message },
-        ]);
-        const content = typeof raw.content === 'string' ? raw.content : '';
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(content);
-        } catch {
-          throw new InvalidModelOutput();
-        }
-        const validated = planningProposalSchema.safeParse(parsed);
-        if (!validated.success) throw new InvalidModelOutput();
-        return { value: validated.data, raw };
-      });
-    if (
-      currentRequirements &&
-      !currentRequirements.conditions.some(
-        (item) => item.kind === 'DAYPART_CAPACITY' || item.scheduleGoal,
-      )
-    )
-      return this.measured('planning', async () => {
-        const result = await this.legacyPlanningModel.invoke([
-          {
-            role: 'system',
-            content: `只提取本轮用户明确新增、替换或撤销的排程需求候选条件，绝不确认、生成或覆盖赛程。返回 changes；没有具体条件返回空数组。用户明确指定竞赛组别时另填顶层 divisionName，明确选择全部组别时填 allDivisions=true；没有说明不猜。每两队交手一次仅在同一组别内解释。kind=DATE_RANGE(赛事计划日期范围)、TEAM_WINDOW(赛事参赛球队 ONLY=只能在指定日期安排，AVAILABLE=所述时段可安排不代表其它日期不可安排，BLOCK=所述时段不可安排)、MATCHUP(两支参赛球队 PREFER=倾向交手，AVOID=尽量避免交手)。不要因为“优先对阵”猜测对手、赛制或增加比赛，未知字段留空交由服务端澄清。operation ADD/REPLACE/REMOVE，改成周三和周五表示替换同一球队旧时段，不是叠加；取消球队时间限制表示移除旧要求。日期只能来自用户本轮明确年份的日期，不要自行给“周三”指定年份；weekdays 为星期一=1 至星期日=7，时刻使用24小时 HH:mm。priority MUST=只能/必须/不可，PREFER=尽量/希望。不得猜测 teamId/eventId，优先使用用户原文球队名；当前已授权需求摘要仅帮助“改成/取消”指代：${JSON.stringify(currentRequirements)}。${context.skills?.SCHEDULE_PLANNING?.instructions ?? ''}`,
-          },
-          { role: 'user', content: message },
-        ]);
-        captureUsage(result.raw);
-        if (!result.parsed) throw new InvalidModelOutput();
-        return {
-          value: {
-            goal: 'UPDATE_REQUIREMENTS' as const,
-            changes: result.parsed.changes,
-          },
-          raw: result.raw,
-        };
-      });
-    if (
-      currentRequirements?.conditions.some(
-        (item) => item.kind === 'DAYPART_CAPACITY',
-      )
-    )
-      return this.measured('planning', async () => {
-        const raw = await this.rawModel.invoke([
-          {
-            role: 'system',
-            content: `仅输出一个合法 JSON 对象，不加解释或代码块。字段 goal 固定为 UPDATE_REQUIREMENTS；changes 是数组。每条修改使用 operation=REPLACE、kind=DAYPART_CAPACITY、daypart=MORNING/AFTERNOON/EVENING，补充 startTime、endTime、maxMatchesPerDay 或 capacityScope=EVENT/VENUE；未变化字段可以省略，由服务端合并。若用户还提出其它要求，也须分别提取为 DATE_RANGE、FORMAT、TEAM_WINDOW 或 MATCHUP；无法表示的要求放入 unhandled，不能忽略。当前条件：${JSON.stringify(currentRequirements)}。${context.skills?.SCHEDULE_PLANNING?.instructions ?? ''}`,
-          },
-          { role: 'user', content: message },
-        ]);
-        const content = typeof raw.content === 'string' ? raw.content : '';
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(content);
-        } catch {
-          throw new InvalidModelOutput();
-        }
-        const validated = planningProposalSchema.safeParse(parsed);
-        if (!validated.success) throw new InvalidModelOutput();
-        return { value: validated.data, raw };
-      });
     return this.measured('planning', async () => {
       const result = await this.planningModel.invoke([
         {
           role: 'system',
-          content: `${context.skills?.SCHEDULE_PLANNING?.instructions ?? (context.planning ? schedulePlanningSkill : schedulePlanningOpeningSkill)}${currentRequirements ? `\n当前已授权条件：${JSON.stringify(currentRequirements)}。` : ''}`,
+          content: [
+            '只提议本轮用户明确表达的排程条件；不得确认、生成、保存或发布赛程。始终返回符合工具结构的 goal 和 changes；没有可表达的条件则返回空 changes。只有独立且结构完全无法表达的约束才放入 unhandled；不确定的对阵规则和缺失字段由服务端待补流程追问，不要放入 unhandled。缺失值留空。',
+            currentRequirements
+              ? '已有需求单时 goal=UPDATE_REQUIREMENTS。后续补充或修订条件用 REPLACE，未变字段可省略，由服务端合并；不得丢弃已有条件。'
+              : '新需求单中，用户明确要求编排整套赛程才使用 goal=WHOLE_SCHEDULE；仅提供条件或要求收集需求时使用 UPDATE_REQUIREMENTS。',
+            schedulePlanningSkill,
+            currentRequirements ? '' : schedulePlanningOpeningSkill,
+            '语义反例：用户说“所有队伍都比过一场”，只表示每队至少参赛一次，不表示每两队都交手；提案不得包含 FORMAT=ROUND_ROBIN。用户说“每两支参赛队伍各交手一次”才提出 FORMAT=ROUND_ROBIN。前一种说法由服务端追问赛制，不放入 unhandled。',
+            context.skills?.SCHEDULE_PLANNING
+              ? `可编辑排程 Skill v${context.skills.SCHEDULE_PLANNING.version}：${context.skills.SCHEDULE_PLANNING.instructions}。以上固定产品规则和工具结构仍须遵守。`
+              : '',
+            currentRequirements
+              ? `当前已授权需求摘要仅用于理解本轮指代：${JSON.stringify(currentRequirements)}。`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
         },
         { role: 'user', content: message },
       ]);
       captureUsage(result.raw);
       if (!result.parsed) throw new InvalidModelOutput();
-      return { value: result.parsed, raw: result.raw };
+      const validated = qwenPlanningProposalSchema.safeParse(result.parsed);
+      if (!validated.success) throw new InvalidModelOutput();
+      return { value: validated.data, raw: result.raw };
     });
   }
   async planTeam(

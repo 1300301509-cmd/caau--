@@ -11,6 +11,8 @@ export const planningChangeSchema = z.object({
     'MATCHUP',
     'FORMAT',
     'DAYPART_CAPACITY',
+    'DAILY_COUNT',
+    'SCHEDULE_CONFIG',
   ]),
   eventName: z.string().max(120).optional(),
   teamName: z
@@ -41,7 +43,14 @@ export const planningChangeSchema = z.object({
     .describe('仅 DAYPART_CAPACITY 使用；球队只能周三不是一天中的时段')
     .optional(),
   maxMatchesPerDay: z.number().int().min(0).max(66).optional(),
+  countMode: z.enum(['EXACT', 'MAXIMUM', 'UNRESOLVED']).optional(),
   capacityScope: z.enum(['EVENT', 'VENUE']).optional(),
+  dailyStart: clock.optional(),
+  dailyEnd: clock.optional(),
+  venues: z.array(z.string().trim().min(1).max(80)).min(1).max(12).optional(),
+  durationMinutes: z.number().int().min(10).max(240).optional(),
+  bufferMinutes: z.number().int().min(0).max(120).optional(),
+  minRestMinutes: z.number().int().min(0).max(1440).optional(),
   dates: z
     .array(date)
     .max(31)
@@ -77,11 +86,25 @@ export const planningProposalSchema = z.object({
   changes: z.array(planningChangeSchema).max(8),
   unhandled: z.array(z.string().max(160)).max(4).optional(),
 });
+export const qwenPlanningProposalSchema = planningProposalSchema.required({
+  goal: true,
+});
 export const legacyPlanningProposalSchema = z.object({
   changes: z
     .array(
       planningChangeSchema
-        .omit({ daypart: true, maxMatchesPerDay: true, capacityScope: true })
+        .omit({
+          daypart: true,
+          maxMatchesPerDay: true,
+          countMode: true,
+          capacityScope: true,
+          dailyStart: true,
+          dailyEnd: true,
+          venues: true,
+          durationMinutes: true,
+          bufferMinutes: true,
+          minRestMinutes: true,
+        })
         .extend({
           kind: z.enum(['DATE_RANGE', 'TEAM_WINDOW', 'MATCHUP', 'FORMAT']),
         }),
@@ -109,7 +132,17 @@ export type PlanningCondition = {
   format?: 'ROUND_ROBIN';
   daypart?: 'MORNING' | 'AFTERNOON' | 'EVENING';
   maxMatchesPerDay?: number;
+  countMode?: 'EXACT' | 'MAXIMUM' | 'UNRESOLVED';
   capacityScope?: 'EVENT' | 'VENUE';
+  dailyStart?: string;
+  dailyEnd?: string;
+  venues?: string[];
+  durationMinutes?: number;
+  bufferMinutes?: number;
+  minRestMinutes?: number;
+  configSource?: 'USER' | 'EVENT_SCHEDULE' | 'MIXED';
+  configRevision?: number;
+  participantFingerprint?: string;
   teamId?: string;
   teamLabel?: string;
   opponentId?: string;
@@ -208,6 +241,13 @@ export function expandDays(
 }
 export function planningIssues(conditions: PlanningCondition[]) {
   const issues: string[] = [];
+  const schedule = conditions.find((item) => item.kind === 'SCHEDULE_CONFIG');
+  if (
+    schedule?.dailyStart &&
+    schedule.dailyEnd &&
+    schedule.dailyStart >= schedule.dailyEnd
+  )
+    issues.push('每日比赛的结束时间必须晚于开始时间。');
   const capacities = conditions.filter(
     (item) => item.kind === 'DAYPART_CAPACITY',
   );
@@ -219,6 +259,17 @@ export function planningIssues(conditions: PlanningCondition[]) {
     )
       issues.push(
         `${daypartLabel(condition.daypart)}的开始时间必须早于结束时间。`,
+      );
+    if (
+      schedule?.dailyStart &&
+      schedule.dailyEnd &&
+      condition.startTime &&
+      condition.endTime &&
+      (condition.startTime < schedule.dailyStart ||
+        condition.endTime > schedule.dailyEnd)
+    )
+      issues.push(
+        `${daypartLabel(condition.daypart)}时段须落在每日比赛时间内；请修订时段或每日比赛时间。`,
       );
     for (const other of capacities) {
       if (other.id === condition.id || other.id < condition.id) continue;
@@ -326,6 +377,20 @@ export function planningPending(
     );
   if (period?.scheduleGoal && !period.divisionIds?.length)
     pending.push('请确认要编排哪个竞赛组别，或明确选择当前赛事的全部组别。');
+  if (period?.scheduleGoal) {
+    const schedule = conditions.find((item) => item.kind === 'SCHEDULE_CONFIG');
+    if (!schedule?.dailyStart || !schedule.dailyEnd)
+      pending.push('请明确每天可以安排比赛的开始和结束时间。');
+    if (!schedule?.venues?.length)
+      pending.push('请明确可用比赛场地；没有现有赛程配置时不能猜测场地。');
+    if (schedule?.durationMinutes === undefined)
+      pending.push('请明确单场比赛时长（分钟）。');
+    if (
+      schedule?.bufferMinutes === undefined ||
+      schedule.minRestMinutes === undefined
+    )
+      pending.push('请明确场地换场缓冲和同队最短休息时间（分钟）。');
+  }
   if (unresolved.length)
     pending.push(
       '已有球队时段描述尚未转换为明确日期；请先补全赛事日期范围或具体日期。',
@@ -346,13 +411,39 @@ export function planningPending(
     );
     if (missingCounts.length)
       pending.push(
-        `请说明${missingCounts.map((item) => daypartLabel(item.daypart)).join('、')}每天最多安排几场。`,
+        `请说明${missingCounts.map((item) => daypartLabel(item.daypart)).join('、')}每天安排几场。`,
+      );
+    const ambiguousCounts = capacities.filter(
+      (item) => item.countMode === 'UNRESOLVED',
+    );
+    if (ambiguousCounts.length)
+      pending.push(
+        `请确认${ambiguousCounts.map((item) => daypartLabel(item.daypart)).join('、')}所说的场数，是选定日期范围内每天必须安排的确切场数，还是每天的场数上限。`,
       );
     const missingScopes = capacities.filter((item) => !item.capacityScope);
     if (missingScopes.length)
       pending.push(
-        `请确认${missingScopes.map((item) => daypartLabel(item.daypart)).join('、')}的每日场数上限按整个赛事合计，还是每个场地分别计算。`,
+        `请确认${missingScopes.map((item) => daypartLabel(item.daypart)).join('、')}的每日场数按整个赛事合计，还是每个场地分别计算。`,
       );
+  }
+  const daily = conditions.find((item) => item.kind === 'DAILY_COUNT');
+  if (
+    period?.scheduleGoal &&
+    !daily &&
+    new Set(capacities.map((item) => item.daypart)).size < 3
+  )
+    pending.push(
+      '请明确每天比赛场数（确切场数或上限）；如果按上午、下午、晚上分别安排，请补齐三个时段。',
+    );
+  if (daily) {
+    if (daily.maxMatchesPerDay === undefined)
+      pending.push('请说明每天安排几场比赛。');
+    if (daily.countMode === 'UNRESOLVED')
+      pending.push(
+        '请确认每日场数是选定日期范围内每天必须安排的确切场数，还是每天的场数上限。',
+      );
+    if (!daily.capacityScope)
+      pending.push('请确认每日场数按整个赛事合计，还是每个场地分别计算。');
   }
   return pending;
 }
@@ -364,8 +455,12 @@ export function conditionSummary(condition: PlanningCondition) {
     return `赛事日期 ${condition.from ?? '待明确'} 至 ${condition.to ?? '待明确'}${condition.durationDays ? `，共 ${condition.durationDays} 天` : ''}${condition.dateSource === 'EVENT_PROFILE' ? '，起点来自赛事资料' : condition.dateSource === 'EVENT_SCHEDULE' ? '，起点来自当前赛程配置' : ''}；竞赛组别：${condition.allDivisions ? '当前全部组别' : condition.divisionLabels?.join('、') || '待确认'}（${strength}）`;
   if (condition.kind === 'FORMAT')
     return `单循环：每两支参赛球队各交手一次（${strength}）`;
+  if (condition.kind === 'SCHEDULE_CONFIG')
+    return `每天比赛时间 ${condition.dailyStart ?? '待明确'}—${condition.dailyEnd ?? '待明确'}；场地 ${condition.venues?.join('、') || '待明确'}；单场 ${condition.durationMinutes ?? '待明确'} 分钟；换场缓冲 ${condition.bufferMinutes ?? '待明确'} 分钟；同队最短休息 ${condition.minRestMinutes ?? '待明确'} 分钟${condition.configSource === 'EVENT_SCHEDULE' ? '（取自现有赛程配置）' : condition.configSource === 'MIXED' ? '（现有配置和对话修订）' : ''}`;
+  if (condition.kind === 'DAILY_COUNT')
+    return `每天${condition.capacityScope === 'VENUE' ? '每个场地' : condition.capacityScope === 'EVENT' ? '整个赛事' : '统计范围待明确'}${condition.countMode === 'EXACT' ? '必须安排' : condition.countMode === 'UNRESOLVED' ? '安排（确切场数或上限待确认）' : '最多安排'} ${condition.maxMatchesPerDay ?? '待明确'} 场（${strength}）`;
   if (condition.kind === 'DAYPART_CAPACITY')
-    return `${daypartLabel(condition.daypart)} ${condition.startTime ?? '待明确'}—${condition.endTime ?? '待明确'}，${condition.capacityScope === 'VENUE' ? '每个场地' : condition.capacityScope === 'EVENT' ? '整个赛事' : '统计范围待明确'}每天最多 ${condition.maxMatchesPerDay ?? '待明确'} 场（${strength}）`;
+    return `${daypartLabel(condition.daypart)} ${condition.startTime ?? '待明确'}—${condition.endTime ?? '待明确'}，${condition.capacityScope === 'VENUE' ? '每个场地' : condition.capacityScope === 'EVENT' ? '整个赛事' : '统计范围待明确'}每天${condition.countMode === 'EXACT' ? '必须安排' : condition.countMode === 'UNRESOLVED' ? '安排（确切场数或上限待确认）' : '最多安排'} ${condition.maxMatchesPerDay ?? '待明确'} 场（${strength}）`;
   if (condition.kind === 'TEAM_WINDOW')
     return `${condition.teamLabel ?? condition.teamId}：${condition.availability === 'ONLY' ? '只在' : condition.availability === 'BLOCK' ? '不在' : '可在'} ${condition.dates?.join('、') ?? ''} ${condition.startTime ?? '00:00'}—${condition.endTime ?? '24:00'} 安排（${strength}，仅本次排程要求）`;
   return `${condition.teamLabel ?? condition.teamId} 与 ${condition.opponentLabel ?? condition.opponentId}：${condition.matchup === 'PREFER' ? '倾向相遇' : '尽量避免相遇'}（${strength}，不新增对阵）`;

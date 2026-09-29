@@ -2707,10 +2707,18 @@ export interface components {
       allDivisions?: boolean;
       /** @enum {string} */
       availability?: 'AVAILABLE' | 'ONLY' | 'BLOCK';
+      bufferMinutes?: number;
       /** @enum {string} */
       capacityScope?: 'EVENT' | 'VENUE';
+      configRevision?: number;
+      /** @enum {string} */
+      configSource?: 'USER' | 'EVENT_SCHEDULE' | 'MIXED';
       /** @enum {string} */
       confirmation: 'PENDING' | 'CONFIRMED';
+      /** @enum {string} */
+      countMode?: 'EXACT' | 'MAXIMUM' | 'UNRESOLVED';
+      dailyEnd?: string;
+      dailyStart?: string;
       /** @enum {string} */
       dateSource?: 'USER' | 'EVENT_PROFILE' | 'EVENT_SCHEDULE';
       dates?: string[];
@@ -2719,6 +2727,7 @@ export interface components {
       divisionIds?: string[];
       divisionLabels?: string[];
       durationDays?: number;
+      durationMinutes?: number;
       endTime?: string;
       eventId: string;
       /** @enum {string} */
@@ -2731,12 +2740,16 @@ export interface components {
         | 'TEAM_WINDOW'
         | 'MATCHUP'
         | 'FORMAT'
-        | 'DAYPART_CAPACITY';
+        | 'DAYPART_CAPACITY'
+        | 'DAILY_COUNT'
+        | 'SCHEDULE_CONFIG';
       /** @enum {string} */
       matchup?: 'PREFER' | 'AVOID';
       maxMatchesPerDay?: number;
+      minRestMinutes?: number;
       opponentId?: string;
       opponentLabel?: string;
+      participantFingerprint?: string;
       /** @enum {string} */
       priority: 'MUST' | 'PREFER';
       scheduleGoal?: boolean;
@@ -2745,6 +2758,7 @@ export interface components {
       teamId?: string;
       teamLabel?: string;
       to?: string;
+      venues?: string[];
       weekdays?: number[];
     };
     AgentPlanningRequestViewDto: {

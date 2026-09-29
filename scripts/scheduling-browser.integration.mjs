@@ -238,7 +238,7 @@ export async function schedulingBrowserTest({ config, tokens, eventId, sql }) {
       .fill('__CAAU_SYNTHETIC_CHAT_LENGTH_4001__');
     await page.getByRole('button', { name: '发送消息' }).click();
     await expect(page.locator('.schedule-agent .ant-alert')).toContainText(
-      '回答超过单次 4000 字上限',
+      '本次模型回复无法可靠处理，输入已保留',
     );
     await expect(page.getByLabel('对话消息')).toHaveValue(
       '__CAAU_SYNTHETIC_CHAT_LENGTH_4001__',

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import test from 'node:test';
 import {
   chatPrompt,
@@ -352,6 +353,166 @@ test('Qwen structured route, not a production keyword matcher, proposes confirma
   assert.match(routePrompt(context), /pendingConfirmation/);
 });
 
+test('Qwen planning uses the same structured proposal for a new plan and an older requirement', async () => {
+  const model = new QwenAgentModelAdapter(
+    'synthetic-key',
+    'qwen-plus',
+    'http://localhost',
+  );
+  model.rawModel = {
+    invoke: async () => {
+      assert.fail('Planning must not parse a free-form JSON answer');
+    },
+  };
+  const prompts = [];
+  model.planningModel = {
+    invoke: async (messages) => {
+      prompts.push(messages[0].content);
+      return {
+        parsed: {
+          goal: prompts.length === 1 ? 'WHOLE_SCHEDULE' : 'UPDATE_REQUIREMENTS',
+          changes: [
+            {
+              operation: prompts.length === 1 ? 'ADD' : 'REPLACE',
+              kind: 'DAYPART_CAPACITY',
+              daypart: 'MORNING',
+              maxMatchesPerDay: 1,
+            },
+          ],
+        },
+        raw: {},
+      };
+    },
+  };
+  const opening = await model.planPlanning('编排赛程，上午最多一场', {
+    history: [],
+  });
+  assert.equal(opening.goal, 'WHOLE_SCHEDULE');
+  assert.equal(opening.changes[0].maxMatchesPerDay, 1);
+  const updated = await model.planPlanning('上午最多一场', {
+    history: [],
+    planning: {
+      conditions: [
+        { kind: 'DATE_RANGE', from: '2026-10-01' },
+        {
+          kind: 'DAYPART_CAPACITY',
+          daypart: 'MORNING',
+          maxMatchesPerDay: 1,
+          countMode: 'UNRESOLVED',
+        },
+        {
+          kind: 'SCHEDULE_CONFIG',
+          dailyStart: '09:00',
+          dailyEnd: '21:00',
+          venues: ['一号场'],
+          durationMinutes: 60,
+          bufferMinutes: 0,
+          minRestMinutes: 60,
+        },
+      ],
+      pending: ['竞赛组别'],
+    },
+  });
+  assert.equal(updated.goal, 'UPDATE_REQUIREMENTS');
+  assert.equal(updated.changes[0].kind, 'DAYPART_CAPACITY');
+  assert.match(prompts[1], /DATE_RANGE/);
+  assert.match(prompts[1], /UNRESOLVED/);
+  assert.match(prompts[1], /一号场/);
+  assert.match(prompts[1], /当前已授权需求摘要/);
+});
+
+test('invalid Qwen planning proposal is classified before any requirement write', async () => {
+  const model = new QwenAgentModelAdapter(
+    'synthetic-key',
+    'qwen-plus',
+    'http://localhost',
+  );
+  model.planningModel = {
+    invoke: async () => ({ parsed: null, raw: {} }),
+  };
+  await assert.rejects(
+    model.planPlanning('按照早上 1 场、下午 2 场、晚上 1 场编排赛程', {
+      history: [],
+    }),
+    (error) => error.getStatus?.() === 502,
+  );
+  model.planningModel = {
+    invoke: async () => ({ parsed: { changes: [] }, raw: {} }),
+  };
+  await assert.rejects(
+    model.planPlanning('帮我编排赛程', { history: [] }),
+    (error) => error.getStatus?.() === 502,
+  );
+});
+
+test('Qwen planning sends a forced function call rather than unsupported JSON Schema mode', async () => {
+  let providerRequest;
+  const provider = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    providerRequest = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    response.setHeader('Content-Type', 'application/json');
+    response.end(
+      JSON.stringify({
+        id: 'synthetic-provider-response',
+        object: 'chat.completion',
+        created: 1,
+        model: 'qwen-plus',
+        choices: [
+          {
+            index: 0,
+            finish_reason: 'tool_calls',
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                {
+                  id: 'synthetic-tool-call',
+                  type: 'function',
+                  function: {
+                    name: 'caau_planning_requirement_proposal',
+                    arguments: JSON.stringify({
+                      goal: 'WHOLE_SCHEDULE',
+                      changes: [],
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+      }),
+    );
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  try {
+    const address = provider.address();
+    assert.ok(address && typeof address !== 'string');
+    const model = new QwenAgentModelAdapter(
+      'synthetic-key',
+      'qwen-plus',
+      `http://127.0.0.1:${address.port}/v1`,
+    );
+    assert.equal(
+      (await model.planPlanning('帮我编排赛程', { history: [] })).goal,
+      'WHOLE_SCHEDULE',
+    );
+    assert.equal(providerRequest.response_format, undefined);
+    assert.equal(
+      providerRequest.tool_choice.function.name,
+      'caau_planning_requirement_proposal',
+    );
+    assert.ok(
+      providerRequest.tools[0].function.parameters.required.includes('goal'),
+    );
+  } finally {
+    await new Promise((resolve, reject) =>
+      provider.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
+});
+
 test('Qwen keeps team creation separate from an active scheduling requirement', async () => {
   const model = new QwenAgentModelAdapter(
     'synthetic-key',
@@ -669,6 +830,20 @@ test('structured whole-schedule follow-up retains round robin and enforces daily
     maxMatchesPerDay,
     capacityScope: 'EVENT',
   }));
+  const scheduleConfig = {
+    id: 'schedule-config',
+    kind: 'SCHEDULE_CONFIG',
+    eventId: 'event',
+    priority: 'MUST',
+    confirmation: 'PENDING',
+    sourceTurnIds,
+    dailyStart: '09:00',
+    dailyEnd: '21:00',
+    venues: ['一号场'],
+    durationMinutes: 60,
+    bufferMinutes: 0,
+    minRestMinutes: 0,
+  };
   const proposal = {
     goal: 'UPDATE_REQUIREMENTS',
     changes: [
@@ -694,11 +869,33 @@ test('structured whole-schedule follow-up retains round robin and enforces daily
       .allDivisions,
     true,
   );
-  assert.equal(planningPending([period, format, ...windows], []).length, 0);
+  assert.equal(
+    planningPending([period, format, ...windows], []).some((item) =>
+      item.includes('比赛场地'),
+    ),
+    true,
+  );
+  assert.equal(
+    planningPending([period, format, scheduleConfig, ...windows], []).length,
+    0,
+  );
+  assert.equal(
+    planningPending([period, format, scheduleConfig], []).some((item) =>
+      item.includes('每天比赛场数'),
+    ),
+    true,
+  );
+  assert.equal(
+    planningPending([period, format, scheduleConfig, windows[0]], []).some(
+      (item) => item.includes('补齐三个时段'),
+    ),
+    true,
+  );
   const missingWindowDetails = planningPending(
     [
       period,
       format,
+      scheduleConfig,
       ...windows.map(
         ({
           startTime: _startTime,
